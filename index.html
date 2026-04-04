@@ -982,69 +982,88 @@ async function renderProfiles() {
 
   const allMeals = await txGetAll('meals');
   const allBazar = await txGetAll('bazar');
-  const allRent = await txGetAll('rent');
+  const allRent  = await txGetAll('rent');
+  const { data: allUtility } = await sb.from('utility_payments').select('*');
 
-  buildProfileCards(allMeals, allBazar, allRent);
-  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent);
+  buildProfileCards(allMeals, allBazar, allRent, allUtility||[]);
+  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
 }
 
 async function refreshProfiles() {
   const allMeals = await txGetAll('meals');
   const allBazar = await txGetAll('bazar');
-  const allRent = await txGetAll('rent');
-  buildProfileCards(allMeals, allBazar, allRent);
-  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent);
+  const allRent  = await txGetAll('rent');
+  const { data: allUtility } = await sb.from('utility_payments').select('*');
+
+  buildProfileCards(allMeals, allBazar, allRent, allUtility||[]);
+  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
   else document.getElementById('profile-detail-section').innerHTML = '';
 }
 
-function getFilteredData(allMeals, allBazar, allRent, period) {
-  if (period === 'all') return { meals: allMeals, bazar: allBazar, rent: allRent };
+function getFilteredData(allMeals, allBazar, allRent, period, allUtility=[]) {
+  if (period === 'all') return { meals: allMeals, bazar: allBazar, rent: allRent, utility: allUtility };
   const months = parseInt(period);
   const now = new Date();
-  // Build cutStr manually to avoid UTC offset shifting the month (e.g. Dhaka is UTC+6)
-  let cutMonth = now.getMonth() - months + 1;  // JS months 0-indexed
+  let cutMonth = now.getMonth() - months + 1;
   let cutYear  = now.getFullYear();
   while (cutMonth < 0)  { cutMonth += 12; cutYear--; }
   while (cutMonth > 11) { cutMonth -= 12; cutYear++; }
   const cutStr = cutYear + '-' + String(cutMonth + 1).padStart(2, '0');
   return {
-    meals: allMeals.filter(r => r.date.slice(0,7) >= cutStr),
-    bazar: allBazar.filter(r => r.date.slice(0,7) >= cutStr),
-    rent: allRent.filter(r => r.key >= cutStr)
+    meals:   allMeals.filter(r => r.date.slice(0,7) >= cutStr),
+    bazar:   allBazar.filter(r => r.date.slice(0,7) >= cutStr),
+    rent:    allRent.filter(r => r.key >= cutStr),
+    utility: allUtility.filter(r => r.month_key >= cutStr)
   };
 }
 
-function getMemberStats(member, meals, bazar, rent) {
-  let totalMeals=0, totalBazar=0, rentDue=0, rentPaid=0, activeDays=0;
+function getMemberStats(member, meals, bazar, rent, utility=[]) {
+  let totalMeals=0, totalBazar=0, rentDue=0, rentPaid=0, utilityDue=0, utilityPaid=0, activeDays=0;
   const byMonth = {};
+  const ensureMonth = k => { byMonth[k] = byMonth[k]||{meals:0,bazar:0,rentPaid:0,utilityPaid:0}; };
   meals.forEach(r => {
     const v = Number(r.meals[member.name]||0);
     totalMeals += v; if(v>0) activeDays++;
-    const k = r.date.slice(0,7);
-    byMonth[k] = byMonth[k]||{meals:0,bazar:0,rentPaid:0};
+    const k = r.date.slice(0,7); ensureMonth(k);
     byMonth[k].meals += v;
   });
   bazar.forEach(r => {
     const v = Number(r.bazar[member.name]||0);
     totalBazar += v;
-    const k = r.date.slice(0,7);
-    byMonth[k] = byMonth[k]||{meals:0,bazar:0,rentPaid:0};
+    const k = r.date.slice(0,7); ensureMonth(k);
     byMonth[k].bazar += v;
   });
   rent.forEach(r => {
     const e = r.entries?.find(x=>x.name===member.name);
-    if (e) { rentDue+=Number(e.rent||0); rentPaid+=Number(e.paid||0); byMonth[r.key]=byMonth[r.key]||{meals:0,bazar:0,rentPaid:0}; byMonth[r.key].rentPaid+=Number(e.paid||0); }
+    if (e) {
+      rentDue  += Number(e.rent||0);
+      rentPaid += Number(e.paid||0);
+      ensureMonth(r.key);
+      byMonth[r.key].rentPaid += Number(e.paid||0);
+    }
+  });
+  utility.forEach(r => {
+    const bills = r.bills || {};
+    const total = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(Number(bills[k])||0),0);
+    const perHead = members.length > 0 ? round2(total / members.length) : 0;
+    const p = (r.payments || {})[member.name] || {};
+    utilityDue  += perHead;
+    utilityPaid += Number(p.paid||0);
+    ensureMonth(r.month_key);
+    byMonth[r.month_key].utilityPaid += Number(p.paid||0);
   });
   const totalDays = meals.length;
   const avgMeals = totalDays>0 ? round2(totalMeals/totalDays) : 0;
-  const latestRent = rent.sort((a,b)=>b.key.localeCompare(a.key))[0];
+  const latestRent = [...rent].sort((a,b)=>b.key.localeCompare(a.key))[0];
   const latestStatus = latestRent?.entries?.find(x=>x.name===member.name)?.status||'unpaid';
-  return { totalMeals, totalBazar, rentDue, rentPaid, activeDays, avgMeals, latestStatus, byMonth };
+  const latestUtil = [...utility].sort((a,b)=>b.month_key.localeCompare(a.month_key))[0];
+  const latestUtilStatus = (latestUtil?.payments||{})[member.name]?.status||'unpaid';
+  return { totalMeals, totalBazar, rentDue, rentPaid, utilityDue, utilityPaid, activeDays, avgMeals, latestStatus, latestUtilStatus, byMonth };
 }
 
-function buildProfileCards(allMeals, allBazar, allRent) {
+function buildProfileCards(allMeals, allBazar, allRent, allUtility=[]) {
   const period = document.getElementById('prof-period')?.value || 'all';
-  const { meals, bazar, rent } = getFilteredData(allMeals, allBazar, allRent, period);
+  const { meals, bazar, rent, utility } = getFilteredData(allMeals, allBazar, allRent, period, allUtility);
   const grid = document.getElementById('profile-card-grid');
   if (!grid) return;
   if (!members.length) {
@@ -1055,23 +1074,29 @@ function buildProfileCards(allMeals, allBazar, allRent) {
 
   // Desktop grid cards (hidden on mobile via CSS)
   grid.innerHTML = members.map((m, i) => {
-    const stats = getMemberStats(m, meals, bazar, rent);
+    const stats = getMemberStats(m, meals, bazar, rent, utility);
     const col = avatarColor(i);
     const cls = stats.latestStatus==='paid'?'badge-green':stats.latestStatus==='partial'?'badge-amber':'badge-red';
     const rentLabel = stats.latestStatus==='paid'?'Rent paid':stats.latestStatus==='partial'?'Partial':'Rent due';
+    const utCls = stats.latestUtilStatus==='paid'?'badge-green':stats.latestUtilStatus==='partial'?'badge-amber':'badge-red';
+    const utLabel = stats.latestUtilStatus==='paid'?'Utility paid':stats.latestUtilStatus==='partial'?'Util partial':'Utility due';
     return `<div class="profile-card${selectedProfileId===m.id?' active':''}" onclick="selectProfile('${m.id}')">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
         <div class="avatar" style="background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
         <div>
           <div style="font-weight:600;font-size:15px">${m.name}</div>
-          <span class="badge ${cls}" style="margin-top:4px">${rentLabel}</span>
+          <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+            <span class="badge ${cls}">${rentLabel}</span>
+            <span class="badge ${utCls}">${utLabel}</span>
+          </div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <div class="stat-card" style="padding:10px"><div class="stat-label">Meals</div><div style="font-size:18px;font-weight:600">${stats.totalMeals}</div></div>
         <div class="stat-card" style="padding:10px"><div class="stat-label">Avg/day</div><div style="font-size:18px;font-weight:600">${stats.avgMeals}</div></div>
         <div class="stat-card" style="padding:10px"><div class="stat-label">Bazar</div><div style="font-size:15px;font-weight:600">${fmtTk(stats.totalBazar)}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label">Rent paid</div><div style="font-size:15px;font-weight:600">${fmtTk(stats.rentPaid)}</div></div>
+        <div class="stat-card" style="padding:10px"><div class="stat-label">Utility paid</div><div style="font-size:15px;font-weight:600;color:var(--green)">${fmtTk(stats.utilityPaid)}</div></div>
+        <div class="stat-card" style="padding:10px;grid-column:span 2"><div class="stat-label">Rent paid</div><div style="font-size:15px;font-weight:600;color:var(--green)">${fmtTk(stats.rentPaid)}</div></div>
       </div>
     </div>`;
   }).join('');
@@ -1080,10 +1105,11 @@ function buildProfileCards(allMeals, allBazar, allRent) {
   const mob = document.getElementById('profile-mobile-list');
   if (mob) {
     mob.innerHTML = members.map((m, i) => {
-      const stats = getMemberStats(m, meals, bazar, rent);
+      const stats = getMemberStats(m, meals, bazar, rent, utility);
       const col = avatarColor(i);
       const cls = stats.latestStatus==='paid'?'badge-green':stats.latestStatus==='partial'?'badge-amber':'badge-red';
       const rentLabel = stats.latestStatus==='paid'?'Paid':stats.latestStatus==='partial'?'Partial':'Due';
+      const utClsM = stats.latestUtilStatus==='paid'?'badge-green':stats.latestUtilStatus==='partial'?'badge-amber':'badge-red';
       const netDue = stats.rentDue - stats.rentPaid;
       return `<div class="profile-mobile-item${selectedProfileId===m.id?' active':''}" onclick="selectProfile('${m.id}')">
         <div class="pmi-left">
@@ -1093,6 +1119,7 @@ function buildProfileCards(allMeals, allBazar, allRent) {
         <div class="pmi-right">
           <span style="font-size:13px;font-weight:500;color:${netDue>0?'var(--red)':netDue<0?'var(--green)':'var(--text2)'}">${netDue>0?fmtTk(netDue)+' due':netDue<0?fmtTk(-netDue)+' overpaid':'Settled'}</span>
           <span class="badge ${cls}">${rentLabel}</span>
+          <span class="badge ${utClsM}">${stats.latestUtilStatus==='paid'?'Util':'Util?'}</span>
           <span style="color:var(--text3);font-size:14px">${selectedProfileId===m.id?'▲':'▼'}</span>
         </div>
       </div>`;
@@ -1104,21 +1131,23 @@ async function selectProfile(id) {
   selectedProfileId = selectedProfileId === id ? null : id;
   const allMeals = await txGetAll('meals');
   const allBazar = await txGetAll('bazar');
-  const allRent = await txGetAll('rent');
-  buildProfileCards(allMeals, allBazar, allRent);
-  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent);
+  const allRent  = await txGetAll('rent');
+  const { data: allUtility } = await sb.from('utility_payments').select('*');
+  buildProfileCards(allMeals, allBazar, allRent, allUtility||[]);
+  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
   else document.getElementById('profile-detail-section').innerHTML='';
 }
 
-function showProfileDetail(id, allMeals, allBazar, allRent) {
+function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
   const member = members.find(m=>m.id===id);
   if (!member) return;
   const period = document.getElementById('prof-period')?.value || 'all';
-  const { meals, bazar, rent } = getFilteredData(allMeals, allBazar, allRent, period);
-  const stats = getMemberStats(member, meals, bazar, rent);
+  const { meals, bazar, rent, utility } = getFilteredData(allMeals, allBazar, allRent, period, allUtility);
+  const stats = getMemberStats(member, meals, bazar, rent, utility);
   const col = avatarColor(members.indexOf(member));
   const net = stats.rentPaid - stats.rentDue;
   const netCls = net >= 0 ? 'net-pos' : 'net-neg';
+  const utilNet = round2(stats.utilityPaid - stats.utilityDue);
 
   // All months sorted
   const allMonthKeys = Object.keys(stats.byMonth).sort();
@@ -1140,9 +1169,15 @@ function showProfileDetail(id, allMeals, allBazar, allRent) {
           <div style="font-family:var(--font-serif);font-size:22px">${member.name}</div>
           <div style="font-size:13px;color:var(--text2);margin-top:3px">Default rent: ${fmtTk(member.rent||0)} / month · ${member.room||'—'}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
-          <div style="font-size:20px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
+        <div style="display:flex;gap:16px;flex-shrink:0">
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
+            <div style="font-size:18px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
+          </div>
+          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
+            <div style="font-size:18px;font-weight:600" class="${utilNet>=0?'net-pos':'net-neg'}">${utilNet>=0?'+':''}${fmtTk(Math.abs(utilNet))}</div>
+          </div>
         </div>
       </div>
 
@@ -1153,6 +1188,8 @@ function showProfileDetail(id, allMeals, allBazar, allRent) {
         <div class="stat-card"><div class="stat-label">Bazar spent</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.totalBazar)}</div></div>
         <div class="stat-card"><div class="stat-label">Rent due</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.rentDue)}</div></div>
         <div class="stat-card"><div class="stat-label">Rent paid</div><div class="stat-value" style="font-size:16px;color:var(--green)">${fmtTk(stats.rentPaid)}</div></div>
+        <div class="stat-card"><div class="stat-label">Utility due</div><div class="stat-value" style="font-size:16px">${fmtTk(round2(stats.utilityDue))}</div></div>
+        <div class="stat-card"><div class="stat-label">Utility paid</div><div class="stat-value" style="font-size:16px;color:var(--green)">${fmtTk(round2(stats.utilityPaid))}</div></div>
       </div>
 
       <div class="detail-section">
@@ -1175,10 +1212,10 @@ function showProfileDetail(id, allMeals, allBazar, allRent) {
       <div class="detail-section">
         <div class="detail-section-title">Recent months breakdown</div>
         <div class="tbl-wrap">
-          <table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th></tr></thead>
+          <table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Utility paid</th></tr></thead>
           <tbody>${allMonthKeys.slice(-6).reverse().map(k=>{
             const d=stats.byMonth[k]||{};
-            return `<tr><td>${MONTHS[parseInt(k.slice(5))-1]} ${k.slice(0,4)}</td><td>${d.meals||0}</td><td>${fmtTk(d.bazar||0)}</td><td>${fmtTk(d.rentPaid||0)}</td></tr>`;
+            return `<tr><td>${MONTHS[parseInt(k.slice(5))-1]} ${k.slice(0,4)}</td><td>${d.meals||0}</td><td>${fmtTk(d.bazar||0)}</td><td>${fmtTk(d.rentPaid||0)}</td><td>${fmtTk(d.utilityPaid||0)}</td></tr>`;
           }).join('')}</tbody></table>
         </div>
       </div>
