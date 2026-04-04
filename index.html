@@ -1193,7 +1193,7 @@ async function renderUtility() {
   const n = new Date();
   el.innerHTML = `
     <div class="topbar">
-      <div><div class="page-title">Utility Entry</div><div class="page-sub">Update monthly utility bills independently</div></div>
+      <div><div class="page-title">Utility Entry</div><div class="page-sub">Track bills & who has paid their share</div></div>
     </div>
     <div class="content">
       <div class="month-sel" style="margin-bottom:16px">
@@ -1203,26 +1203,41 @@ async function renderUtility() {
         <select class="input" id="ut-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
         <button class="btn btn-ghost" onclick="loadUtilityMonth()">Load</button>
       </div>
+
       <div class="card" style="margin-bottom:14px">
-        <div class="card-title">Utility bills for month</div>
+        <div class="card-title">Bill amounts</div>
         <div class="util-fields">
-          <div class="field" style="margin:0"><label>Electricity (৳)</label><input type="number" class="input" id="ut-elec" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>WiFi (৳)</label><input type="number" class="input" id="ut-wifi" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>Gas (৳)</label><input type="number" class="input" id="ut-gas" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>Khala bill (৳)</label><input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>Other (৳)</label><input type="number" class="input" id="ut-other" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Electricity (৳)</label><input type="number" class="input" id="ut-elec"  min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>WiFi (৳)</label>        <input type="number" class="input" id="ut-wifi"  min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Gas (৳)</label>         <input type="number" class="input" id="ut-gas"   min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Khala bill (৳)</label>  <input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Other (৳)</label>       <input type="number" class="input" id="ut-other" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
         </div>
-        <div class="stat-grid" style="margin-top:16px;margin-bottom:16px">
-          <div class="stat-card"><div class="stat-label">Total utility</div><div class="stat-value" id="ut-total">৳0</div></div>
+        <div class="stat-grid" style="margin-top:16px;margin-bottom:0">
+          <div class="stat-card"><div class="stat-label">Total bill</div><div class="stat-value" id="ut-total">৳0</div></div>
           <div class="stat-card"><div class="stat-label">Per member</div><div class="stat-value" id="ut-per">৳0</div></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="saveUtility()">Save utility</button>
-          <button class="btn btn-ghost" onclick="clearUtility()">Clear</button>
+          <div class="stat-card"><div class="stat-label">Collected</div><div class="stat-value" id="ut-collected" style="color:var(--green)">৳0</div></div>
+          <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="ut-outstanding" style="color:var(--red)">৳0</div></div>
         </div>
       </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title">Payment status per member</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Member</th><th>Share (৳)</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
+            <tbody id="ut-pay-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn btn-primary" onclick="saveUtility()">Save</button>
+          <button class="btn btn-ghost"   onclick="markAllUtilPaid()">Mark all paid</button>
+          <button class="btn btn-ghost"   onclick="clearUtility()">Clear bills</button>
+        </div>
+      </div>
+
       <div class="card">
-        <div class="card-title">Utility history</div>
+        <div class="card-title">History</div>
         <div class="tbl-wrap" id="ut-history"><div class="loading"><div class="spinner"></div>Loading...</div></div>
       </div>
     </div>`;
@@ -1231,36 +1246,105 @@ async function renderUtility() {
 }
 
 function updUtilSummary() {
-  const keys = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other'];
-  const total = keys.reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
+  const total = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other']
+    .reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
   const perHead = members.length > 0 ? round2(total / members.length) : 0;
   const te = document.getElementById('ut-total'), tp = document.getElementById('ut-per');
   if(te) te.textContent = fmtTk(total);
   if(tp) tp.textContent = fmtTk(perHead);
+  // rebuild payment rows with new share amount
+  buildUtilPayRows(perHead);
+  updUtilPaySummary();
+}
+
+function buildUtilPayRows(perHead) {
+  const tbody = document.getElementById('ut-pay-tbody');
+  if (!tbody) return;
+  // preserve existing paid/status/notes values if rows already exist
+  const existing = {};
+  members.forEach(m => {
+    existing[m.id] = {
+      paid:   parseFloat(document.getElementById('utp-paid-'+m.id)?.value   || perHead),
+      status: document.getElementById('utp-status-'+m.id)?.value            || 'unpaid',
+      notes:  document.getElementById('utp-notes-'+m.id)?.value             || ''
+    };
+  });
+  tbody.innerHTML = members.map(m => {
+    const ex = existing[m.id];
+    const status = ex.status;
+    return `<tr>
+      <td><b>${m.name}</b></td>
+      <td style="color:var(--text2)">${fmtTk(perHead)}</td>
+      <td><input type="number" class="input input-sm" id="utp-paid-${m.id}"
+            value="${ex.paid}" style="width:95px" oninput="updUtilPaySummary()"/></td>
+      <td><select class="input input-sm" id="utp-status-${m.id}" style="width:110px" onchange="updUtilPaySummary()">
+        <option value="paid"   ${status==='paid'   ?'selected':''}>Paid</option>
+        <option value="unpaid" ${status==='unpaid' ?'selected':''}>Not paid</option>
+        <option value="partial"${status==='partial'?'selected':''}>Partial</option>
+      </select></td>
+      <td><input type="text" class="input input-sm" id="utp-notes-${m.id}"
+            value="${ex.notes}" placeholder="—" style="width:120px"/></td>
+    </tr>`;
+  }).join('');
+}
+
+function updUtilPaySummary() {
+  let collected = 0;
+  members.forEach(m => { collected += parseFloat(document.getElementById('utp-paid-'+m.id)?.value||0); });
+  const total = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other']
+    .reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
+  const outstanding = Math.max(0, round2(total - collected));
+  const ce = document.getElementById('ut-collected'), oe = document.getElementById('ut-outstanding');
+  if(ce) ce.textContent = fmtTk(round2(collected));
+  if(oe) oe.textContent = fmtTk(outstanding);
+}
+
+function markAllUtilPaid() {
+  const total = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other']
+    .reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
+  const perHead = members.length > 0 ? round2(total / members.length) : 0;
+  members.forEach(m => {
+    const pp = document.getElementById('utp-paid-'+m.id);
+    const ps = document.getElementById('utp-status-'+m.id);
+    if(pp) pp.value = perHead;
+    if(ps) ps.value = 'paid';
+  });
+  updUtilPaySummary();
 }
 
 async function loadUtilityMonth() {
   const month = parseInt(document.getElementById('ut-month')?.value || 0);
   const year  = parseInt(document.getElementById('ut-year')?.value  || new Date().getFullYear());
-  // Find any bazar entry in this month and pull its utility block
-  const allBazar = await txGetAll('bazar');
-  const key = monthKey(year, month);
-  // Aggregate utility across all bazar entries in this month
-  const monthEntries = allBazar.filter(r => r.date.startsWith(key));
-  if (monthEntries.length) {
-    // Use the first entry that has utility data, or the last saved
-    const withUtil = monthEntries.filter(r => r.utility && Object.values(r.utility).some(v=>Number(v)>0));
-    const rec = withUtil.length ? withUtil[withUtil.length-1] : monthEntries[monthEntries.length-1];
-    const u = rec.utility || {};
+  const key   = monthKey(year, month);
+
+  // Load from utility_payments table (or fall back to bazar utility field)
+  const { data: rec } = await sb.from('utility_payments')
+    .select('*').eq('month_key', key).maybeSingle();
+
+  if (rec) {
+    const u = rec.bills || {};
     ['elec','wifi','gas','khala','other'].forEach(k => {
       const el = document.getElementById('ut-'+k); if(el) el.value = u[k] || 0;
     });
-    toast('Loaded utility from '+rec.date);
+    const total = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(u[k]||0),0);
+    const perHead = members.length > 0 ? round2(total / members.length) : 0;
+    // restore payment rows
+    const payments = rec.payments || {};
+    members.forEach(m => {
+      const p = payments[m.name] || {};
+      const pp = document.getElementById('utp-paid-'+m.id);
+      const ps = document.getElementById('utp-status-'+m.id);
+      const pn = document.getElementById('utp-notes-'+m.id);
+      if(pp) pp.value = p.paid ?? perHead;
+      if(ps) ps.value = p.status || 'unpaid';
+      if(pn) pn.value = p.notes || '';
+    });
+    toast('Loaded utility for ' + MONTHS[month] + ' ' + year);
   } else {
     ['elec','wifi','gas','khala','other'].forEach(k => {
       const el = document.getElementById('ut-'+k); if(el) el.value = '';
     });
-    toast('No bazar entries found for '+MONTHS[month]+' '+year);
+    toast('No utility record for ' + MONTHS[month] + ' ' + year);
   }
   updUtilSummary();
 }
@@ -1276,20 +1360,29 @@ async function saveUtility() {
   const month = parseInt(document.getElementById('ut-month')?.value || 0);
   const year  = parseInt(document.getElementById('ut-year')?.value  || new Date().getFullYear());
   const key   = monthKey(year, month);
-  const utility = {
+
+  const bills = {
     elec:  parseFloat(document.getElementById('ut-elec')?.value  || 0),
     wifi:  parseFloat(document.getElementById('ut-wifi')?.value  || 0),
     gas:   parseFloat(document.getElementById('ut-gas')?.value   || 0),
     khala: parseFloat(document.getElementById('ut-khala')?.value || 0),
     other: parseFloat(document.getElementById('ut-other')?.value || 0)
   };
-  // We store utility on a dedicated bazar row dated the 1st of the month
-  const dateKey = key + '-01';
+  const payments = {};
+  members.forEach(m => {
+    payments[m.name] = {
+      paid:   parseFloat(document.getElementById('utp-paid-'+m.id)?.value   || 0),
+      status: document.getElementById('utp-status-'+m.id)?.value            || 'unpaid',
+      notes:  document.getElementById('utp-notes-'+m.id)?.value             || ''
+    };
+  });
+
   try {
-    // Load existing bazar for that date if any to preserve bazar data
-    const { data: existing } = await sb.from('bazar').select('*').eq('date', dateKey).maybeSingle();
-    const bazarData = existing?.bazar || {};
-    await txPut('bazar', { date: dateKey, bazar: bazarData, utility });
+    const { error } = await sb.from('utility_payments').upsert(
+      { month_key: key, month, year, month_name: MONTHS[month], bills, payments },
+      { onConflict: 'month_key' }
+    );
+    if (error) throw error;
     toast('Utility saved for ' + MONTHS[month] + ' ' + year);
     loadUtilityHistory();
   } catch(e) { toast('Save failed: ' + e.message, 'error'); console.error(e); }
@@ -1298,35 +1391,43 @@ async function saveUtility() {
 async function loadUtilityHistory() {
   const wrap = document.getElementById('ut-history');
   if (!wrap) return;
-  const allBazar = await txGetAll('bazar');
-  // Group utility by month
-  const byMonth = {};
-  allBazar.forEach(r => {
-    const k = r.date.slice(0,7);
-    if (!byMonth[k]) byMonth[k] = { elec:0, wifi:0, gas:0, khala:0, other:0 };
-    const u = r.utility || {};
-    ['elec','wifi','gas','khala','other'].forEach(f => { byMonth[k][f] += Number(u[f]||0); });
-  });
-  const months = Object.keys(byMonth).sort().reverse().slice(0,12);
-  if (!months.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No utility data yet</div></div>'; return; }
-  wrap.innerHTML=`<table>
-    <thead><tr><th>Month</th><th>Electricity</th><th>WiFi</th><th>Gas</th><th>Khala</th><th>Other</th><th>Total</th><th>Per member</th></tr></thead>
-    <tbody>${months.map(k => {
-      const u = byMonth[k];
-      const total = u.elec + u.wifi + u.gas + u.khala + u.other;
-      const perHead = members.length > 0 ? round2(total / members.length) : 0;
-      const mo = parseInt(k.slice(5)) - 1;
-      return `<tr>
-        <td><b>${MONTHS[mo]} ${k.slice(0,4)}</b></td>
-        <td>${u.elec ? fmtTk(u.elec) : '—'}</td>
-        <td>${u.wifi ? fmtTk(u.wifi) : '—'}</td>
-        <td>${u.gas  ? fmtTk(u.gas)  : '—'}</td>
-        <td>${u.khala? fmtTk(u.khala): '—'}</td>
-        <td>${u.other? fmtTk(u.other): '—'}</td>
-        <td><b>${fmtTk(total)}</b></td>
-        <td style="color:var(--text2)">${fmtTk(perHead)}</td>
-      </tr>`;
-    }).join('')}</tbody>
+  const { data: all, error } = await sb.from('utility_payments').select('*').order('month_key', { ascending: false });
+  if (error || !all?.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-text">No utility records yet</div></div>'; return;
+  }
+  wrap.innerHTML = `<table>
+    <thead>
+      <tr>
+        <th>Month</th><th>Total bill</th><th>Per member</th>
+        ${members.map(m=>`<th>${m.name}</th>`).join('')}
+        <th>Collected</th><th>Outstanding</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${all.slice(0,12).map(r => {
+        const bills = r.bills || {};
+        const total = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(bills[k]||0),0);
+        const perHead = members.length > 0 ? round2(total / members.length) : 0;
+        const payments = r.payments || {};
+        let collected = 0;
+        const memberCells = members.map(m => {
+          const p = payments[m.name] || {};
+          collected += Number(p.paid || 0);
+          const cls = p.status==='paid'?'badge-green':p.status==='partial'?'badge-amber':'badge-red';
+          const lbl = p.status==='paid'?'Paid':p.status==='partial'?'Part':'Due';
+          return `<td><span class="badge ${cls}">${lbl}</span><span style="font-size:11px;color:var(--text2);margin-left:4px">${fmtTk(p.paid||0)}</span></td>`;
+        }).join('');
+        const outstanding = Math.max(0, round2(total - collected));
+        return `<tr>
+          <td><b>${r.month_name} ${r.year}</b></td>
+          <td>${fmtTk(total)}</td>
+          <td style="color:var(--text2)">${fmtTk(perHead)}</td>
+          ${memberCells}
+          <td style="color:var(--green)"><b>${fmtTk(round2(collected))}</b></td>
+          <td style="color:${outstanding>0?'var(--red)':'var(--green)'}">${fmtTk(outstanding)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
   </table>`;
 }
 
@@ -1615,6 +1716,7 @@ async function init() {
     if (error) throw error;
     document.getElementById('db-dot').style.background = 'var(--green)';
     document.getElementById('db-label').textContent = 'Supabase connected';
+    await ensureUtilityTable();
     await seedIfEmpty();
     members = await txGetAll('members');
     navigate('dashboard');
@@ -1623,6 +1725,13 @@ async function init() {
     document.getElementById('db-label').textContent = 'DB error';
     console.error('Supabase error:', e.message || e);
     toast('Database connection failed. Check console.', 'error');
+  }
+}
+
+async function ensureUtilityTable() {
+  const { error } = await sb.from('utility_payments').select('month_key', { count: 'exact', head: true });
+  if (error) {
+    console.warn('utility_payments table missing. Run in Supabase SQL Editor:\ncreate table if not exists utility_payments (\n  id uuid primary key default gen_random_uuid(),\n  month_key text not null unique,\n  month int, year int, month_name text,\n  bills jsonb default \'{}\',\n  payments jsonb default \'{}\',\n  created_at timestamptz default now()\n);\nalter table utility_payments enable row level security;\ncreate policy \"open\" on utility_payments for all using (true) with check (true);');
   }
 }
 
