@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MessManager — Dhaka</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23161616'/%3E%3Cellipse cx='16' cy='19' rx='10' ry='4' fill='none' stroke='%23d4a853' stroke-width='1.8'/%3E%3Cpath d='M6 19 Q6 13 16 13 Q26 13 26 19' fill='%23d4a853' opacity='0.15'/%3E%3Cpath d='M6 19 Q6 13 16 13 Q26 13 26 19' fill='none' stroke='%23d4a853' stroke-width='1.8'/%3E%3Cpath d='M12 13 Q12 8 16 7 Q20 8 20 13' fill='none' stroke='%23d4a853' stroke-width='1.6' stroke-linecap='round'/%3E%3Cline x1='10' y1='22' x2='22' y2='22' stroke='%23d4a853' stroke-width='1.4' stroke-linecap='round' opacity='0.5'/%3E%3C/svg%3E"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0f0f0f;
+  --bg2: #161616;
+  --bg3: #1e1e1e;
+  --bg4: #252525;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #f0ede8;
+  --text2: #9a9690;
+  --text3: #5c5a57;
+  --accent: #d4a853;
+  --accent2: #b8914a;
+  --accent-bg: rgba(212,168,83,0.08);
+  --green: #4caf82;
+  --green-bg: rgba(76,175,130,0.08);
+  --red: #e05252;
+  --red-bg: rgba(224,82,82,0.08);
+  --blue: #5b9bd5;
+  --blue-bg: rgba(91,155,213,0.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: 'DM Sans', sans-serif;
+  --font-serif: 'DM Serif Display', serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+
+/* LAYOUT */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh}
+.main{flex:1;min-width:0;overflow-x:hidden}
+
+/* SIDEBAR */
+.logo{padding:24px 20px 20px;border-bottom:1px solid var(--border)}
+.logo-text{font-family:var(--font-serif);font-size:20px;color:var(--accent);letter-spacing:-0.5px}
+.logo-sub{font-size:11px;color:var(--text3);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase}
+.nav{padding:12px 10px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text2);font-size:13px;font-weight:400;transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--accent-bg);color:var(--accent);font-weight:500}
+.nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.7}
+.nav-item.active .nav-icon{opacity:1}
+.nav-section{font-size:10px;color:var(--text3);padding:14px 12px 6px;letter-spacing:0.8px;text-transform:uppercase}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--border)}
+.db-status{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.db-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+
+/* TOPBAR */
+.topbar{padding:20px 28px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.page-title{font-family:var(--font-serif);font-size:28px;color:var(--text);letter-spacing:-0.5px;line-height:1.1}
+.page-sub{font-size:13px;color:var(--text2);margin-top:4px}
+.topbar-actions{display:flex;gap:8px;align-items:center;margin-top:4px}
+
+/* CONTENT */
+.content{padding:20px 28px 40px}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.card-sm{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.card-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:12px;font-weight:500}
+
+/* STAT GRID */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+.stat-label{font-size:11px;color:var(--text3);margin-bottom:6px}
+.stat-value{font-size:22px;font-weight:600;color:var(--text);line-height:1}
+.stat-sub{font-size:11px;color:var(--text2);margin-top:4px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:none;font-family:var(--font)}
+.btn-primary{background:var(--accent);color:#0f0f0f}
+.btn-primary:hover{background:var(--accent2)}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2)}
+.btn-ghost:hover{background:var(--bg3);color:var(--text)}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid rgba(224,82,82,0.2)}
+.btn-danger:hover{background:rgba(224,82,82,0.15)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:6px;width:30px;height:30px;justify-content:center}
+
+/* INPUTS */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.field label{font-size:12px;color:var(--text2);font-weight:500}
+.input{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;color:var(--text);font-family:var(--font);transition:border-color .15s;width:100%}
+.input:focus{outline:none;border-color:var(--accent)}
+.input::placeholder{color:var(--text3)}
+.input-sm{padding:5px 8px;font-size:12px}
+select.input option{background:var(--bg3);color:var(--text)}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--text3);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text2);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg3)}
+tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px solid var(--border2)}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500}
+.badge-green{background:var(--green-bg);color:var(--green)}
+.badge-red{background:var(--red-bg);color:var(--red)}
+.badge-amber{background:var(--accent-bg);color:var(--accent)}
+.badge-blue{background:var(--blue-bg);color:var(--blue)}
+
+/* DIVIDER */
+.divider{border:none;border-top:1px solid var(--border);margin:18px 0}
+
+/* GRID LAYOUTS */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.grid-auto{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+
+/* AVATAR */
+.avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex-shrink:0}
+
+/* PROFILE CARD */
+.profile-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s}
+.profile-card:hover{border-color:var(--border2);background:var(--bg3)}
+.profile-card.active{border-color:var(--accent);background:var(--accent-bg)}
+
+/* MINI BAR */
+.mini-bar{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.mini-bar-label{font-size:12px;color:var(--text2);width:80px;flex-shrink:0}
+.mini-bar-track{flex:1;background:var(--bg4);border-radius:99px;height:5px;overflow:hidden}
+.mini-bar-fill{height:100%;border-radius:99px;background:var(--accent);transition:width .4s}
+.mini-bar-val{font-size:12px;color:var(--text2);width:36px;text-align:right;flex-shrink:0}
+
+/* HISTORY BARS */
+.hist-wrap{display:flex;gap:3px;align-items:flex-end;height:48px;margin:8px 0 4px}
+.hist-b{flex:1;border-radius:2px 2px 0 0;background:var(--bg4);min-height:3px;position:relative;transition:background .15s}
+.hist-b:hover{background:var(--accent)}
+.hist-b .tip{display:none;position:absolute;bottom:calc(100%+5px);left:50%;transform:translateX(-50%);background:var(--bg4);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:3px 7px;border-radius:5px;white-space:nowrap;z-index:20}
+.hist-b:hover .tip{display:block}
+.hist-labels{display:flex;gap:3px}
+.hist-labels span{flex:1;font-size:10px;color:var(--text3);text-align:center;overflow:hidden;text-overflow:ellipsis}
+
+/* MEAL INPUT GRID */
+.meal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+.meal-cell{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
+.meal-cell-name{font-size:12px;font-weight:500;margin-bottom:8px;color:var(--text)}
+.meal-cell-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.meal-cell-label{font-size:11px;color:var(--text3)}
+.meal-num-input{width:64px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;color:var(--text);text-align:center;font-family:var(--font)}
+.meal-num-input:focus{outline:none;border-color:var(--accent)}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:1000;max-width:320px}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.error{background:#2e1a1a;border-color:rgba(224,82,82,0.4);color:var(--red)}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;align-items:center;justify-content:center;padding:20px}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:24px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto}
+.modal-title{font-family:var(--font-serif);font-size:20px;margin-bottom:4px}
+.modal-sub{font-size:13px;color:var(--text2);margin-bottom:20px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* NET VALUE */
+.net-pos{color:var(--green)}
+.net-neg{color:var(--red)}
+
+/* DETAIL PANEL */
+.detail-section{margin-bottom:20px}
+.detail-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;font-weight:500;display:flex;align-items:center;gap:8px}
+.detail-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* DATE ROW */
+.date-row{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.date-row label{font-size:13px;color:var(--text2);white-space:nowrap}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .sidebar{width:56px;overflow:hidden}
+  .logo-text,.logo-sub,.nav-label,.nav-section,.sidebar-footer{display:none}
+  .nav-item{justify-content:center;padding:10px}
+  .content,.topbar{padding-left:16px;padding-right:16px}
+  .grid-2,.grid-3{grid-template-columns:1fr}
+}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.4}
+.empty-text{font-size:14px}
+
+/* INLINE EDIT */
+td .input-sm{background:var(--bg4);border-color:var(--border)}
+
+/* TABS */
+.tabs-inline{display:flex;gap:2px;background:var(--bg3);border-radius:var(--radius-sm);padding:3px;margin-bottom:16px;width:fit-content}
+.tab-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text3);font-family:var(--font);transition:all .15s}
+.tab-btn.active{background:var(--bg2);color:var(--text);border:1px solid var(--border)}
+
+/* LOADING */
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--text3);font-size:13px;gap:10px}
+.spinner{width:16px;height:16px;border:2px solid var(--bg4);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* SCROLLABLE TABLE CONTAINER */
+.scroll-table{max-height:400px;overflow-y:auto}
+
+/* MONTH SELECTOR */
+.month-sel{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.month-sel label{font-size:13px;color:var(--text2)}
+
+/* PROFILE — MOBILE LIST VIEW */
+.profile-mobile-list{display:none}
+.profile-mobile-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:12px}
+.profile-mobile-item:last-child{border-bottom:none}
+.profile-mobile-item:hover .pmi-name{color:var(--accent)}
+.pmi-left{display:flex;align-items:center;gap:10px;min-width:0}
+.pmi-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmi-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+@media(max-width:600px){
+  .profile-mobile-list{display:block}
+  .grid-auto{display:none}
+}
+
+/* UTILITY PAGE */
+.util-month-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px}
+.util-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-text">MessManager</div>
+      <div class="logo-sub">Dhaka · 2025</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Overview</div>
+      <button class="nav-item active" onclick="navigate('dashboard')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-item" onclick="navigate('profiles')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        <span class="nav-label">Profiles</span>
+      </button>
+      <div class="nav-section">Entry</div>
+      <button class="nav-item" onclick="navigate('meals')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2v12M8 2v4M13 2v12M8 6c0 2.5-2 3-2 5"/></svg>
+        <span class="nav-label">Meal Entry</span>
+      </button>
+      <button class="nav-item" onclick="navigate('bazar')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12l-1.5 7H3.5L2 4z"/><circle cx="6" cy="13" r="1"/><circle cx="11" cy="13" r="1"/><path d="M5 2h6"/></svg>
+        <span class="nav-label">Bazar Entry</span>
+      </button>
+      <button class="nav-item" onclick="navigate('utility')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v3M8 12v3M3.5 3.5l2 2M10.5 10.5l2 2M1 8h3M12 8h3M3.5 12.5l2-2M10.5 5.5l2-2"/></svg>
+        <span class="nav-label">Utility Entry</span>
+      </button>
+      <button class="nav-item" onclick="navigate('rent')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="12" height="9" rx="1"/><path d="M5 5V4a3 3 0 016 0v1"/><path d="M8 9v2"/></svg>
+        <span class="nav-label">Room Rent</span>
+      </button>
+      <div class="nav-section">Reports</div>
+      <button class="nav-item" onclick="navigate('log')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 6h6M5 9h4"/></svg>
+        <span class="nav-label">Monthly Log</span>
+      </button>
+      <div class="nav-section">Settings</div>
+      <button class="nav-item" onclick="navigate('members')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 13c0-2.8 2.2-5 5-5"/><circle cx="12" cy="7" r="2"/><path d="M9 14c0-1.7 1.3-3 3-3s3 1.3 3 3"/></svg>
+        <span class="nav-label">Members</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="db-status"><div class="db-dot" id="db-dot"></div><span id="db-label">Connecting…</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div id="page-dashboard" class="page"></div>
+    <div id="page-profiles" class="page" style="display:none"></div>
+    <div id="page-meals" class="page" style="display:none"></div>
+    <div id="page-bazar" class="page" style="display:none"></div>
+    <div id="page-utility" class="page" style="display:none"></div>
+    <div id="page-rent" class="page" style="display:none"></div>
+    <div id="page-log" class="page" style="display:none"></div>
+    <div id="page-members" class="page" style="display:none"></div>
+  </main>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ============================================================
+   DATABASE — Supabase
+   ============================================================ */
+const SUPABASE_URL = 'https://lrzotklutnyzcadutgwf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ── Compatibility shims so all existing code works unchanged ── */
+
+// txGetAll('members') → all rows ordered by created_at
+// txGetAll('meals')   → all rows ordered by date
+// txGetAll('bazar')   → all rows ordered by date
+// txGetAll('rent')    → all rows ordered by month_key (stored as .key on each row)
+async function txGetAll(store) {
+  const orderCol = (store === 'meals' || store === 'bazar') ? 'date'
+                 : store === 'rent' ? 'month_key'
+                 : 'created_at';
+  const { data, error } = await sb.from(store).select('*').order(orderCol);
+  if (error) throw error;
+  // rent rows: expose .key and .monthName aliases so existing code keeps working
+  if (store === 'rent') data.forEach(r => { r.key = r.month_key; r.monthName = r.month_name; });
+  return data || [];
+}
+
+// txGet('rent', key)  → single rent row by month_key
+// txGet('members', id) — not used in existing code, but included for safety
+async function txGet(store, key) {
+  if (store === 'rent') {
+    const { data, error } = await sb.from('rent').select('*').eq('month_key', key).maybeSingle();
+    if (error) throw error;
+    if (data) { data.key = data.month_key; data.monthName = data.month_name; }
+    return data;
+  }
+  const { data, error } = await sb.from(store).select('*').eq('id', key).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// txPut — upsert.  Handles members, meals, bazar, rent.
+async function txPut(store, row) {
+  if (store === 'members') {
+    // members: if row has no id it's a new insert; otherwise update
+    if (!row.id) {
+      const ins = { name: row.name, room: row.room||'', rent: row.rent||0,
+                    phone: row.phone||'', joined: row.joined||null };
+      const { data, error } = await sb.from('members').insert(ins).select().single();
+      if (error) throw error;
+      return data.id;
+    } else {
+      const { error } = await sb.from('members').update({
+        name: row.name, room: row.room||'', rent: row.rent||0,
+        phone: row.phone||'', joined: row.joined||null
+      }).eq('id', row.id);
+      if (error) throw error;
+      return row.id;
+    }
+  }
+
+  if (store === 'meals') {
+    const { data, error } = await sb.from('meals').upsert(
+      { date: row.date, meals: row.meals },
+      { onConflict: 'date' }
+    ).select().single();
+    if (error) throw error;
+    return data.id;
+  }
+
+  if (store === 'bazar') {
+    const { data, error } = await sb.from('bazar').upsert(
+      { date: row.date, bazar: row.bazar, utility: row.utility||{} },
+      { onConflict: 'date' }
+    ).select().single();
+    if (error) throw error;
+    return data.id;
+  }
+
+  if (store === 'rent') {
+    const { data, error } = await sb.from('rent').upsert(
+      { month_key: row.key, month: row.month, year: row.year,
+        month_name: row.monthName, entries: row.entries },
+      { onConflict: 'month_key' }
+    ).select().single();
+    if (error) throw error;
+    return data.month_key;
+  }
+}
+
+// txDelete — delete by id (meals, bazar, members) or month_key (rent)
+async function txDelete(store, key) {
+  if (store === 'rent') {
+    const { error } = await sb.from('rent').delete().eq('month_key', key);
+    if (error) throw error;
+  } else {
+    const { error } = await sb.from(store).delete().eq('id', key);
+    if (error) throw error;
+  }
+}
+
+// txClear — not needed but kept to avoid reference errors
+async function txClear(store) {
+  const { error } = await sb.from(store).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (error) throw error;
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const AVATAR_PALETTE = [
+  {bg:'#1a2a3a',fg:'#5b9bd5'},{bg:'#1a2e25',fg:'#4caf82'},{bg:'#2e1a1a',fg:'#e05252'},
+  {bg:'#2a2218',fg:'#d4a853'},{bg:'#251a2e',fg:'#9b7fd4'},{bg:'#1e2a2a',fg:'#4cb8b8'},
+  {bg:'#2e1f1a',fg:'#d47a4c'},{bg:'#1a1a2e',fg:'#7a7dd4'}
+];
+
+let currentPage = 'dashboard';
+let members = [];
+let selectedProfileId = null;
+
+function today() { return new Date().toISOString().slice(0, 10); }
+function thisMonth() {
+  const n = new Date();
+  return { month: n.getMonth(), year: n.getFullYear() };
+}
+function pad2(n) { return String(n+1).padStart(2,'0'); }
+function monthKey(y, m) { return `${y}-${pad2(m)}`; }
+function fmt(n) { return Number(n||0).toLocaleString('en-IN'); }
+function fmtTk(n) { return '৳' + fmt(n); }
+function round2(n) { return Math.round((n||0)*100)/100; }
+function initials(name) { return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function avatarColor(i) { return AVATAR_PALETTE[i % AVATAR_PALETTE.length]; }
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+function navigate(page) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) n.classList.add('active');
+  });
+  renderPage(page);
+}
+
+async function renderPage(page) {
+  members = await txGetAll('members');
+  switch(page) {
+    case 'dashboard': await renderDashboard(); break;
+    case 'profiles': await renderProfiles(); break;
+    case 'meals': renderMeals(); break;
+    case 'bazar': renderBazar(); break;
+    case 'utility': await renderUtility(); break;
+    case 'rent': renderRent(); break;
+    case 'log': renderLog(); break;
+    case 'members': renderMembers(); break;
+  }
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+async function renderDashboard() {
+  const {month, year} = thisMonth();
+  const key = monthKey(year, month);
+  const allMeals = await txGetAll('meals');
+  const allBazar = await txGetAll('bazar');
+  const rentRec = await txGet('rent', key);
+
+  const monthMeals = allMeals.filter(r => r.date.startsWith(key));
+  const monthBazar = allBazar.filter(r => r.date.startsWith(key));
+
+  let totalMeals = 0, totalBazar = 0, totalUtility = 0;
+  monthMeals.forEach(r => Object.values(r.meals||{}).forEach(v => totalMeals += Number(v)));
+  monthBazar.forEach(r => {
+    Object.values(r.bazar||{}).forEach(v => totalBazar += Number(v));
+    if (r.utility) Object.values(r.utility).forEach(v => totalUtility += Number(v));
+  });
+  const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
+  const totalRentDue = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.rent||0),0) : 0;
+  const totalRentPaid = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.paid||0),0) : 0;
+
+  // Recent activity
+  const recentMeals = allMeals.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+
+  // Per-member bazar totals this month
+  let memBazar = {};
+  monthBazar.forEach(r => { Object.entries(r.bazar||{}).forEach(([k,v]) => { memBazar[k] = (memBazar[k]||0) + Number(v); }); });
+  const topBazar = Object.entries(memBazar).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxBazar = topBazar.length ? topBazar[0][1] : 1;
+
+  const html = `
+    <div class="topbar">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">${MONTHS[month]} ${year} — ${members.length} members</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" onclick="navigate('meals')">+ Meal</button>
+        <button class="btn btn-primary btn-sm" onclick="navigate('bazar')">+ Bazar</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total meals</div>
+          <div class="stat-value">${totalMeals}</div>
+          <div class="stat-sub">${MONTHS[month]}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Meal rate</div>
+          <div class="stat-value">${fmtTk(mealRate)}</div>
+          <div class="stat-sub">per meal</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total bazar</div>
+          <div class="stat-value">${fmtTk(totalBazar)}</div>
+          <div class="stat-sub">groceries</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Utility bill</div>
+          <div class="stat-value">${fmtTk(totalUtility)}</div>
+          <div class="stat-sub">elec + wifi + gas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Rent collected</div>
+          <div class="stat-value">${fmtTk(totalRentPaid)}</div>
+          <div class="stat-sub">of ${fmtTk(totalRentDue)} due</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Days logged</div>
+          <div class="stat-value">${monthMeals.length}</div>
+          <div class="stat-sub">meal entries</div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap:14px">
+        <div class="card">
+          <div class="card-title">Bazar leaders — ${MONTHS[month]}</div>
+          ${topBazar.length ? topBazar.map(([name,amt]) => `
+            <div class="mini-bar">
+              <div class="mini-bar-label" style="overflow:hidden;text-overflow:ellipsis">${name}</div>
+              <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt/maxBazar)*100)}%"></div></div>
+              <div class="mini-bar-val">${fmtTk(amt)}</div>
+            </div>`).join('') : '<div class="empty"><div class="empty-text">No bazar data yet</div></div>'}
+        </div>
+        <div class="card">
+          <div class="card-title">Recent meal entries</div>
+          ${recentMeals.length ? `<div class="tbl-wrap"><table>
+            <thead><tr><th>Date</th><th>Total meals</th><th>Members</th></tr></thead>
+            <tbody>${recentMeals.map(r => {
+              const total = Object.values(r.meals||{}).reduce((s,v)=>s+Number(v),0);
+              const active = Object.values(r.meals||{}).filter(v=>Number(v)>0).length;
+              return `<tr><td>${r.date}</td><td>${total}</td><td>${active} members</td></tr>`;
+            }).join('')}</tbody>
+          </table></div>` : '<div class="empty"><div class="empty-text">No meal data yet</div></div>'}
+        </div>
+      </div>
+
+      ${rentRec && rentRec.entries.length ? `
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">Rent status — ${MONTHS[month]} ${year}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${rentRec.entries.map(e => {
+            const cls = e.status==='paid'?'badge-green':e.status==='partial'?'badge-amber':'badge-red';
+            const label = e.status==='paid'?'Paid':e.status==='partial'?'Partial':'Due';
+            return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <span style="font-size:13px;font-weight:500">${e.name}</span>
+              <span class="badge ${cls}">${label}</span>
+              <span style="font-size:12px;color:var(--text2)">${fmtTk(e.paid)}/${fmtTk(e.rent)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
+  document.getElementById('page-dashboard').innerHTML = html;
+}
+
+/* ============================================================
+   MEAL ENTRY
+   ============================================================ */
+function renderMeals() {
+  const el = document.getElementById('page-meals');
+  el.innerHTML = `
+    <div class="topbar">
+      <div><div class="page-title">Meal Entry</div><div class="page-sub">Log daily meals per member</div></div>
+    </div>
+    <div class="content">
+      <div class="card" style="margin-bottom:14px">
+        <div class="date-row">
+          <label>Date</label>
+          <input type="date" class="input" id="meal-date" value="${today()}" style="width:180px" onchange="loadMealForDate()"/>
+          <button class="btn btn-ghost btn-sm" onclick="loadMealForDate()">Load existing</button>
+        </div>
+        <div class="stat-grid" style="margin-bottom:16px">
+          <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value" id="m-total">0</div></div>
+          <div class="stat-card"><div class="stat-label">Members eating</div><div class="stat-value" id="m-eating">0</div></div>
+        </div>
+        <div class="card-title">Meals per member</div>
+        <div class="meal-grid" id="meal-input-grid"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
+          <button class="btn btn-ghost" onclick="setAllMeals(2)">Set all → 2</button>
+          <button class="btn btn-ghost" onclick="setAllMeals(1)">Set all → 1</button>
+          <button class="btn btn-ghost" onclick="setAllMeals(0)">Clear all</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Recent entries</div>
+        <div class="tbl-wrap" id="meals-recent-table"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>`;
+  buildMealInputs();
+  loadMealsRecent();
+}
+
+function buildMealInputs() {
+  const grid = document.getElementById('meal-input-grid');
+  if (!grid) return;
+  grid.innerHTML = members.map(m => `
+    <div class="meal-cell">
+      <div class="meal-cell-name">${m.name}</div>
+      <div class="meal-cell-row">
+        <span class="meal-cell-label">Meals</span>
+        <input type="number" class="meal-num-input" id="mi-${m.id}" min="0" max="6" step="0.5" value="2" oninput="updMealSummary()"/>
+      </div>
+    </div>`).join('');
+  updMealSummary();
+}
+
+function updMealSummary() {
+  let t=0,c=0;
+  members.forEach(m => {
+    const v = parseFloat(document.getElementById('mi-'+m.id)?.value||0);
+    t+=v; if(v>0)c++;
+  });
+  const te=document.getElementById('m-total'), ce=document.getElementById('m-eating');
+  if(te)te.textContent=t;
+  if(ce)ce.textContent=c;
+}
+
+function setAllMeals(v) {
+  members.forEach(m => { const el=document.getElementById('mi-'+m.id); if(el)el.value=v; });
+  updMealSummary();
+}
+
+async function loadMealForDate() {
+  const date = document.getElementById('meal-date')?.value;
+  if (!date) return;
+  const { data: rec, error } = await sb.from('meals').select('*').eq('date', date).maybeSingle();
+  if (error) { toast('Error loading: '+error.message); return; }
+  if (rec) {
+    members.forEach(m => {
+      const el = document.getElementById('mi-'+m.id);
+      if (el) el.value = rec.meals[m.name] ?? 0;
+    });
+    updMealSummary();
+    toast('Loaded entry for '+date);
+  } else {
+    toast('No entry for '+date+' — starting fresh');
+  }
+}
+
+async function saveMeals() {
+  const date = document.getElementById('meal-date')?.value;
+  if (!date) { toast('Select a date first'); return; }
+  const meals = {};
+  members.forEach(m => { meals[m.name] = parseFloat(document.getElementById('mi-'+m.id)?.value||0); });
+  try {
+    await txPut('meals', { date, meals });
+    toast('Meals saved for '+date);
+    loadMealsRecent();
+  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+}
+
+async function loadMealsRecent() {
+  const wrap = document.getElementById('meals-recent-table');
+  if (!wrap) return;
+  const all = await txGetAll('meals');
+  const recent = all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  if (!recent.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No meal entries yet</div></div>'; return; }
+  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th><th></th></tr></thead>
+    <tbody>${recent.map(r=>{
+      const t=Object.values(r.meals||{}).reduce((s,v)=>s+Number(v),0);
+      return `<tr><td>${r.date}</td>${members.map(m=>`<td>${r.meals[m.name]??'—'}</td>`).join('')}<td><b>${t}</b></td>
+        <td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteMeal('${r.id}')" title="Delete">✕</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function deleteMeal(id) {
+  if (!confirm('Delete this entry?')) return;
+  try {
+    await txDelete('meals', id);
+    toast('Entry deleted');
+    loadMealsRecent();
+    if (currentPage === 'dashboard') renderDashboard();
+  } catch(e) { toast('Delete failed: '+e.message, 'error'); console.error(e); }
+}
+
+/* ============================================================
+   BAZAR ENTRY
+   ============================================================ */
+function renderBazar() {
+  const el = document.getElementById('page-bazar');
+  el.innerHTML = `
+    <div class="topbar">
+      <div><div class="page-title">Bazar Entry</div><div class="page-sub">Log daily grocery spending per member</div></div>
+    </div>
+    <div class="content">
+      <div class="card" style="margin-bottom:14px">
+        <div class="date-row">
+          <label>Date</label>
+          <input type="date" class="input" id="bazar-date" value="${today()}" style="width:180px" onchange="loadBazarForDate()"/>
+          <button class="btn btn-ghost btn-sm" onclick="loadBazarForDate()">Load existing</button>
+        </div>
+        <div class="card-title">Bazar per member (৳)</div>
+        <div class="meal-grid" id="bazar-input-grid" style="margin-bottom:16px"></div>
+        <div class="stat-grid" style="margin-bottom:16px">
+          <div class="stat-card"><div class="stat-label">Bazar total</div><div class="stat-value" id="bazar-tot">৳0</div></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveBazar()">Save bazar</button>
+          <button class="btn btn-ghost" onclick="clearBazar()">Clear</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Recent entries</div>
+        <div class="tbl-wrap" id="bazar-recent-table"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>`;
+  buildBazarInputs();
+  loadBazarRecent();
+}
+
+function buildBazarInputs() {
+  const g = document.getElementById('bazar-input-grid');
+  if (!g) return;
+  g.innerHTML = members.map(m => `
+    <div class="meal-cell">
+      <div class="meal-cell-name">${m.name}</div>
+      <div class="meal-cell-row">
+        <span class="meal-cell-label">৳</span>
+        <input type="number" class="meal-num-input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSummary()"/>
+      </div>
+    </div>`).join('');
+}
+
+function updBazarSummary() {
+  let b=0;
+  members.forEach(m => { b+=parseFloat(document.getElementById('bz-'+m.id)?.value||0); });
+  const bt=document.getElementById('bazar-tot');
+  if(bt)bt.textContent=fmtTk(b);
+}
+
+async function loadBazarForDate() {
+  const date = document.getElementById('bazar-date')?.value;
+  if (!date) return;
+  const { data: rec, error } = await sb.from('bazar').select('*').eq('date', date).maybeSingle();
+  if (error) { toast('Error loading: '+error.message); return; }
+  if (rec) {
+    members.forEach(m => { const el=document.getElementById('bz-'+m.id); if(el)el.value=rec.bazar[m.name]??0; });
+    updBazarSummary();
+    toast('Loaded entry for '+date);
+  } else {
+    toast('No entry for '+date+' — starting fresh');
+  }
+}
+
+function clearBazar() {
+  members.forEach(m => { const el=document.getElementById('bz-'+m.id); if(el)el.value=''; });
+  updBazarSummary();
+}
+
+async function saveBazar() {
+  const date = document.getElementById('bazar-date')?.value;
+  if (!date) { toast('Select a date first'); return; }
+  const bazar = {};
+  members.forEach(m => { bazar[m.name] = parseFloat(document.getElementById('bz-'+m.id)?.value||0); });
+  try {
+    // Preserve any existing utility data for this date
+    const { data: existing } = await sb.from('bazar').select('utility').eq('date', date).maybeSingle();
+    const utility = existing?.utility || {};
+    await txPut('bazar', { date, bazar, utility });
+    toast('Bazar saved for '+date);
+    loadBazarRecent();
+  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+}
+
+async function loadBazarRecent() {
+  const wrap = document.getElementById('bazar-recent-table');
+  if (!wrap) return;
+  const all = await txGetAll('bazar');
+  const recent = all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+  if (!recent.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No bazar entries yet</div></div>'; return; }
+  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Bazar</th><th>Utility</th><th></th></tr></thead>
+    <tbody>${recent.map(r=>{
+      const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);
+      const ut=Object.values(r.utility||{}).reduce((s,v)=>s+Number(v),0);
+      return `<tr><td>${r.date}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'—'}</td>`).join('')}
+        <td><b>${fmtTk(bt)}</b></td><td>${fmtTk(ut)}</td>
+        <td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteBazar('${r.id}')" title="Delete">✕</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function deleteBazar(id) {
+  if (!confirm('Delete this entry?')) return;
+  try {
+    await txDelete('bazar', id);
+    toast('Entry deleted');
+    loadBazarRecent();
+  } catch(e) { toast('Delete failed: '+e.message, 'error'); console.error(e); }
+}
+
+/* ============================================================
+   ROOM RENT
+   ============================================================ */
+async function renderRent() {
+  const el = document.getElementById('page-rent');
+  const n = new Date();
+  el.innerHTML = `
+    <div class="topbar">
+      <div><div class="page-title">Room Rent</div><div class="page-sub">Track monthly rent collection</div></div>
+    </div>
+    <div class="content">
+      <div class="month-sel" style="margin-bottom:16px">
+        <label>Month</label>
+        <select class="input" id="rent-month" style="width:140px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
+        <label>Year</label>
+        <select class="input" id="rent-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
+        <button class="btn btn-ghost" onclick="loadRentMonth()">Load</button>
+      </div>
+      <div class="stat-grid" id="rent-stats"></div>
+      <div class="card">
+        <div class="card-title">Rent entries</div>
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Member</th><th>Default rent</th><th>Due this month (৳)</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody id="rent-tbody"></tbody></table>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+          <button class="btn btn-primary" onclick="saveRent()">Save rent</button>
+          <button class="btn btn-ghost" onclick="markAllPaid()">Mark all paid</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">All months history</div>
+        <div class="tbl-wrap" id="rent-history"></div>
+      </div>
+    </div>`;
+  loadRentMonth();
+  loadRentHistory();
+}
+
+async function loadRentMonth() {
+  const month = parseInt(document.getElementById('rent-month')?.value||0);
+  const year = parseInt(document.getElementById('rent-year')?.value||2025);
+  const key = monthKey(year, month);
+  const rec = await txGet('rent', key);
+  const tb = document.getElementById('rent-tbody');
+  if (!tb) return;
+  tb.innerHTML = members.map(m => {
+    const e = rec?.entries?.find(x=>x.name===m.name)||{};
+    const due = e.rent ?? m.rent ?? 0;
+    const paid = e.paid ?? 0;
+    const status = e.status ?? 'unpaid';
+    const notes = e.notes ?? '';
+    const cls = status==='paid'?'badge-green':status==='partial'?'badge-amber':'badge-red';
+    return `<tr>
+      <td><b>${m.name}</b></td>
+      <td style="color:var(--text3)">${fmtTk(m.rent||0)}</td>
+      <td><input type="number" class="input input-sm" id="ra-${m.id}" value="${due}" style="width:100px" oninput="updRentSummary()"/></td>
+      <td><input type="number" class="input input-sm" id="rp-${m.id}" value="${paid}" style="width:100px" oninput="updRentSummary()"/></td>
+      <td><select class="input input-sm" id="rs-${m.id}" style="width:110px">
+        <option value="paid"${status==='paid'?' selected':''}>Paid</option>
+        <option value="unpaid"${status==='unpaid'?' selected':''}>Not paid</option>
+        <option value="partial"${status==='partial'?' selected':''}>Partial</option>
+      </select></td>
+      <td><input type="text" class="input input-sm" id="rn-${m.id}" value="${notes}" placeholder="—" style="width:130px"/></td>
+    </tr>`;
+  }).join('');
+  updRentSummary();
+}
+
+function updRentSummary() {
+  let due=0,paid=0;
+  members.forEach(m => {
+    due += parseFloat(document.getElementById('ra-'+m.id)?.value||0);
+    paid += parseFloat(document.getElementById('rp-'+m.id)?.value||0);
+  });
+  const el = document.getElementById('rent-stats');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total due</div><div class="stat-value">${fmtTk(due)}</div></div>
+    <div class="stat-card"><div class="stat-label">Collected</div><div class="stat-value" style="color:var(--green)">${fmtTk(paid)}</div></div>
+    <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" style="color:${due-paid>0?'var(--red)':'var(--green)'}">${fmtTk(due-paid)}</div></div>
+    <div class="stat-card"><div class="stat-label">Collection rate</div><div class="stat-value">${due>0?Math.round((paid/due)*100):0}%</div></div>`;
+}
+
+function markAllPaid() {
+  members.forEach(m => {
+    const ra=document.getElementById('ra-'+m.id), rp=document.getElementById('rp-'+m.id), rs=document.getElementById('rs-'+m.id);
+    if(ra&&rp&&rs){ rp.value=ra.value; rs.value='paid'; }
+  });
+  updRentSummary();
+}
+
+async function saveRent() {
+  const month = parseInt(document.getElementById('rent-month')?.value||0);
+  const year = parseInt(document.getElementById('rent-year')?.value||2025);
+  const key = monthKey(year, month);
+  const entries = members.map(m => ({
+    name: m.name,
+    rent: parseFloat(document.getElementById('ra-'+m.id)?.value||0),
+    paid: parseFloat(document.getElementById('rp-'+m.id)?.value||0),
+    status: document.getElementById('rs-'+m.id)?.value||'unpaid',
+    notes: document.getElementById('rn-'+m.id)?.value||''
+  }));
+  try {
+    await txPut('rent', { key, month, year, monthName: MONTHS[month], entries });
+    toast('Rent saved for '+MONTHS[month]+' '+year);
+    loadRentHistory();
+  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+}
+
+async function loadRentHistory() {
+  const wrap = document.getElementById('rent-history');
+  if (!wrap) return;
+  const all = await txGetAll('rent');
+  if (!all.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No rent records yet</div></div>'; return; }
+  all.sort((a,b)=>b.key.localeCompare(a.key));
+  wrap.innerHTML=`<table><thead><tr><th>Month</th><th>Total due</th><th>Collected</th><th>Outstanding</th><th>Status</th></tr></thead>
+    <tbody>${all.map(r=>{
+      const due=r.entries.reduce((s,e)=>s+Number(e.rent||0),0);
+      const paid=r.entries.reduce((s,e)=>s+Number(e.paid||0),0);
+      const allPaid=r.entries.every(e=>e.status==='paid');
+      const anyUnpaid=r.entries.some(e=>e.status==='unpaid');
+      const cls=allPaid?'badge-green':anyUnpaid?'badge-red':'badge-amber';
+      const label=allPaid?'Complete':anyUnpaid?'Pending':'Partial';
+      return `<tr><td><b>${r.monthName} ${r.year}</b></td><td>${fmtTk(due)}</td><td style="color:var(--green)">${fmtTk(paid)}</td><td style="color:${due-paid>0?'var(--red)':'var(--green)'}">${fmtTk(due-paid)}</td><td><span class="badge ${cls}">${label}</span></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+/* ============================================================
+   PROFILES
+   ============================================================ */
+async function renderProfiles() {
+  const el = document.getElementById('page-profiles');
+
+  // Only build the shell once — preserve the select value on period changes
+  if (!document.getElementById('prof-period')) {
+    el.innerHTML = `
+      <div class="topbar">
+        <div><div class="page-title">Member Profiles</div><div class="page-sub">Individual summaries & history</div></div>
+        <div class="topbar-actions">
+          <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:160px">
+            <option value="all">All time</option>
+            <option value="1">This month</option>
+            <option value="3">Last 3 months</option>
+            <option value="6">Last 6 months</option>
+          </select>
+        </div>
+      </div>
+      <div class="content">
+        <div class="grid-auto" id="profile-card-grid" style="margin-bottom:20px"></div>
+        <div class="card profile-mobile-list" id="profile-mobile-list" style="margin-bottom:14px;padding:4px 16px"></div>
+        <div id="profile-detail-section"></div>
+      </div>`;
+  }
+
+  const allMeals = await txGetAll('meals');
+  const allBazar = await txGetAll('bazar');
+  const allRent = await txGetAll('rent');
+
+  buildProfileCards(allMeals, allBazar, allRent);
+  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent);
+}
+
+async function refreshProfiles() {
+  const allMeals = await txGetAll('meals');
+  const allBazar = await txGetAll('bazar');
+  const allRent = await txGetAll('rent');
+  buildProfileCards(allMeals, allBazar, allRent);
+  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent);
+  else document.getElementById('profile-detail-section').innerHTML = '';
+}
+
+function getFilteredData(allMeals, allBazar, allRent, period) {
+  if (period === 'all') return { meals: allMeals, bazar: allBazar, rent: allRent };
+  const months = parseInt(period);
+  const now = new Date();
+  // Build cutStr manually to avoid UTC offset shifting the month (e.g. Dhaka is UTC+6)
+  let cutMonth = now.getMonth() - months + 1;  // JS months 0-indexed
+  let cutYear  = now.getFullYear();
+  while (cutMonth < 0)  { cutMonth += 12; cutYear--; }
+  while (cutMonth > 11) { cutMonth -= 12; cutYear++; }
+  const cutStr = cutYear + '-' + String(cutMonth + 1).padStart(2, '0');
+  return {
+    meals: allMeals.filter(r => r.date.slice(0,7) >= cutStr),
+    bazar: allBazar.filter(r => r.date.slice(0,7) >= cutStr),
+    rent: allRent.filter(r => r.key >= cutStr)
+  };
+}
+
+function getMemberStats(member, meals, bazar, rent) {
+  let totalMeals=0, totalBazar=0, rentDue=0, rentPaid=0, activeDays=0;
+  const byMonth = {};
+  meals.forEach(r => {
+    const v = Number(r.meals[member.name]||0);
+    totalMeals += v; if(v>0) activeDays++;
+    const k = r.date.slice(0,7);
+    byMonth[k] = byMonth[k]||{meals:0,bazar:0,rentPaid:0};
+    byMonth[k].meals += v;
+  });
+  bazar.forEach(r => {
+    const v = Number(r.bazar[member.name]||0);
+    totalBazar += v;
+    const k = r.date.slice(0,7);
+    byMonth[k] = byMonth[k]||{meals:0,bazar:0,rentPaid:0};
+    byMonth[k].bazar += v;
+  });
+  rent.forEach(r => {
+    const e = r.entries?.find(x=>x.name===member.name);
+    if (e) { rentDue+=Number(e.rent||0); rentPaid+=Number(e.paid||0); byMonth[r.key]=byMonth[r.key]||{meals:0,bazar:0,rentPaid:0}; byMonth[r.key].rentPaid+=Number(e.paid||0); }
+  });
+  const totalDays = meals.length;
+  const avgMeals = totalDays>0 ? round2(totalMeals/totalDays) : 0;
+  const latestRent = rent.sort((a,b)=>b.key.localeCompare(a.key))[0];
+  const latestStatus = latestRent?.entries?.find(x=>x.name===member.name)?.status||'unpaid';
+  return { totalMeals, totalBazar, rentDue, rentPaid, activeDays, avgMeals, latestStatus, byMonth };
+}
+
+function buildProfileCards(allMeals, allBazar, allRent) {
+  const period = document.getElementById('prof-period')?.value || 'all';
+  const { meals, bazar, rent } = getFilteredData(allMeals, allBazar, allRent, period);
+  const grid = document.getElementById('profile-card-grid');
+  if (!grid) return;
+  if (!members.length) {
+    grid.innerHTML='<div class="empty"><div class="empty-text">No members yet. Add members first.</div></div>';
+    const mob = document.getElementById('profile-mobile-list'); if(mob) mob.innerHTML='';
+    return;
+  }
+
+  // Desktop grid cards (hidden on mobile via CSS)
+  grid.innerHTML = members.map((m, i) => {
+    const stats = getMemberStats(m, meals, bazar, rent);
+    const col = avatarColor(i);
+    const cls = stats.latestStatus==='paid'?'badge-green':stats.latestStatus==='partial'?'badge-amber':'badge-red';
+    const rentLabel = stats.latestStatus==='paid'?'Rent paid':stats.latestStatus==='partial'?'Partial':'Rent due';
+    return `<div class="profile-card${selectedProfileId===m.id?' active':''}" onclick="selectProfile('${m.id}')">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div class="avatar" style="background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
+        <div>
+          <div style="font-weight:600;font-size:15px">${m.name}</div>
+          <span class="badge ${cls}" style="margin-top:4px">${rentLabel}</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div class="stat-card" style="padding:10px"><div class="stat-label">Meals</div><div style="font-size:18px;font-weight:600">${stats.totalMeals}</div></div>
+        <div class="stat-card" style="padding:10px"><div class="stat-label">Avg/day</div><div style="font-size:18px;font-weight:600">${stats.avgMeals}</div></div>
+        <div class="stat-card" style="padding:10px"><div class="stat-label">Bazar</div><div style="font-size:15px;font-weight:600">${fmtTk(stats.totalBazar)}</div></div>
+        <div class="stat-card" style="padding:10px"><div class="stat-label">Rent paid</div><div style="font-size:15px;font-weight:600">${fmtTk(stats.rentPaid)}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Mobile list (name + rent due only, tap for full detail)
+  const mob = document.getElementById('profile-mobile-list');
+  if (mob) {
+    mob.innerHTML = members.map((m, i) => {
+      const stats = getMemberStats(m, meals, bazar, rent);
+      const col = avatarColor(i);
+      const cls = stats.latestStatus==='paid'?'badge-green':stats.latestStatus==='partial'?'badge-amber':'badge-red';
+      const rentLabel = stats.latestStatus==='paid'?'Paid':stats.latestStatus==='partial'?'Partial':'Due';
+      const netDue = stats.rentDue - stats.rentPaid;
+      return `<div class="profile-mobile-item${selectedProfileId===m.id?' active':''}" onclick="selectProfile('${m.id}')">
+        <div class="pmi-left">
+          <div class="avatar" style="width:34px;height:34px;font-size:11px;flex-shrink:0;background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
+          <div class="pmi-name">${m.name}</div>
+        </div>
+        <div class="pmi-right">
+          <span style="font-size:13px;font-weight:500;color:${netDue>0?'var(--red)':netDue<0?'var(--green)':'var(--text2)'}">${netDue>0?fmtTk(netDue)+' due':netDue<0?fmtTk(-netDue)+' overpaid':'Settled'}</span>
+          <span class="badge ${cls}">${rentLabel}</span>
+          <span style="color:var(--text3);font-size:14px">${selectedProfileId===m.id?'▲':'▼'}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+async function selectProfile(id) {
+  selectedProfileId = selectedProfileId === id ? null : id;
+  const allMeals = await txGetAll('meals');
+  const allBazar = await txGetAll('bazar');
+  const allRent = await txGetAll('rent');
+  buildProfileCards(allMeals, allBazar, allRent);
+  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent);
+  else document.getElementById('profile-detail-section').innerHTML='';
+}
+
+function showProfileDetail(id, allMeals, allBazar, allRent) {
+  const member = members.find(m=>m.id===id);
+  if (!member) return;
+  const period = document.getElementById('prof-period')?.value || 'all';
+  const { meals, bazar, rent } = getFilteredData(allMeals, allBazar, allRent, period);
+  const stats = getMemberStats(member, meals, bazar, rent);
+  const col = avatarColor(members.indexOf(member));
+  const net = stats.rentPaid - stats.rentDue;
+  const netCls = net >= 0 ? 'net-pos' : 'net-neg';
+
+  // All months sorted
+  const allMonthKeys = Object.keys(stats.byMonth).sort();
+  const recent8 = allMonthKeys.slice(-8);
+  const maxMeals = Math.max(...recent8.map(k=>stats.byMonth[k]?.meals||0), 1);
+
+  // All meals total share
+  const totalAllMeals = allMeals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
+  const totalAllBazar = allBazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
+  const mealShare = totalAllMeals > 0 ? Math.round((stats.totalMeals/totalAllMeals)*100) : 0;
+  const bazarShare = totalAllBazar > 0 ? Math.round((stats.totalBazar/totalAllBazar)*100) : 0;
+
+  const detail = document.getElementById('profile-detail-section');
+  detail.innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+        <div class="avatar" style="width:52px;height:52px;font-size:17px;background:${col.bg};color:${col.fg}">${initials(member.name)}</div>
+        <div style="flex:1">
+          <div style="font-family:var(--font-serif);font-size:22px">${member.name}</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:3px">Default rent: ${fmtTk(member.rent||0)} / month · ${member.room||'—'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
+          <div style="font-size:20px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:20px">
+        <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${stats.totalMeals}</div></div>
+        <div class="stat-card"><div class="stat-label">Active days</div><div class="stat-value">${stats.activeDays}</div></div>
+        <div class="stat-card"><div class="stat-label">Avg / day</div><div class="stat-value">${stats.avgMeals}</div></div>
+        <div class="stat-card"><div class="stat-label">Bazar spent</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.totalBazar)}</div></div>
+        <div class="stat-card"><div class="stat-label">Rent due</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.rentDue)}</div></div>
+        <div class="stat-card"><div class="stat-label">Rent paid</div><div class="stat-value" style="font-size:16px;color:var(--green)">${fmtTk(stats.rentPaid)}</div></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Share in mess (all time)</div>
+        <div class="mini-bar"><div class="mini-bar-label">Meal share</div><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${mealShare}%"></div></div><div class="mini-bar-val">${mealShare}%</div></div>
+        <div class="mini-bar"><div class="mini-bar-label">Bazar share</div><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${bazarShare}%"></div></div><div class="mini-bar-val">${bazarShare}%</div></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Monthly meal history</div>
+        ${recent8.length ? `
+          <div class="hist-labels">${recent8.map(k=>`<span>${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}</span>`).join('')}</div>
+          <div class="hist-wrap">${recent8.map(k=>{
+            const v=stats.byMonth[k]?.meals||0;
+            const h=Math.max(Math.round((v/maxMeals)*44),3);
+            return `<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5))-1].slice(0,3)} ${k.slice(0,4)}: ${v} meals</div></div>`;
+          }).join('')}</div>` : '<div style="color:var(--text3);font-size:13px">No history</div>'}
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Recent months breakdown</div>
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th></tr></thead>
+          <tbody>${allMonthKeys.slice(-6).reverse().map(k=>{
+            const d=stats.byMonth[k]||{};
+            return `<tr><td>${MONTHS[parseInt(k.slice(5))-1]} ${k.slice(0,4)}</td><td>${d.meals||0}</td><td>${fmtTk(d.bazar||0)}</td><td>${fmtTk(d.rentPaid||0)}</td></tr>`;
+          }).join('')}</tbody></table>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   UTILITY ENTRY
+   ============================================================ */
+async function renderUtility() {
+  const el = document.getElementById('page-utility');
+  const n = new Date();
+  el.innerHTML = `
+    <div class="topbar">
+      <div><div class="page-title">Utility Entry</div><div class="page-sub">Update monthly utility bills independently</div></div>
+    </div>
+    <div class="content">
+      <div class="month-sel" style="margin-bottom:16px">
+        <label>Month</label>
+        <select class="input" id="ut-month" style="width:140px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
+        <label>Year</label>
+        <select class="input" id="ut-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
+        <button class="btn btn-ghost" onclick="loadUtilityMonth()">Load</button>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title">Utility bills for month</div>
+        <div class="util-fields">
+          <div class="field" style="margin:0"><label>Electricity (৳)</label><input type="number" class="input" id="ut-elec" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>WiFi (৳)</label><input type="number" class="input" id="ut-wifi" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Gas (৳)</label><input type="number" class="input" id="ut-gas" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Khala bill (৳)</label><input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+          <div class="field" style="margin:0"><label>Other (৳)</label><input type="number" class="input" id="ut-other" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
+        </div>
+        <div class="stat-grid" style="margin-top:16px;margin-bottom:16px">
+          <div class="stat-card"><div class="stat-label">Total utility</div><div class="stat-value" id="ut-total">৳0</div></div>
+          <div class="stat-card"><div class="stat-label">Per member</div><div class="stat-value" id="ut-per">৳0</div></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveUtility()">Save utility</button>
+          <button class="btn btn-ghost" onclick="clearUtility()">Clear</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Utility history</div>
+        <div class="tbl-wrap" id="ut-history"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>`;
+  loadUtilityMonth();
+  loadUtilityHistory();
+}
+
+function updUtilSummary() {
+  const keys = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other'];
+  const total = keys.reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
+  const perHead = members.length > 0 ? round2(total / members.length) : 0;
+  const te = document.getElementById('ut-total'), tp = document.getElementById('ut-per');
+  if(te) te.textContent = fmtTk(total);
+  if(tp) tp.textContent = fmtTk(perHead);
+}
+
+async function loadUtilityMonth() {
+  const month = parseInt(document.getElementById('ut-month')?.value || 0);
+  const year  = parseInt(document.getElementById('ut-year')?.value  || new Date().getFullYear());
+  // Find any bazar entry in this month and pull its utility block
+  const allBazar = await txGetAll('bazar');
+  const key = monthKey(year, month);
+  // Aggregate utility across all bazar entries in this month
+  const monthEntries = allBazar.filter(r => r.date.startsWith(key));
+  if (monthEntries.length) {
+    // Use the first entry that has utility data, or the last saved
+    const withUtil = monthEntries.filter(r => r.utility && Object.values(r.utility).some(v=>Number(v)>0));
+    const rec = withUtil.length ? withUtil[withUtil.length-1] : monthEntries[monthEntries.length-1];
+    const u = rec.utility || {};
+    ['elec','wifi','gas','khala','other'].forEach(k => {
+      const el = document.getElementById('ut-'+k); if(el) el.value = u[k] || 0;
+    });
+    toast('Loaded utility from '+rec.date);
+  } else {
+    ['elec','wifi','gas','khala','other'].forEach(k => {
+      const el = document.getElementById('ut-'+k); if(el) el.value = '';
+    });
+    toast('No bazar entries found for '+MONTHS[month]+' '+year);
+  }
+  updUtilSummary();
+}
+
+function clearUtility() {
+  ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  updUtilSummary();
+}
+
+async function saveUtility() {
+  const month = parseInt(document.getElementById('ut-month')?.value || 0);
+  const year  = parseInt(document.getElementById('ut-year')?.value  || new Date().getFullYear());
+  const key   = monthKey(year, month);
+  const utility = {
+    elec:  parseFloat(document.getElementById('ut-elec')?.value  || 0),
+    wifi:  parseFloat(document.getElementById('ut-wifi')?.value  || 0),
+    gas:   parseFloat(document.getElementById('ut-gas')?.value   || 0),
+    khala: parseFloat(document.getElementById('ut-khala')?.value || 0),
+    other: parseFloat(document.getElementById('ut-other')?.value || 0)
+  };
+  // We store utility on a dedicated bazar row dated the 1st of the month
+  const dateKey = key + '-01';
+  try {
+    // Load existing bazar for that date if any to preserve bazar data
+    const { data: existing } = await sb.from('bazar').select('*').eq('date', dateKey).maybeSingle();
+    const bazarData = existing?.bazar || {};
+    await txPut('bazar', { date: dateKey, bazar: bazarData, utility });
+    toast('Utility saved for ' + MONTHS[month] + ' ' + year);
+    loadUtilityHistory();
+  } catch(e) { toast('Save failed: ' + e.message, 'error'); console.error(e); }
+}
+
+async function loadUtilityHistory() {
+  const wrap = document.getElementById('ut-history');
+  if (!wrap) return;
+  const allBazar = await txGetAll('bazar');
+  // Group utility by month
+  const byMonth = {};
+  allBazar.forEach(r => {
+    const k = r.date.slice(0,7);
+    if (!byMonth[k]) byMonth[k] = { elec:0, wifi:0, gas:0, khala:0, other:0 };
+    const u = r.utility || {};
+    ['elec','wifi','gas','khala','other'].forEach(f => { byMonth[k][f] += Number(u[f]||0); });
+  });
+  const months = Object.keys(byMonth).sort().reverse().slice(0,12);
+  if (!months.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No utility data yet</div></div>'; return; }
+  wrap.innerHTML=`<table>
+    <thead><tr><th>Month</th><th>Electricity</th><th>WiFi</th><th>Gas</th><th>Khala</th><th>Other</th><th>Total</th><th>Per member</th></tr></thead>
+    <tbody>${months.map(k => {
+      const u = byMonth[k];
+      const total = u.elec + u.wifi + u.gas + u.khala + u.other;
+      const perHead = members.length > 0 ? round2(total / members.length) : 0;
+      const mo = parseInt(k.slice(5)) - 1;
+      return `<tr>
+        <td><b>${MONTHS[mo]} ${k.slice(0,4)}</b></td>
+        <td>${u.elec ? fmtTk(u.elec) : '—'}</td>
+        <td>${u.wifi ? fmtTk(u.wifi) : '—'}</td>
+        <td>${u.gas  ? fmtTk(u.gas)  : '—'}</td>
+        <td>${u.khala? fmtTk(u.khala): '—'}</td>
+        <td>${u.other? fmtTk(u.other): '—'}</td>
+        <td><b>${fmtTk(total)}</b></td>
+        <td style="color:var(--text2)">${fmtTk(perHead)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+/* ============================================================
+   MONTHLY LOG
+   ============================================================ */
+async function renderLog() {
+  const el = document.getElementById('page-log');
+  const n = new Date();
+  el.innerHTML = `
+    <div class="topbar">
+      <div><div class="page-title">Monthly Log</div><div class="page-sub">Full month report</div></div>
+    </div>
+    <div class="content">
+      <div class="month-sel" style="margin-bottom:16px">
+        <label>Month</label>
+        <select class="input" id="log-month" style="width:140px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
+        <label>Year</label>
+        <select class="input" id="log-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
+        <button class="btn btn-primary" onclick="loadLog()">Generate report</button>
+      </div>
+      <div id="log-content"><div class="empty"><div class="empty-text">Select a month and click Generate report</div></div></div>
+    </div>`;
+}
+
+async function loadLog() {
+  const month = parseInt(document.getElementById('log-month').value);
+  const year = parseInt(document.getElementById('log-year').value);
+  const key = monthKey(year, month);
+  const allMeals = await txGetAll('meals');
+  const allBazar = await txGetAll('bazar');
+  const rentRec = await txGet('rent', key);
+
+  const fm = allMeals.filter(r=>r.date.startsWith(key)).sort((a,b)=>a.date.localeCompare(b.date));
+  const fb = allBazar.filter(r=>r.date.startsWith(key)).sort((a,b)=>a.date.localeCompare(b.date));
+
+  let totalMeals=0, totalBazar=0, totalUtility=0;
+  fm.forEach(r=>Object.values(r.meals||{}).forEach(v=>totalMeals+=Number(v)));
+  fb.forEach(r=>{Object.values(r.bazar||{}).forEach(v=>totalBazar+=Number(v)); if(r.utility)Object.values(r.utility).forEach(v=>totalUtility+=Number(v));});
+  const mealRate = totalMeals>0?round2(totalBazar/totalMeals):0;
+
+  // Per member totals
+  const memMeals={}, memBazar={};
+  members.forEach(m=>{memMeals[m.name]=0;memBazar[m.name]=0;});
+  fm.forEach(r=>Object.entries(r.meals||{}).forEach(([n,v])=>{memMeals[n]=(memMeals[n]||0)+Number(v);}));
+  fb.forEach(r=>Object.entries(r.bazar||{}).forEach(([n,v])=>{memBazar[n]=(memBazar[n]||0)+Number(v);}));
+
+  // Payment calc
+  const paymentData = members.map(m=>{
+    const rentEntry = rentRec?.entries?.find(e=>e.name===m.name)||{};
+    const meals = memMeals[m.name]||0;
+    const bazar = memBazar[m.name]||0;
+    const mealCost = round2(meals * mealRate);
+    const utility = members.length>0 ? round2(totalUtility/members.length) : 0;
+    const rent = Number(rentEntry.rent||m.rent||0);
+    const totalOwed = round2(mealCost + utility + rent);
+    const bazarCredit = bazar;
+    const net = round2(totalOwed - bazarCredit);
+    return { name:m.name, meals, bazar, mealCost, utility, rent, totalOwed, bazarCredit, net };
+  });
+
+  const wrap = document.getElementById('log-content');
+  wrap.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${totalMeals}</div></div>
+      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:18px">${fmtTk(totalBazar)}</div></div>
+      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:18px">${fmtTk(mealRate)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total utility</div><div class="stat-value" style="font-size:18px">${fmtTk(totalUtility)}</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Payment summary — ${MONTHS[month]} ${year}</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Member</th><th>Meals</th><th>Meal cost</th><th>Utility share</th><th>Rent</th><th>Total owed</th><th>Bazar credit</th><th>Net (pay/get)</th></tr></thead>
+        <tbody>${paymentData.map(p=>{
+          const netCls = p.net>0?'net-neg':p.net<0?'net-pos':'';
+          const netLabel = p.net>0?`Pay ${fmtTk(p.net)}`:p.net<0?`Get ${fmtTk(-p.net)}`:'Settled';
+          return `<tr><td><b>${p.name}</b></td><td>${p.meals}</td><td>${fmtTk(p.mealCost)}</td><td>${fmtTk(p.utility)}</td><td>${fmtTk(p.rent)}</td><td>${fmtTk(p.totalOwed)}</td><td style="color:var(--green)">${fmtTk(p.bazarCredit)}</td><td class="${netCls}"><b>${netLabel}</b></td></tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>
+
+    <div class="grid-2" style="gap:14px">
+      <div class="card">
+        <div class="card-title">Meal log</div>
+        <div class="scroll-table tbl-wrap"><table>
+          <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
+          <tbody>${fm.map(r=>{const t=Object.values(r.meals||{}).reduce((s,v)=>s+Number(v),0);return`<tr><td>${r.date.slice(8)}</td>${members.map(m=>`<td>${r.meals[m.name]??0}</td>`).join('')}<td><b>${t}</b></td></tr>`;}).join('')}
+          </tbody>
+          <tfoot><tr><td>Total</td>${members.map(m=>`<td>${memMeals[m.name]||0}</td>`).join('')}<td>${totalMeals}</td></tr></tfoot>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Bazar log</div>
+        <div class="scroll-table tbl-wrap"><table>
+          <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
+          <tbody>${fb.map(r=>{const t=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);return`<tr><td>${r.date.slice(8)}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'0'}</td>`).join('')}<td><b>${fmtTk(t)}</b></td></tr>`;}).join('')}
+          </tbody>
+          <tfoot><tr><td>Total</td>${members.map(m=>`<td>${fmtTk(memBazar[m.name]||0)}</td>`).join('')}<td>${fmtTk(totalBazar)}</td></tr></tfoot>
+        </table></div>
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   MEMBERS
+   ============================================================ */
+async function renderMembers() {
+  const el = document.getElementById('page-members');
+  el.innerHTML = `
+    <div class="topbar">
+      <div><div class="page-title">Members</div><div class="page-sub">Manage mess members & rent defaults</div></div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" onclick="openAddMemberModal()">+ Add member</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card">
+        <div class="card-title">Current members (${members.length})</div>
+        <div class="tbl-wrap" id="members-table"></div>
+      </div>
+    </div>`;
+  renderMembersTable();
+}
+
+function renderMembersTable() {
+  const wrap = document.getElementById('members-table');
+  if (!wrap) return;
+  if (!members.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No members yet. Click + Add member to get started.</div></div>'; return; }
+  wrap.innerHTML=`<table>
+    <thead><tr><th>#</th><th>Name</th><th>Room</th><th>Default rent (৳)</th><th>Phone</th><th>Joined</th><th></th></tr></thead>
+    <tbody>${members.map((m,i)=>{
+      const col=avatarColor(i);
+      return `<tr>
+        <td><div class="avatar" style="background:${col.bg};color:${col.fg};width:28px;height:28px;font-size:11px">${initials(m.name)}</div></td>
+        <td><b>${m.name}</b></td>
+        <td style="color:var(--text2)">${m.room||'—'}</td>
+        <td>${fmtTk(m.rent||0)}</td>
+        <td style="color:var(--text2)">${m.phone||'—'}</td>
+        <td style="color:var(--text3)">${m.joined||'—'}</td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" onclick="openEditMemberModal('${m.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">Remove</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function openAddMemberModal() {
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">Add member</div>
+    <div class="modal-sub">New mess member details</div>
+    <div class="field"><label>Full name *</label><input type="text" class="input" id="nm-name" placeholder="e.g. Shahriyar"/></div>
+    <div class="grid-2">
+      <div class="field"><label>Room / flat</label><input type="text" class="input" id="nm-room" placeholder="Room 3A"/></div>
+      <div class="field"><label>Default rent (৳) *</label><input type="number" class="input" id="nm-rent" placeholder="4400"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Phone</label><input type="text" class="input" id="nm-phone" placeholder="017xxxxxxxx"/></div>
+      <div class="field"><label>Joined date</label><input type="date" class="input" id="nm-joined"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addMember()">Add member</button>
+    </div>`;
+  openModal();
+}
+
+function openEditMemberModal(id) {
+  const m = members.find(x=>x.id===id);
+  if (!m) return;
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">Edit member</div>
+    <div class="modal-sub">Update ${m.name}'s details</div>
+    <div class="field"><label>Full name *</label><input type="text" class="input" id="em-name" value="${m.name}"/></div>
+    <div class="grid-2">
+      <div class="field"><label>Room / flat</label><input type="text" class="input" id="em-room" value="${m.room||''}"/></div>
+      <div class="field"><label>Default rent (৳)</label><input type="number" class="input" id="em-rent" value="${m.rent||0}"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Phone</label><input type="text" class="input" id="em-phone" value="${m.phone||''}"/></div>
+      <div class="field"><label>Joined date</label><input type="date" class="input" id="em-joined" value="${m.joined||''}"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="updateMember('${id}')">Save changes</button>
+    </div>`;
+  openModal();
+}
+
+async function addMember() {
+  const name = document.getElementById('nm-name')?.value.trim();
+  if (!name) { toast('Name is required'); return; }
+  try {
+    await txPut('members', {
+      name, room: document.getElementById('nm-room').value.trim(),
+      rent: parseFloat(document.getElementById('nm-rent').value||0),
+      phone: document.getElementById('nm-phone').value.trim(),
+      joined: document.getElementById('nm-joined').value || null
+    });
+    members = await txGetAll('members');
+    closeModal();
+    toast(name+' added');
+    renderMembersTable();
+  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+}
+
+async function updateMember(id) {
+  const m = members.find(x=>x.id===id);
+  if (!m) return;
+  try {
+    await txPut('members', {
+      ...m,
+      name: document.getElementById('em-name').value.trim(),
+      room: document.getElementById('em-room').value.trim(),
+      rent: parseFloat(document.getElementById('em-rent').value||0),
+      phone: document.getElementById('em-phone').value.trim(),
+      joined: document.getElementById('em-joined').value || null
+    });
+    members = await txGetAll('members');
+    closeModal();
+    toast('Member updated');
+    renderMembersTable();
+  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+}
+
+async function deleteMember(id) {
+  const m = members.find(x=>x.id===id);
+  if (!m) return;
+  if (!confirm(`Remove ${m.name}? This won't delete their historical data.`)) return;
+  try {
+    await txDelete('members', id);
+    members = await txGetAll('members');
+    toast(m.name+' removed');
+    renderMembersTable();
+  } catch(e) { toast('Delete failed: '+e.message, 'error'); console.error(e); }
+}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+function openModal() { document.getElementById('modal-bg').classList.add('open'); }
+function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+let toastTimer;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type === 'error' ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3500);
+}
+
+/* ============================================================
+   SEED DEFAULT MEMBERS (first run)
+   ============================================================ */
+async function seedIfEmpty() {
+  const existing = await txGetAll('members');
+  if (existing.length > 0) return;
+  const defaults = [
+    {name:'Sourov',rent:4600,room:'Room 1'},{name:'Shahriyar',rent:4400,room:'Room 2'},
+    {name:'Nafis',rent:4600,room:'Room 3'},{name:'Rafi',rent:4000,room:'Room 4'},
+    {name:'Shanto',rent:4000,room:'Room 5'},{name:'Kanak',rent:4400,room:'Room 6'}
+  ];
+  for (const d of defaults) {
+    await txPut('members', { name: d.name, room: d.room, rent: d.rent,
+      phone: '', joined: '2025-07-01' });
+  }
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+async function init() {
+  document.getElementById('db-dot').style.background = 'var(--accent)';
+  document.getElementById('db-label').textContent = 'Connecting…';
+  try {
+    // Verify connection
+    const { error } = await sb.from('members').select('id', { count: 'exact', head: true });
+    if (error) throw error;
+    document.getElementById('db-dot').style.background = 'var(--green)';
+    document.getElementById('db-label').textContent = 'Supabase connected';
+    await seedIfEmpty();
+    members = await txGetAll('members');
+    navigate('dashboard');
+  } catch(e) {
+    document.getElementById('db-dot').style.background = 'var(--red)';
+    document.getElementById('db-label').textContent = 'DB error';
+    console.error('Supabase error:', e.message || e);
+    toast('Database connection failed. Check console.', 'error');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
