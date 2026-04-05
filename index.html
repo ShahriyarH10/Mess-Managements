@@ -588,6 +588,24 @@ async function renderDashboard() {
           }).join('')}
         </div>
       </div>` : ''}
+
+      ${utilRec && Object.keys(utilRec.payments||{}).length ? `
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">Utility status — ${MONTHS[month]} ${year}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${members.map(m => {
+            const p = (utilRec.payments||{})[m.name] || {};
+            const share = members.length > 0 ? round2(totalUtilDue / members.length) : 0;
+            const cls = p.status==='paid'?'badge-green':p.status==='partial'?'badge-amber':'badge-red';
+            const label = p.status==='paid'?'Paid':p.status==='partial'?'Partial':'Due';
+            return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <span style="font-size:13px;font-weight:500">${m.name}</span>
+              <span class="badge ${cls}">${label}</span>
+              <span style="font-size:12px;color:var(--text2)">${fmtTk(p.paid||0)}/${fmtTk(share)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
     </div>`;
   document.getElementById('page-dashboard').innerHTML = html;
 }
