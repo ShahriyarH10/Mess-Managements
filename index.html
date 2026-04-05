@@ -480,19 +480,21 @@ async function renderDashboard() {
   const allMeals = await txGetAll('meals');
   const allBazar = await txGetAll('bazar');
   const rentRec = await txGet('rent', key);
+  const { data: utilRec } = await sb.from('utility_payments').select('*').eq('month_key', key).maybeSingle();
 
   const monthMeals = allMeals.filter(r => r.date.startsWith(key));
   const monthBazar = allBazar.filter(r => r.date.startsWith(key));
 
-  let totalMeals = 0, totalBazar = 0, totalUtility = 0;
+  let totalMeals = 0, totalBazar = 0;
   monthMeals.forEach(r => Object.values(r.meals||{}).forEach(v => totalMeals += Number(v)));
-  monthBazar.forEach(r => {
-    Object.values(r.bazar||{}).forEach(v => totalBazar += Number(v));
-    if (r.utility) Object.values(r.utility).forEach(v => totalUtility += Number(v));
-  });
+  monthBazar.forEach(r => Object.values(r.bazar||{}).forEach(v => totalBazar += Number(v)));
   const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
-  const totalRentDue = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.rent||0),0) : 0;
+  const totalRentDue  = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.rent||0),0) : 0;
   const totalRentPaid = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.paid||0),0) : 0;
+  const bills = utilRec?.bills || {};
+  const totalUtilDue  = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(Number(bills[k])||0),0);
+  const payments = utilRec?.payments || {};
+  const totalUtilCollected = Object.values(payments).reduce((s,p)=>s+Number(p.paid||0),0);
 
   // Recent activity
   const recentMeals = allMeals.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
@@ -532,9 +534,9 @@ async function renderDashboard() {
           <div class="stat-sub">groceries</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Utility bill</div>
-          <div class="stat-value">${fmtTk(totalUtility)}</div>
-          <div class="stat-sub">elec + wifi + gas</div>
+          <div class="stat-label">Utility collected</div>
+          <div class="stat-value">${fmtTk(round2(totalUtilCollected))}</div>
+          <div class="stat-sub">of ${fmtTk(round2(totalUtilDue))} due</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Rent collected</div>
