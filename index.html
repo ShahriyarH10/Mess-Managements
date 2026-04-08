@@ -219,6 +219,11 @@ td .input-sm{background:var(--bg4);border-color:var(--border)}
 .month-sel{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .month-sel label{font-size:13px;color:var(--text2)}
 
+/* Hide number input spinners */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+
 /* PROFILE — MOBILE LIST VIEW */
 .profile-mobile-list{display:none}
 .profile-mobile-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:12px}
@@ -908,7 +913,7 @@ async function loadRentMonth() {
         <option value="unpaid"${status==='unpaid'?' selected':''}>Not paid</option>
         <option value="partial"${status==='partial'?' selected':''}>Partial</option>
       </select></td>
-      <td><input type="text" class="input input-sm" id="rn-${m.id}" value="${notes}" placeholder="—" style="width:130px"/></td>
+      <td><textarea class="input input-sm" id="rn-${m.id}" placeholder="—" style="width:160px;min-height:36px;resize:vertical;line-height:1.4">${notes}</textarea></td>
     </tr>`;
   }).join('');
   updRentSummary();
@@ -986,10 +991,10 @@ async function renderProfiles() {
         <div><div class="page-title">Member Profiles</div><div class="page-sub">Individual summaries & history</div></div>
         <div class="topbar-actions">
           <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:160px">
-            <option value="all">All time</option>
-            <option value="1">This month</option>
+            <option value="1" selected>This month</option>
             <option value="3">Last 3 months</option>
             <option value="6">Last 6 months</option>
+            <option value="all">All time</option>
           </select>
         </div>
       </div>
@@ -1168,13 +1173,19 @@ function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
   const net = stats.rentPaid - stats.rentDue;
   const netCls = net >= 0 ? 'net-pos' : 'net-neg';
   const utilNet = round2(stats.utilityPaid - stats.utilityDue);
+  // Meal net: what member owes for meals minus what they contributed via bazar
+  const totalAllMealsCount = meals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
+  const totalAllBazarAmt   = bazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
+  const mealRate = totalAllMealsCount > 0 ? round2(totalAllBazarAmt / totalAllMealsCount) : 0;
+  const mealCost = round2(stats.totalMeals * mealRate);
+  const mealNet  = round2(mealCost - stats.totalBazar); // positive = owes more, negative = overpaid
 
   // All months sorted
   const allMonthKeys = Object.keys(stats.byMonth).sort();
   const recent8 = allMonthKeys.slice(-8);
   const maxMeals = Math.max(...recent8.map(k=>stats.byMonth[k]?.meals||0), 1);
 
-  // All meals total share
+  // All meals total share (use allMeals/allBazar for all-time share regardless of period)
   const totalAllMeals = allMeals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
   const totalAllBazar = allBazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
   const mealShare = totalAllMeals > 0 ? Math.round((stats.totalMeals/totalAllMeals)*100) : 0;
@@ -1189,14 +1200,19 @@ function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
           <div style="font-family:var(--font-serif);font-size:22px">${member.name}</div>
           <div style="font-size:13px;color:var(--text2);margin-top:3px">Default rent: ${fmtTk(member.rent||0)} / month · ${member.room||'—'}</div>
         </div>
-        <div style="display:flex;gap:16px;flex-shrink:0">
+        <div style="display:flex;gap:16px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
           <div style="text-align:right">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
-            <div style="font-size:18px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay/get</div>
+            <div style="font-size:18px;font-weight:600" class="${mealNet>0?'net-neg':mealNet<0?'net-pos':''}">
+              ${mealNet===0?'৳0':mealNet>0?'Pay '+fmtTk(mealNet):'Get '+fmtTk(-mealNet)}</div>
           </div>
           <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
             <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
-            <div style="font-size:18px;font-weight:600" class="${utilNet>=0?'net-pos':'net-neg'}">${utilNet>=0?'+':''}${fmtTk(Math.abs(utilNet))}</div>
+            <div style="font-size:18px;font-weight:600" class="${utilNet===0?'':utilNet>=0?'net-pos':'net-neg'}">${utilNet===0?'৳0':(utilNet>=0?'+':'')+fmtTk(Math.abs(utilNet))}</div>
+          </div>
+          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
+            <div style="font-size:18px;font-weight:600" class="${net===0?'':netCls}">${net===0?'৳0':(net>=0?'+':'')+fmtTk(Math.abs(net))}</div>
           </div>
         </div>
       </div>
@@ -1338,8 +1354,8 @@ function buildUtilPayRows(perHead) {
         <option value="paid">Paid</option>
         <option value="partial">Partial</option>
       </select></td>
-      <td><input type="text" class="input input-sm" id="utp-notes-${m.id}"
-            value="" placeholder="—" style="width:120px"/></td>
+      <td><textarea class="input input-sm" id="utp-notes-${m.id}"
+            placeholder="—" style="width:160px;min-height:36px;resize:vertical;line-height:1.4"></textarea></td>
     </tr>`;
   }).join('');
 }
@@ -1397,7 +1413,7 @@ async function loadUtilityMonth() {
       const sc = document.getElementById('utp-share-'+m.id);
       if(pp) pp.value = p.paid ?? 0;
       if(ps) ps.value = p.status || 'unpaid';
-      if(pn) pn.value = p.notes || '';
+      if(pn) pn.value = p.notes || '';  // works for both input and textarea
       if(sc) sc.textContent = fmtTk(perHead);
     });
     toast('Loaded utility for ' + MONTHS[month] + ' ' + year);
