@@ -236,8 +236,16 @@ td .input-sm{background:var(--bg4);border-color:var(--border)}
 .util-month-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px}
 .util-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
 
-/* Notes textarea — horizontal resize only, wider default size, fixed height */
-textarea.input{resize:horizontal;min-width:220px;max-width:100%;min-height:34px;height:34px;overflow:hidden;line-height:1.4;vertical-align:top}
+/* Notes textarea */
+textarea.input{min-width:220px;max-width:100%;min-height:34px;height:auto;overflow:auto;line-height:1.4;vertical-align:top;resize:vertical}
+
+/* Notes columns should use the full right side space */
+.utility-pay-table{width:100%;table-layout:auto}
+.utility-pay-table th:last-child,
+.utility-pay-table td:last-child{width:100%;white-space:normal}
+.utility-pay-table .notes-cell{width:100%;white-space:normal;padding-right:10px}
+.utility-pay-table .notes-textarea,
+.utility-pay-table td:last-child textarea.input{display:block;width:100% !important;min-width:0;max-width:none;height:auto;min-height:34px;resize:vertical;overflow:auto}
 
 /* Hide number input spinners */
 input[type=number]::-webkit-inner-spin-button,
@@ -1053,7 +1061,7 @@ async function loadRentMonth() {
         <option value="unpaid"${status==='unpaid'?' selected':''}>Not paid</option>
         <option value="partial"${status==='partial'?' selected':''}>Partial</option>
       </select></td>
-      <td><textarea class="input input-sm" id="rn-${m.id}" placeholder="—" style="width:240px">${notes}</textarea></td>
+      <td class="notes-cell"><textarea class="input input-sm notes-textarea" id="rn-${m.id}" placeholder="—">${notes}</textarea></td>
     </tr>`;
   }).join('');
   updRentSummary();
@@ -1450,7 +1458,7 @@ async function renderUtility() {
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">Payment status per member</div>
         <div class="tbl-wrap">
-          <table>
+          <table class="utility-pay-table">
             <thead><tr><th>Member</th><th>Share (৳)</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
             <tbody id="ut-pay-tbody"></tbody>
           </table>
