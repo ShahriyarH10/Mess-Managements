@@ -279,7 +279,7 @@ input[type=number]{-moz-appearance:textfield}
 
 /* MOBILE BOTTOM NAV */
 .mobile-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:200;justify-content:space-around;align-items:center;padding:6px 0 8px}
-.mob-nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--text3);font-size:9px;font-family:var(--font);cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);transition:all .15s;min-width:44px}
+.mob-nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--text3);font-size:8px;font-family:var(--font);cursor:pointer;padding:4px 4px;border-radius:var(--radius-sm);transition:all .15s;min-width:40px;flex:1}
 .mob-nav-btn svg{width:20px;height:20px;opacity:.6}
 .mob-nav-btn.active{color:var(--accent)}
 .mob-nav-btn.active svg{opacity:1}
@@ -351,6 +351,10 @@ input[type=number]{-moz-appearance:textfield}
     <button class="mob-nav-btn" onclick="navigate('bazar')" data-page="bazar">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12l-1.5 7H3.5L2 4z"/><circle cx="6" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>
       Bazar
+    </button>
+    <button class="mob-nav-btn" onclick="navigate('utility')" data-page="utility">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v3M8 12v3M3.5 3.5l2 2M10.5 10.5l2 2M1 8h3M12 8h3M3.5 12.5l2-2M10.5 5.5l2-2"/></svg>
+      Utility
     </button>
     <button class="mob-nav-btn" onclick="navigate('profiles')" data-page="profiles">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
@@ -1000,7 +1004,7 @@ async function renderRent() {
       <div class="card">
         <div class="card-title">Rent entries</div>
         <div class="tbl-wrap">
-          <table><thead><tr><th>Member</th><th>Default rent</th><th>Due this month (৳)</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
+          <table class="utility-pay-table"><thead><tr><th>Member</th><th>Default rent</th><th>Due this month (৳)</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
           <tbody id="rent-tbody"></tbody></table>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
@@ -1485,8 +1489,8 @@ function buildUtilPayRows(perHead) {
         <option value="paid">Paid</option>
         <option value="partial">Partial</option>
       </select></td>
-      <td><input type="text" class="input input-sm" id="utp-notes-${m.id}"
-            value="" placeholder="—" style="width:120px"/></td>
+      <td class="notes-cell"><textarea class="input input-sm notes-textarea" id="utp-notes-${m.id}"
+            placeholder="—"></textarea></td>
     </tr>`;
   }).join('');
 }
