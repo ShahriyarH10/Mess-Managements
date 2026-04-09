@@ -219,11 +219,6 @@ td .input-sm{background:var(--bg4);border-color:var(--border)}
 .month-sel{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .month-sel label{font-size:13px;color:var(--text2)}
 
-/* Hide number input spinners */
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-input[type=number]{-moz-appearance:textfield}
-
 /* PROFILE — MOBILE LIST VIEW */
 .profile-mobile-list{display:none}
 .profile-mobile-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;gap:12px}
@@ -240,6 +235,55 @@ input[type=number]{-moz-appearance:textfield}
 /* UTILITY PAGE */
 .util-month-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px}
 .util-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+
+/* Notes textarea — horizontal resize only, wider default size, fixed height */
+textarea.input{resize:horizontal;min-width:220px;max-width:100%;min-height:34px;height:34px;overflow:hidden;line-height:1.4;vertical-align:top}
+
+/* Hide number input spinners */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+
+/* DAY/NIGHT meal tabs */
+.meal-tab-row{display:flex;gap:0;margin-bottom:14px;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);width:fit-content}
+.meal-tab{padding:7px 20px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:var(--bg3);color:var(--text2);font-family:var(--font);transition:all .15s}
+.meal-tab.on{background:var(--accent);color:#0f0f0f}
+
+/* MOBILE IMPROVEMENTS */
+@media(max-width:768px){
+  .topbar{padding:14px 14px 0}
+  .content{padding:14px 14px 32px}
+  .page-title{font-size:22px}
+  .stat-grid{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+  .stat-card{padding:10px 12px}
+  .stat-value{font-size:18px}
+  .card{padding:14px}
+  .meal-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .meal-cell{padding:10px}
+  .btn{padding:7px 12px;font-size:12px}
+  .btn-sm{padding:4px 8px;font-size:11px}
+  .grid-2,.grid-3{grid-template-columns:1fr}
+  .tbl-wrap{font-size:12px}
+  th,td{padding:6px 7px}
+  .modal{padding:16px;max-height:90vh}
+  .month-sel{gap:6px}
+  .month-sel select{width:110px!important}
+  /* Bottom nav bar for mobile */
+  .mobile-nav{display:flex}
+  .sidebar{display:none}
+  .shell{flex-direction:column}
+  .main{padding-bottom:64px}
+  .topbar-actions .btn{display:none}
+}
+@media(min-width:769px){.mobile-nav{display:none}}
+
+/* MOBILE BOTTOM NAV */
+.mobile-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:200;justify-content:space-around;align-items:center;padding:6px 0 8px}
+.mob-nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--text3);font-size:9px;font-family:var(--font);cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);transition:all .15s;min-width:44px}
+.mob-nav-btn svg{width:20px;height:20px;opacity:.6}
+.mob-nav-btn.active{color:var(--accent)}
+.mob-nav-btn.active svg{opacity:1}
+.mob-nav-btn:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -293,6 +337,34 @@ input[type=number]{-moz-appearance:textfield}
       <div class="db-status"><div class="db-dot" id="db-dot"></div><span id="db-label">Connecting…</span></div>
     </div>
   </aside>
+
+  <!-- MOBILE BOTTOM NAV -->
+  <nav class="mobile-nav" id="mobile-nav">
+    <button class="mob-nav-btn active" onclick="navigate('dashboard')" data-page="dashboard">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Home
+    </button>
+    <button class="mob-nav-btn" onclick="navigate('meals')" data-page="meals">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2v12M8 2v4M13 2v12M8 6c0 2.5-2 3-2 5"/></svg>
+      Meals
+    </button>
+    <button class="mob-nav-btn" onclick="navigate('bazar')" data-page="bazar">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12l-1.5 7H3.5L2 4z"/><circle cx="6" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>
+      Bazar
+    </button>
+    <button class="mob-nav-btn" onclick="navigate('profiles')" data-page="profiles">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+      Profiles
+    </button>
+    <button class="mob-nav-btn" onclick="navigate('rent')" data-page="rent">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="12" height="9" rx="1"/><path d="M5 5V4a3 3 0 016 0v1"/><path d="M8 9v2"/></svg>
+      Rent
+    </button>
+    <button class="mob-nav-btn" onclick="navigate('log')" data-page="log">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="1"/><path d="M5 6h6M5 9h4"/></svg>
+      Log
+    </button>
+  </nav>
 
   <!-- MAIN -->
   <main class="main">
@@ -459,6 +531,10 @@ function navigate(page) {
   document.querySelectorAll('.nav-item').forEach(n => {
     if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) n.classList.add('active');
   });
+  // sync mobile bottom nav
+  document.querySelectorAll('.mob-nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === page);
+  });
   renderPage(page);
 }
 
@@ -622,7 +698,7 @@ function renderMeals() {
   const el = document.getElementById('page-meals');
   el.innerHTML = `
     <div class="topbar">
-      <div><div class="page-title">Meal Entry</div><div class="page-sub">Log daily meals per member</div></div>
+      <div><div class="page-title">Meal Entry</div><div class="page-sub">Log day & night meals per member</div></div>
     </div>
     <div class="content">
       <div class="card" style="margin-bottom:14px">
@@ -633,15 +709,16 @@ function renderMeals() {
         </div>
         <div class="stat-grid" style="margin-bottom:16px">
           <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value" id="m-total">0</div></div>
+          <div class="stat-card"><div class="stat-label">Day meals</div><div class="stat-value" id="m-day">0</div></div>
+          <div class="stat-card"><div class="stat-label">Night meals</div><div class="stat-value" id="m-night">0</div></div>
           <div class="stat-card"><div class="stat-label">Members eating</div><div class="stat-value" id="m-eating">0</div></div>
         </div>
-        <div class="card-title">Meals per member</div>
+        <div class="card-title" style="margin-bottom:10px">Meal per member</div>
         <div class="meal-grid" id="meal-input-grid"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
-          <button class="btn btn-ghost" onclick="setAllMeals(2)">Set all → 2</button>
-          <button class="btn btn-ghost" onclick="setAllMeals(1)">Set all → 1</button>
-          <button class="btn btn-ghost" onclick="setAllMeals(0)">Clear all</button>
+          <button class="btn btn-ghost" onclick="setAllMeals(1)">All → 1</button>
+          <button class="btn btn-ghost" onclick="setAllMeals(0)">Clear</button>
         </div>
       </div>
       <div class="card">
@@ -653,33 +730,60 @@ function renderMeals() {
   loadMealsRecent();
 }
 
+const mealDayVals = {}, mealNightVals = {};
+
 function buildMealInputs() {
   const grid = document.getElementById('meal-input-grid');
   if (!grid) return;
+  members.forEach(m => {
+    if (mealDayVals[m.id] == null) mealDayVals[m.id] = 1;
+    if (mealNightVals[m.id] == null) mealNightVals[m.id] = 1;
+  });
   grid.innerHTML = members.map(m => `
     <div class="meal-cell">
       <div class="meal-cell-name">${m.name}</div>
+      <div class="meal-cell-row" style="margin-bottom:8px">
+        <span class="meal-cell-label">Day</span>
+        <input type="number" class="meal-num-input" id="mi-day-${m.id}" min="0" max="4" step="0.5"
+          value="${mealDayVals[m.id] ?? 1}" oninput="updMealSummary()"/>
+      </div>
       <div class="meal-cell-row">
-        <span class="meal-cell-label">Meals</span>
-        <input type="number" class="meal-num-input" id="mi-${m.id}" min="0" max="6" step="0.5" value="2" oninput="updMealSummary()"/>
+        <span class="meal-cell-label">Night</span>
+        <input type="number" class="meal-num-input" id="mi-night-${m.id}" min="0" max="4" step="0.5"
+          value="${mealNightVals[m.id] ?? 1}" oninput="updMealSummary()"/>
       </div>
     </div>`).join('');
   updMealSummary();
 }
 
 function updMealSummary() {
-  let t=0,c=0;
+  let dayTotal = 0, nightTotal = 0, eating = 0;
   members.forEach(m => {
-    const v = parseFloat(document.getElementById('mi-'+m.id)?.value||0);
-    t+=v; if(v>0)c++;
+    const d = parseFloat(document.getElementById('mi-day-'+m.id)?.value || 0);
+    const n = parseFloat(document.getElementById('mi-night-'+m.id)?.value || 0);
+    mealDayVals[m.id] = d;
+    mealNightVals[m.id] = n;
+    dayTotal += d;
+    nightTotal += n;
+    if (d > 0 || n > 0) eating++;
   });
-  const te=document.getElementById('m-total'), ce=document.getElementById('m-eating');
-  if(te)te.textContent=t;
-  if(ce)ce.textContent=c;
+  const te=document.getElementById('m-total'), td=document.getElementById('m-day'),
+        tn=document.getElementById('m-night'), ce=document.getElementById('m-eating');
+  if (te) te.textContent = round2(dayTotal + nightTotal);
+  if (td) td.textContent = round2(dayTotal);
+  if (tn) tn.textContent = round2(nightTotal);
+  if (ce) ce.textContent = eating;
 }
 
 function setAllMeals(v) {
-  members.forEach(m => { const el=document.getElementById('mi-'+m.id); if(el)el.value=v; });
+  members.forEach(m => {
+    const dayEl = document.getElementById('mi-day-'+m.id);
+    const nightEl = document.getElementById('mi-night-'+m.id);
+    if (dayEl) dayEl.value = v;
+    if (nightEl) nightEl.value = v;
+    mealDayVals[m.id] = v;
+    mealNightVals[m.id] = v;
+  });
   updMealSummary();
 }
 
@@ -690,12 +794,23 @@ async function loadMealForDate() {
   if (error) { toast('Error loading: '+error.message); return; }
   if (rec) {
     members.forEach(m => {
-      const el = document.getElementById('mi-'+m.id);
-      if (el) el.value = rec.meals[m.name] ?? 0;
+      // meals stored as {name: total} or {name_day, name_night}
+      const dayKey = m.name+'_day', nightKey = m.name+'_night';
+      if (rec.meals[dayKey] != null || rec.meals[nightKey] != null) {
+        mealDayVals[m.id]   = Number(rec.meals[dayKey]  ?? 0);
+        mealNightVals[m.id] = Number(rec.meals[nightKey]?? 0);
+      } else {
+        // legacy: single value split evenly
+        const total = Number(rec.meals[m.name]||0);
+        mealDayVals[m.id]   = total;
+        mealNightVals[m.id] = 0;
+      }
     });
-    updMealSummary();
+    buildMealInputs();
     toast('Loaded entry for '+date);
   } else {
+    members.forEach(m => { mealDayVals[m.id]=1; mealNightVals[m.id]=1; });
+    buildMealInputs();
     toast('No entry for '+date+' — starting fresh');
   }
 }
@@ -704,7 +819,12 @@ async function saveMeals() {
   const date = document.getElementById('meal-date')?.value;
   if (!date) { toast('Select a date first'); return; }
   const meals = {};
-  members.forEach(m => { meals[m.name] = parseFloat(document.getElementById('mi-'+m.id)?.value||0); });
+  members.forEach(m => {
+    meals[m.name+'_day']   = mealDayVals[m.id]   || 0;
+    meals[m.name+'_night'] = mealNightVals[m.id] || 0;
+    // keep legacy total key for backward compat with stats
+    meals[m.name] = round2((mealDayVals[m.id]||0) + (mealNightVals[m.id]||0));
+  });
   try {
     await txPut('meals', { date, meals });
     toast('Meals saved for '+date);
@@ -720,8 +840,17 @@ async function loadMealsRecent() {
   if (!recent.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No meal entries yet</div></div>'; return; }
   wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th><th></th></tr></thead>
     <tbody>${recent.map(r=>{
-      const t=Object.values(r.meals||{}).reduce((s,v)=>s+Number(v),0);
-      return `<tr><td>${r.date}</td>${members.map(m=>`<td>${r.meals[m.name]??'—'}</td>`).join('')}<td><b>${t}</b></td>
+      let t=0;
+      const cells = members.map(m=>{
+        const d = Number(r.meals[m.name+'_day'] ?? 0);
+        const n = Number(r.meals[m.name+'_night'] ?? 0);
+        const total = (r.meals[m.name+'_day'] != null || r.meals[m.name+'_night'] != null)
+          ? d + n
+          : Number(r.meals[m.name] ?? 0);
+        t += total;
+        return `<td>${round2(total)}</td>`;
+      }).join('');
+      return `<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td>
         <td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteMeal('${r.id}')" title="Delete">✕</button></td></tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -831,12 +960,11 @@ async function loadBazarRecent() {
   const all = await txGetAll('bazar');
   const recent = all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   if (!recent.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No bazar entries yet</div></div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Bazar</th><th>Utility</th><th></th></tr></thead>
+  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th><th></th></tr></thead>
     <tbody>${recent.map(r=>{
       const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);
-      const ut=Object.values(r.utility||{}).reduce((s,v)=>s+Number(v),0);
       return `<tr><td>${r.date}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'—'}</td>`).join('')}
-        <td><b>${fmtTk(bt)}</b></td><td>${fmtTk(ut)}</td>
+        <td><b>${fmtTk(bt)}</b></td>
         <td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteBazar('${r.id}')" title="Delete">✕</button></td></tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -863,7 +991,7 @@ async function renderRent() {
     <div class="content">
       <div class="month-sel" style="margin-bottom:16px">
         <label>Month</label>
-        <select class="input" id="rent-month" style="width:140px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
+        <select class="input" id="rent-month" style="width:240px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
         <label>Year</label>
         <select class="input" id="rent-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
         <button class="btn btn-ghost" onclick="loadRentMonth()">Load</button>
@@ -913,7 +1041,7 @@ async function loadRentMonth() {
         <option value="unpaid"${status==='unpaid'?' selected':''}>Not paid</option>
         <option value="partial"${status==='partial'?' selected':''}>Partial</option>
       </select></td>
-      <td><textarea class="input input-sm" id="rn-${m.id}" placeholder="—" style="width:160px;min-height:36px;resize:vertical;line-height:1.4">${notes}</textarea></td>
+      <td><textarea class="input input-sm" id="rn-${m.id}" placeholder="—" style="width:240px">${notes}</textarea></td>
     </tr>`;
   }).join('');
   updRentSummary();
@@ -991,10 +1119,10 @@ async function renderProfiles() {
         <div><div class="page-title">Member Profiles</div><div class="page-sub">Individual summaries & history</div></div>
         <div class="topbar-actions">
           <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:160px">
+            <option value="all">All time</option>
             <option value="1" selected>This month</option>
             <option value="3">Last 3 months</option>
             <option value="6">Last 6 months</option>
-            <option value="all">All time</option>
           </select>
         </div>
       </div>
@@ -1077,17 +1205,24 @@ function getMemberStats(member, meals, bazar, rent, utility=[]) {
     ensureMonth(r.month_key);
     byMonth[r.month_key].utilityPaid += Number(p.paid||0);
   });
+
+  const filteredTotalMeals = meals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
+  const filteredTotalBazar = bazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
+  const mealRate = filteredTotalMeals > 0 ? (filteredTotalBazar / filteredTotalMeals) : 0;
+  const mealCost = round2(totalMeals * mealRate);
+  const mealBalance = round2(totalBazar - mealCost);
+
   const totalDays = meals.length;
   const avgMeals = totalDays>0 ? round2(totalMeals/totalDays) : 0;
   const latestRent = [...rent].sort((a,b)=>b.key.localeCompare(a.key))[0];
   const latestStatus = latestRent?.entries?.find(x=>x.name===member.name)?.status||'unpaid';
   const latestUtil = [...utility].sort((a,b)=>b.month_key.localeCompare(a.month_key))[0];
   const latestUtilStatus = (latestUtil?.payments||{})[member.name]?.status||'unpaid';
-  return { totalMeals, totalBazar, rentDue, rentPaid, utilityDue, utilityPaid, activeDays, avgMeals, latestStatus, latestUtilStatus, byMonth };
+  return { totalMeals, totalBazar, mealRate, mealCost, mealBalance, rentDue, rentPaid, utilityDue, utilityPaid, activeDays, avgMeals, latestStatus, latestUtilStatus, byMonth };
 }
 
 function buildProfileCards(allMeals, allBazar, allRent, allUtility=[]) {
-  const period = document.getElementById('prof-period')?.value || 'all';
+  const period = document.getElementById('prof-period')?.value || '1';
   const { meals, bazar, rent, utility } = getFilteredData(allMeals, allBazar, allRent, period, allUtility);
   const grid = document.getElementById('profile-card-grid');
   if (!grid) return;
@@ -1166,26 +1301,22 @@ async function selectProfile(id) {
 function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
   const member = members.find(m=>m.id===id);
   if (!member) return;
-  const period = document.getElementById('prof-period')?.value || 'all';
+  const period = document.getElementById('prof-period')?.value || '1';
   const { meals, bazar, rent, utility } = getFilteredData(allMeals, allBazar, allRent, period, allUtility);
   const stats = getMemberStats(member, meals, bazar, rent, utility);
   const col = avatarColor(members.indexOf(member));
   const net = stats.rentPaid - stats.rentDue;
   const netCls = net >= 0 ? 'net-pos' : 'net-neg';
   const utilNet = round2(stats.utilityPaid - stats.utilityDue);
-  // Meal net: what member owes for meals minus what they contributed via bazar
-  const totalAllMealsCount = meals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
-  const totalAllBazarAmt   = bazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
-  const mealRate = totalAllMealsCount > 0 ? round2(totalAllBazarAmt / totalAllMealsCount) : 0;
-  const mealCost = round2(stats.totalMeals * mealRate);
-  const mealNet  = round2(mealCost - stats.totalBazar); // positive = owes more, negative = overpaid
+  const mealNet = round2(stats.mealBalance);
+  const mealNetText = mealNet > 0 ? 'Get ' + fmtTk(mealNet) : mealNet < 0 ? 'Pay ' + fmtTk(Math.abs(mealNet)) : 'Settled';
 
   // All months sorted
   const allMonthKeys = Object.keys(stats.byMonth).sort();
   const recent8 = allMonthKeys.slice(-8);
   const maxMeals = Math.max(...recent8.map(k=>stats.byMonth[k]?.meals||0), 1);
 
-  // All meals total share (use allMeals/allBazar for all-time share regardless of period)
+  // All meals total share
   const totalAllMeals = allMeals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
   const totalAllBazar = allBazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
   const mealShare = totalAllMeals > 0 ? Math.round((stats.totalMeals/totalAllMeals)*100) : 0;
@@ -1202,17 +1333,16 @@ function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
         </div>
         <div style="display:flex;gap:16px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
           <div style="text-align:right">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay/get</div>
-            <div style="font-size:18px;font-weight:600" class="${mealNet>0?'net-neg':mealNet<0?'net-pos':''}">
-              ${mealNet===0?'৳0':mealNet>0?'Pay '+fmtTk(mealNet):'Get '+fmtTk(-mealNet)}</div>
-          </div>
-          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
-            <div style="font-size:18px;font-weight:600" class="${utilNet===0?'':utilNet>=0?'net-pos':'net-neg'}">${utilNet===0?'৳0':(utilNet>=0?'+':'')+fmtTk(Math.abs(utilNet))}</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay / get</div>
+            <div style="font-size:18px;font-weight:600" class="${mealNet>=0?'net-pos':'net-neg'}">${mealNetText}</div>
           </div>
           <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
             <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
-            <div style="font-size:18px;font-weight:600" class="${net===0?'':netCls}">${net===0?'৳0':(net>=0?'+':'')+fmtTk(Math.abs(net))}</div>
+            <div style="font-size:18px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
+          </div>
+          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
+            <div style="font-size:18px;font-weight:600" class="${utilNet>=0?'net-pos':'net-neg'}">${utilNet>=0?'+':''}${fmtTk(Math.abs(utilNet))}</div>
           </div>
         </div>
       </div>
@@ -1222,6 +1352,7 @@ function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
         <div class="stat-card"><div class="stat-label">Active days</div><div class="stat-value">${stats.activeDays}</div></div>
         <div class="stat-card"><div class="stat-label">Avg / day</div><div class="stat-value">${stats.avgMeals}</div></div>
         <div class="stat-card"><div class="stat-label">Bazar spent</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.totalBazar)}</div></div>
+        <div class="stat-card"><div class="stat-label">Meal cost</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.mealCost)}</div></div>
         <div class="stat-card"><div class="stat-label">Rent due</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.rentDue)}</div></div>
         <div class="stat-card"><div class="stat-label">Rent paid</div><div class="stat-value" style="font-size:16px;color:var(--green)">${fmtTk(stats.rentPaid)}</div></div>
         <div class="stat-card"><div class="stat-label">Utility due</div><div class="stat-value" style="font-size:16px">${fmtTk(round2(stats.utilityDue))}</div></div>
@@ -1271,7 +1402,7 @@ async function renderUtility() {
     <div class="content">
       <div class="month-sel" style="margin-bottom:16px">
         <label>Month</label>
-        <select class="input" id="ut-month" style="width:140px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
+        <select class="input" id="ut-month" style="width:240px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
         <label>Year</label>
         <select class="input" id="ut-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
         <button class="btn btn-ghost" onclick="loadUtilityMonth()">Load</button>
@@ -1354,8 +1485,8 @@ function buildUtilPayRows(perHead) {
         <option value="paid">Paid</option>
         <option value="partial">Partial</option>
       </select></td>
-      <td><textarea class="input input-sm" id="utp-notes-${m.id}"
-            placeholder="—" style="width:160px;min-height:36px;resize:vertical;line-height:1.4"></textarea></td>
+      <td><input type="text" class="input input-sm" id="utp-notes-${m.id}"
+            value="" placeholder="—" style="width:120px"/></td>
     </tr>`;
   }).join('');
 }
@@ -1413,7 +1544,7 @@ async function loadUtilityMonth() {
       const sc = document.getElementById('utp-share-'+m.id);
       if(pp) pp.value = p.paid ?? 0;
       if(ps) ps.value = p.status || 'unpaid';
-      if(pn) pn.value = p.notes || '';  // works for both input and textarea
+      if(pn) pn.value = p.notes || '';
       if(sc) sc.textContent = fmtTk(perHead);
     });
     toast('Loaded utility for ' + MONTHS[month] + ' ' + year);
@@ -1521,7 +1652,7 @@ async function renderLog() {
     <div class="content">
       <div class="month-sel" style="margin-bottom:16px">
         <label>Month</label>
-        <select class="input" id="log-month" style="width:140px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
+        <select class="input" id="log-month" style="width:240px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
         <label>Year</label>
         <select class="input" id="log-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
         <button class="btn btn-primary" onclick="loadLog()">Generate report</button>
