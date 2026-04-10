@@ -163,7 +163,12 @@ function navigate(page) {
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + page).style.display = 'block';
+  const pageEl = document.getElementById('page-' + page);
+  pageEl.style.display = 'block';
+  // Force reflow so CSS animations replay on every navigation
+  pageEl.style.animation = 'none';
+  pageEl.offsetHeight; // trigger reflow
+  pageEl.style.animation = '';
   document.querySelectorAll('.nav-item').forEach(n => {
     if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) n.classList.add('active');
   });
@@ -1646,7 +1651,9 @@ async function init() {
     // Verify connection
     const { error } = await sb.from('members').select('id', { count: 'exact', head: true });
     if (error) throw error;
-    document.getElementById('db-dot').style.background = 'var(--green)';
+    const dbDot = document.getElementById('db-dot');
+    dbDot.style.background = 'var(--green)';
+    dbDot.classList.add('live');
     document.getElementById('db-label').textContent = 'Supabase connected';
     await ensureUtilityTable();
     await seedIfEmpty();
