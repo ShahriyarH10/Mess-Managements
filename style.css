@@ -292,3 +292,288 @@ input[type=number]{-moz-appearance:textfield}
 .mob-nav-btn.active{color:var(--accent)}
 .mob-nav-btn.active svg{opacity:1}
 .mob-nav-btn:hover{color:var(--text)}
+
+/* ═══════════════════════════════════════════════════════
+   SMOOTH ANIMATIONS — added layer, zero UI changes
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Keyframes ─────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes barGrow {
+  from { transform: scaleX(0); transform-origin: left; }
+  to   { transform: scaleX(1); transform-origin: left; }
+}
+@keyframes histGrow {
+  from { transform: scaleY(0); transform-origin: bottom; }
+  to   { transform: scaleY(1); transform-origin: bottom; }
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,168,83,0); }
+  50%       { box-shadow: 0 0 0 5px rgba(212,168,83,0.12); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.5); opacity: 0.7; }
+}
+@keyframes mobNavIn {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Sidebar entrance ──────────────────────────────────── */
+.sidebar {
+  animation: slideInLeft 0.4s cubic-bezier(0.22,1,0.36,1) both;
+}
+.nav-section {
+  animation: fadeIn 0.5s ease both;
+}
+.nav-item {
+  animation: slideInLeft 0.35s cubic-bezier(0.22,1,0.36,1) both;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+}
+.nav-item:nth-child(1)  { animation-delay: 0.04s; }
+.nav-item:nth-child(2)  { animation-delay: 0.08s; }
+.nav-item:nth-child(3)  { animation-delay: 0.12s; }
+.nav-item:nth-child(4)  { animation-delay: 0.16s; }
+.nav-item:nth-child(5)  { animation-delay: 0.20s; }
+.nav-item:nth-child(6)  { animation-delay: 0.24s; }
+.nav-item:nth-child(7)  { animation-delay: 0.28s; }
+.nav-item:active { transform: scale(0.97); }
+.logo {
+  animation: fadeIn 0.5s ease both;
+}
+
+/* ── Page content entrance ─────────────────────────────── */
+.page {
+  animation: fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
+}
+.topbar {
+  animation: slideDown 0.3s cubic-bezier(0.22,1,0.36,1) both;
+}
+.content {
+  animation: fadeUp 0.36s cubic-bezier(0.22,1,0.36,1) 0.04s both;
+}
+
+/* ── Cards ─────────────────────────────────────────────── */
+.card {
+  animation: fadeUp 0.35s cubic-bezier(0.22,1,0.36,1) both;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.18s ease, box-shadow 0.2s ease;
+}
+.card:nth-child(1) { animation-delay: 0.02s; }
+.card:nth-child(2) { animation-delay: 0.06s; }
+.card:nth-child(3) { animation-delay: 0.10s; }
+.card:nth-child(4) { animation-delay: 0.14s; }
+
+/* ── Stat cards ────────────────────────────────────────── */
+.stat-card {
+  animation: scaleIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.stat-grid .stat-card:nth-child(1)  { animation-delay: 0.05s; }
+.stat-grid .stat-card:nth-child(2)  { animation-delay: 0.10s; }
+.stat-grid .stat-card:nth-child(3)  { animation-delay: 0.15s; }
+.stat-grid .stat-card:nth-child(4)  { animation-delay: 0.20s; }
+.stat-grid .stat-card:nth-child(5)  { animation-delay: 0.25s; }
+.stat-grid .stat-card:nth-child(6)  { animation-delay: 0.30s; }
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+/* ── Profile cards ─────────────────────────────────────── */
+.profile-card {
+  animation: scaleIn 0.32s cubic-bezier(0.22,1,0.36,1) both;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.grid-auto .profile-card:nth-child(1) { animation-delay: 0.04s; }
+.grid-auto .profile-card:nth-child(2) { animation-delay: 0.09s; }
+.grid-auto .profile-card:nth-child(3) { animation-delay: 0.14s; }
+.grid-auto .profile-card:nth-child(4) { animation-delay: 0.19s; }
+.grid-auto .profile-card:nth-child(5) { animation-delay: 0.24s; }
+.grid-auto .profile-card:nth-child(6) { animation-delay: 0.29s; }
+.profile-card:hover {
+  transform: translateY(-3px);
+}
+.profile-card.active {
+  animation: pulse 2s ease 0.3s infinite;
+}
+
+/* ── Meal cells ────────────────────────────────────────── */
+.meal-cell {
+  animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.meal-grid .meal-cell:nth-child(1) { animation-delay: 0.03s; }
+.meal-grid .meal-cell:nth-child(2) { animation-delay: 0.07s; }
+.meal-grid .meal-cell:nth-child(3) { animation-delay: 0.11s; }
+.meal-grid .meal-cell:nth-child(4) { animation-delay: 0.15s; }
+.meal-grid .meal-cell:nth-child(5) { animation-delay: 0.19s; }
+.meal-grid .meal-cell:nth-child(6) { animation-delay: 0.23s; }
+.meal-num-input {
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+}
+.meal-num-input:focus {
+  transform: scale(1.04);
+}
+
+/* ── Mini bars (bazar leaders) ─────────────────────────── */
+.mini-bar-fill {
+  animation: barGrow 0.7s cubic-bezier(0.22,1,0.36,1) 0.2s both;
+}
+.mini-bar:nth-child(1) .mini-bar-fill { animation-delay: 0.2s; }
+.mini-bar:nth-child(2) .mini-bar-fill { animation-delay: 0.3s; }
+.mini-bar:nth-child(3) .mini-bar-fill { animation-delay: 0.4s; }
+.mini-bar:nth-child(4) .mini-bar-fill { animation-delay: 0.5s; }
+.mini-bar:nth-child(5) .mini-bar-fill { animation-delay: 0.6s; }
+
+/* ── History bars (profile chart) ─────────────────────── */
+.hist-b {
+  animation: histGrow 0.5s cubic-bezier(0.22,1,0.36,1) both;
+  transition: background 0.2s ease;
+}
+.hist-wrap .hist-b:nth-child(1) { animation-delay: 0.05s; }
+.hist-wrap .hist-b:nth-child(2) { animation-delay: 0.10s; }
+.hist-wrap .hist-b:nth-child(3) { animation-delay: 0.15s; }
+.hist-wrap .hist-b:nth-child(4) { animation-delay: 0.20s; }
+.hist-wrap .hist-b:nth-child(5) { animation-delay: 0.25s; }
+.hist-wrap .hist-b:nth-child(6) { animation-delay: 0.30s; }
+.hist-wrap .hist-b:nth-child(7) { animation-delay: 0.35s; }
+.hist-wrap .hist-b:nth-child(8) { animation-delay: 0.40s; }
+
+/* ── Table rows ────────────────────────────────────────── */
+tbody tr {
+  animation: fadeUp 0.28s cubic-bezier(0.22,1,0.36,1) both;
+}
+tbody tr:nth-child(1)  { animation-delay: 0.04s; }
+tbody tr:nth-child(2)  { animation-delay: 0.08s; }
+tbody tr:nth-child(3)  { animation-delay: 0.12s; }
+tbody tr:nth-child(4)  { animation-delay: 0.16s; }
+tbody tr:nth-child(5)  { animation-delay: 0.20s; }
+tbody tr:nth-child(6)  { animation-delay: 0.24s; }
+tbody tr:nth-child(7)  { animation-delay: 0.28s; }
+tbody tr:nth-child(8)  { animation-delay: 0.32s; }
+tbody tr:nth-child(9)  { animation-delay: 0.36s; }
+tbody tr:nth-child(10) { animation-delay: 0.40s; }
+tr { transition: background 0.15s ease; }
+
+/* ── Buttons ───────────────────────────────────────────── */
+.btn {
+  transition: background 0.17s ease, color 0.17s ease, border-color 0.17s ease,
+              transform 0.14s cubic-bezier(0.34,1.56,0.64,1), opacity 0.17s ease;
+}
+.btn:hover  { transform: translateY(-1px); }
+.btn:active { transform: scale(0.96) translateY(0); }
+.btn-primary:hover { transform: translateY(-1px); }
+
+/* ── Inputs & selects ──────────────────────────────────── */
+.input {
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.input:focus {
+  box-shadow: 0 0 0 3px rgba(212,168,83,0.12);
+}
+
+/* ── Badge ─────────────────────────────────────────────── */
+.badge {
+  animation: scaleIn 0.25s cubic-bezier(0.22,1,0.36,1) both;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* ── Modal ─────────────────────────────────────────────── */
+.modal-bg {
+  animation: fadeIn 0.22s ease both;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.modal {
+  animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  transform-origin: center center;
+}
+.modal-bg:not(.open) .modal {
+  animation: none;
+}
+
+/* ── Toast ─────────────────────────────────────────────── */
+#toast {
+  transition: opacity 0.25s cubic-bezier(0.22,1,0.36,1),
+              transform 0.3s cubic-bezier(0.22,1,0.36,1);
+}
+#toast.show {
+  animation: none;
+}
+
+/* ── Mobile nav ────────────────────────────────────────── */
+.mobile-nav {
+  animation: mobNavIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+}
+.mob-nav-btn {
+  transition: color 0.18s ease, transform 0.18s cubic-bezier(0.22,1,0.36,1);
+}
+.mob-nav-btn:hover  { transform: translateY(-2px); }
+.mob-nav-btn:active { transform: scale(0.92); }
+.mob-nav-btn.active { transform: translateY(-1px); }
+
+/* ── DB status dot ─────────────────────────────────────── */
+.db-dot {
+  transition: background 0.4s ease;
+}
+.db-dot.live {
+  animation: dotPulse 2.5s ease-in-out infinite;
+}
+
+/* ── Profile mobile list items ─────────────────────────── */
+.profile-mobile-item {
+  animation: fadeUp 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  transition: background 0.15s ease;
+}
+.profile-mobile-list .profile-mobile-item:nth-child(1) { animation-delay: 0.04s; }
+.profile-mobile-list .profile-mobile-item:nth-child(2) { animation-delay: 0.09s; }
+.profile-mobile-list .profile-mobile-item:nth-child(3) { animation-delay: 0.14s; }
+.profile-mobile-list .profile-mobile-item:nth-child(4) { animation-delay: 0.19s; }
+.profile-mobile-list .profile-mobile-item:nth-child(5) { animation-delay: 0.24s; }
+.profile-mobile-list .profile-mobile-item:nth-child(6) { animation-delay: 0.29s; }
+
+/* ── Detail section titles (profile) ───────────────────── */
+.detail-section {
+  animation: fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
+}
+.detail-section:nth-child(1) { animation-delay: 0.08s; }
+.detail-section:nth-child(2) { animation-delay: 0.14s; }
+.detail-section:nth-child(3) { animation-delay: 0.20s; }
+.detail-section:nth-child(4) { animation-delay: 0.26s; }
+
+/* ── Stat value number pop ──────────────────────────────── */
+.stat-value {
+  transition: color 0.3s ease;
+}
+
+/* ── Reduce motion for accessibility ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
