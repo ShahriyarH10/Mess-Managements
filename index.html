@@ -562,6 +562,7 @@ async function renderPage(page) {
 async function renderDashboard() {
   const {month, year} = thisMonth();
   const key = monthKey(year, month);
+  const todayStr = today();
   const allMeals = await txGetAll('meals');
   const allBazar = await txGetAll('bazar');
   const rentRec = await txGet('rent', key);
@@ -570,10 +571,27 @@ async function renderDashboard() {
   const monthMeals = allMeals.filter(r => r.date.startsWith(key));
   const monthBazar = allBazar.filter(r => r.date.startsWith(key));
 
-  let totalMeals = 0, totalBazar = 0;
-  monthMeals.forEach(r => Object.values(r.meals||{}).forEach(v => totalMeals += Number(v)));
+  // Helper: sum only day+night keys (avoid triple-counting the legacy total key)
+  function sumMeals(mealsObj) {
+    let d=0, n=0;
+    Object.entries(mealsObj||{}).forEach(([k,v]) => {
+      if (k.endsWith('_day'))   d += Number(v);
+      else if (k.endsWith('_night')) n += Number(v);
+      // if no _day/_night keys exist (legacy), fall back to plain name keys
+    });
+    if (d===0 && n===0) {
+      // legacy format: sum all values that aren't _day/_night
+      Object.entries(mealsObj||{}).forEach(([k,v]) => { d += Number(v); });
+    }
+    return { day: d, night: n };
+  }
+
+  let totalDay = 0, totalNight = 0, totalBazar = 0;
+  monthMeals.forEach(r => { const s=sumMeals(r.meals); totalDay+=s.day; totalNight+=s.night; });
   monthBazar.forEach(r => Object.values(r.bazar||{}).forEach(v => totalBazar += Number(v)));
+  const totalMeals = round2(totalDay + totalNight);
   const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
+
   const totalRentDue  = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.rent||0),0) : 0;
   const totalRentPaid = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.paid||0),0) : 0;
   const bills = utilRec?.bills || {};
@@ -581,8 +599,13 @@ async function renderDashboard() {
   const payments = utilRec?.payments || {};
   const totalUtilCollected = Object.values(payments).reduce((s,p)=>s+Number(p.paid||0),0);
 
-  // Recent activity
-  const recentMeals = allMeals.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  // Today's meal record
+  const todayRec = allMeals.find(r => r.date === todayStr);
+  const todayDay   = todayRec ? members.reduce((s,m)=>s+Number(todayRec.meals[m.name+'_day']  ??todayRec.meals[m.name]??0),0) : null;
+  const todayNight = todayRec ? members.reduce((s,m)=>s+Number(todayRec.meals[m.name+'_night']??0),0) : null;
+
+  // Recent activity — only use the legacy total key or sum day+night correctly
+  const recentMeals = [...allMeals].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
 
   // Per-member bazar totals this month
   let memBazar = {};
@@ -635,6 +658,43 @@ async function renderDashboard() {
         </div>
       </div>
 
+      ${todayRec ? `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title">Today's meals — ${todayStr}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
+          <div class="stat-card">
+            <div class="stat-label">Day meals</div>
+            <div class="stat-value">${todayDay}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Night meals</div>
+            <div class="stat-value">${todayNight}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total today</div>
+            <div class="stat-value">${round2(todayDay+todayNight)}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${members.map(m => {
+            const d = Number(todayRec.meals[m.name+'_day']  ?? todayRec.meals[m.name] ?? 0);
+            const n = Number(todayRec.meals[m.name+'_night'] ?? 0);
+            const hasMeal = d>0 || n>0;
+            return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <span style="font-size:13px;font-weight:500;color:${hasMeal?'var(--text)':'var(--text3)'}">${m.name}</span>
+              ${d>0?`<span class="badge badge-blue">Day ${d}</span>`:''}
+              ${n>0?`<span class="badge badge-amber">Night ${n}</span>`:''}
+              ${!hasMeal?`<span class="badge badge-red">Absent</span>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : `
+      <div class="card" style="margin-bottom:14px;text-align:center;padding:20px">
+        <div class="card-title">Today's meals — ${todayStr}</div>
+        <div style="color:var(--text3);font-size:13px;margin-top:8px">No meal entry for today yet</div>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="navigate('meals')">+ Add today's meals</button>
+      </div>`}
+
       <div class="grid-2" style="gap:14px">
         <div class="card">
           <div class="card-title">Bazar leaders — ${MONTHS[month]}</div>
@@ -648,11 +708,15 @@ async function renderDashboard() {
         <div class="card">
           <div class="card-title">Recent meal entries</div>
           ${recentMeals.length ? `<div class="tbl-wrap"><table>
-            <thead><tr><th>Date</th><th>Total meals</th><th>Members</th></tr></thead>
+            <thead><tr><th>Date</th><th>Day</th><th>Night</th><th>Total</th><th>Members</th></tr></thead>
             <tbody>${recentMeals.map(r => {
-              const total = Object.values(r.meals||{}).reduce((s,v)=>s+Number(v),0);
-              const active = Object.values(r.meals||{}).filter(v=>Number(v)>0).length;
-              return `<tr><td>${r.date}</td><td>${total}</td><td>${active} members</td></tr>`;
+              const s = sumMeals(r.meals);
+              const activeMembers = members.filter(m => {
+                const d = Number(r.meals[m.name+'_day']  ?? r.meals[m.name] ?? 0);
+                const n = Number(r.meals[m.name+'_night'] ?? 0);
+                return d>0 || n>0;
+              }).length;
+              return `<tr><td>${r.date}</td><td>${s.day}</td><td>${s.night}</td><td>${round2(s.day+s.night)}</td><td>${activeMembers}</td></tr>`;
             }).join('')}</tbody>
           </table></div>` : '<div class="empty"><div class="empty-text">No meal data yet</div></div>'}
         </div>
