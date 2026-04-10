@@ -239,6 +239,25 @@ td .input-sm{background:var(--bg4);border-color:var(--border)}
 /* Notes input — fixed width and consistent single-line height */
 .notes-input{display:block;width:100%;min-width:0;max-width:none;height:34px;line-height:34px}
 
+
+/* PROFILE DETAIL MOBILE */
+.profile-head{display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.profile-meta{flex:1;min-width:0}
+.profile-balances{display:flex;gap:16px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.profile-balance-item{text-align:right}
+.profile-balance-item.sep{padding-left:16px;border-left:1px solid var(--border)}
+.profile-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:20px}
+@media(max-width:768px){
+  .profile-head{flex-direction:column;align-items:flex-start;gap:12px}
+  .profile-meta{width:100%}
+  .profile-balances{width:100%;display:grid;grid-template-columns:1fr;gap:8px;justify-content:stretch}
+  .profile-balance-item,.profile-balance-item.sep{text-align:left;padding-left:0;border-left:none;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px}
+  .profile-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:420px){
+  .profile-stats-grid{grid-template-columns:1fr}
+}
+
 /* Hide number input spinners */
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
@@ -795,6 +814,7 @@ function renderMeals() {
       </div>
     </div>`;
   buildMealInputs();
+  loadMealForDate();
   loadMealsRecent();
 }
 
@@ -1393,29 +1413,29 @@ function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
   const detail = document.getElementById('profile-detail-section');
   detail.innerHTML = `
     <div class="card">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+      <div class="profile-head">
         <div class="avatar" style="width:52px;height:52px;font-size:17px;background:${col.bg};color:${col.fg}">${initials(member.name)}</div>
-        <div style="flex:1">
+        <div class="profile-meta">
           <div style="font-family:var(--font-serif);font-size:22px">${member.name}</div>
           <div style="font-size:13px;color:var(--text2);margin-top:3px">Default rent: ${fmtTk(member.rent||0)} / month · ${member.room||'—'}</div>
         </div>
-        <div style="display:flex;gap:16px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
-          <div style="text-align:right">
+        <div class="profile-balances">
+          <div class="profile-balance-item">
             <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay / get</div>
             <div style="font-size:18px;font-weight:600" class="${mealNet>=0?'net-pos':'net-neg'}">${mealNetText}</div>
           </div>
-          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+          <div class="profile-balance-item sep">
             <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
             <div style="font-size:18px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
           </div>
-          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+          <div class="profile-balance-item sep">
             <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
             <div style="font-size:18px;font-weight:600" class="${utilNet>=0?'net-pos':'net-neg'}">${utilNet>=0?'+':''}${fmtTk(Math.abs(utilNet))}</div>
           </div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:20px">
+      <div class="profile-stats-grid">
         <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${stats.totalMeals}</div></div>
         <div class="stat-card"><div class="stat-label">Active days</div><div class="stat-value">${stats.activeDays}</div></div>
         <div class="stat-card"><div class="stat-label">Avg / day</div><div class="stat-value">${stats.avgMeals}</div></div>
@@ -1739,16 +1759,32 @@ async function loadLog() {
   const fm = allMeals.filter(r=>r.date.startsWith(key)).sort((a,b)=>a.date.localeCompare(b.date));
   const fb = allBazar.filter(r=>r.date.startsWith(key)).sort((a,b)=>a.date.localeCompare(b.date));
 
-  let totalMeals=0, totalBazar=0, totalUtility=0;
-  fm.forEach(r=>Object.values(r.meals||{}).forEach(v=>totalMeals+=Number(v)));
-  fb.forEach(r=>{Object.values(r.bazar||{}).forEach(v=>totalBazar+=Number(v)); if(r.utility)Object.values(r.utility).forEach(v=>totalUtility+=Number(v));});
-  const mealRate = totalMeals>0?round2(totalBazar/totalMeals):0;
+  function getMemberMealTotal(mealsObj, memberName) {
+    if ((mealsObj||{})[memberName+'_day'] != null || (mealsObj||{})[memberName+'_night'] != null) {
+      return round2(Number((mealsObj||{})[memberName+'_day'] || 0) + Number((mealsObj||{})[memberName+'_night'] || 0));
+    }
+    return round2(Number((mealsObj||{})[memberName] || 0));
+  }
 
-  // Per member totals
+  let totalMeals=0, totalBazar=0, totalUtility=0;
   const memMeals={}, memBazar={};
   members.forEach(m=>{memMeals[m.name]=0;memBazar[m.name]=0;});
-  fm.forEach(r=>Object.entries(r.meals||{}).forEach(([n,v])=>{memMeals[n]=(memMeals[n]||0)+Number(v);}));
-  fb.forEach(r=>Object.entries(r.bazar||{}).forEach(([n,v])=>{memBazar[n]=(memBazar[n]||0)+Number(v);}));
+
+  fm.forEach(r=>{
+    members.forEach(m => {
+      const memberTotal = getMemberMealTotal(r.meals, m.name);
+      memMeals[m.name] += memberTotal;
+      totalMeals += memberTotal;
+    });
+  });
+
+  fb.forEach(r=>{
+    Object.entries(r.bazar||{}).forEach(([n,v])=>{memBazar[n]=(memBazar[n]||0)+Number(v); totalBazar += Number(v);});
+    if(r.utility) Object.values(r.utility).forEach(v=>totalUtility+=Number(v));
+  });
+
+  Object.keys(memMeals).forEach(name => memMeals[name] = round2(memMeals[name]));
+  const mealRate = totalMeals>0?round2(totalBazar/totalMeals):0;
 
   // Payment calc
   const paymentData = members.map(m=>{
@@ -1767,7 +1803,7 @@ async function loadLog() {
   const wrap = document.getElementById('log-content');
   wrap.innerHTML = `
     <div class="stat-grid" style="margin-bottom:16px">
-      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${totalMeals}</div></div>
+      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalMeals)}</div></div>
       <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:18px">${fmtTk(totalBazar)}</div></div>
       <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:18px">${fmtTk(mealRate)}</div></div>
       <div class="stat-card"><div class="stat-label">Total utility</div><div class="stat-value" style="font-size:18px">${fmtTk(totalUtility)}</div></div>
@@ -1790,9 +1826,17 @@ async function loadLog() {
         <div class="card-title">Meal log</div>
         <div class="scroll-table tbl-wrap"><table>
           <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
-          <tbody>${fm.map(r=>{const t=Object.values(r.meals||{}).reduce((s,v)=>s+Number(v),0);return`<tr><td>${r.date.slice(8)}</td>${members.map(m=>`<td>${r.meals[m.name]??0}</td>`).join('')}<td><b>${t}</b></td></tr>`;}).join('')}
+          <tbody>${fm.map(r=>{
+            let t = 0;
+            const rowCells = members.map(m => {
+              const memberTotal = getMemberMealTotal(r.meals, m.name);
+              t += memberTotal;
+              return `<td>${memberTotal}</td>`;
+            }).join('');
+            return `<tr><td>${r.date.slice(8)}</td>${rowCells}<td><b>${round2(t)}</b></td></tr>`;
+          }).join('')}
           </tbody>
-          <tfoot><tr><td>Total</td>${members.map(m=>`<td>${memMeals[m.name]||0}</td>`).join('')}<td>${totalMeals}</td></tr></tfoot>
+          <tfoot><tr><td>Total</td>${members.map(m=>`<td>${memMeals[m.name]||0}</td>`).join('')}<td>${round2(totalMeals)}</td></tr></tfoot>
         </table></div>
       </div>
       <div class="card">
