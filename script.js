@@ -161,21 +161,37 @@ function cleanInputText(value) {
    ============================================================ */
 function navigate(page) {
   currentPage = page;
-  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+
+  // Hide all pages, remove .is-entering from any lingering page
+  document.querySelectorAll('.page').forEach(p => {
+    p.style.display = 'none';
+    p.classList.remove('is-entering');
+  });
+
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
   const pageEl = document.getElementById('page-' + page);
+
+  // Add .is-entering BEFORE showing — CSS animations fire when element becomes visible
+  pageEl.classList.add('is-entering');
   pageEl.style.display = 'block';
-  // Replay page entrance animation on every navigation
-  void pageEl.offsetWidth; // trigger reflow without touching animation property
-  pageEl.style.animation = 'none';
-  requestAnimationFrame(() => { pageEl.style.animation = ''; });
+
   document.querySelectorAll('.nav-item').forEach(n => {
     if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) n.classList.add('active');
   });
+
   // sync mobile bottom nav
   document.querySelectorAll('.mob-nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.page === page);
   });
+
+  // Remove .is-entering after animations finish (~700ms covers all delays+durations)
+  // so subsequent re-renders of innerHTML inside the page don't retrigger animations
+  clearTimeout(pageEl._enterTimer);
+  pageEl._enterTimer = setTimeout(() => {
+    pageEl.classList.remove('is-entering');
+  }, 750);
+
   renderPage(page);
 }
 
