@@ -371,60 +371,54 @@ input[type=number]{-moz-appearance:textfield}
 .nav-item:nth-child(7) { animation-delay: 0.29s; }
 .nav-item:active { transform: scale(0.96); }
 
-/* ── Page & topbar entrance ─────────────────────────────── */
-.page  { animation: fadeUp   0.34s var(--ease-spring) both; }
-.topbar{ animation: slideDown 0.30s var(--ease-spring) both; }
-.content { animation: fadeUp 0.38s var(--ease-spring) 0.04s both; }
-
-/* ── Cards — animate in once, then just transition ──────── */
+/* ── Page & topbar entrance — only when .is-entering is present ─── */
+/* Base classes have NO animation so re-renders don't retrigger them */
 .card {
-  animation: fadeUp 0.35s var(--ease-spring) both;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
-.card:nth-child(1) { animation-delay: 0.02s; }
-.card:nth-child(2) { animation-delay: 0.07s; }
-.card:nth-child(3) { animation-delay: 0.12s; }
-.card:nth-child(4) { animation-delay: 0.17s; }
-
-/* ── Stat cards ─────────────────────────────────────────── */
 .stat-card {
-  animation: scaleIn 0.32s var(--ease-spring) both;
   transition: background 0.18s ease, border-color 0.18s ease,
               transform 0.2s var(--ease-spring);
 }
-.stat-grid .stat-card:nth-child(1) { animation-delay: 0.05s; }
-.stat-grid .stat-card:nth-child(2) { animation-delay: 0.10s; }
-.stat-grid .stat-card:nth-child(3) { animation-delay: 0.15s; }
-.stat-grid .stat-card:nth-child(4) { animation-delay: 0.20s; }
-.stat-grid .stat-card:nth-child(5) { animation-delay: 0.25s; }
-.stat-grid .stat-card:nth-child(6) { animation-delay: 0.30s; }
 .stat-card:hover { transform: translateY(-2px); }
 
-/* ── Profile cards — ONLY animate on first render (page enter).
-      Clicking a card toggles .active via JS class swap,
-      NOT by rebuilding innerHTML, so no animation re-fires. ── */
+/* .is-entering is added by navigate() before render, removed after */
+.is-entering .topbar  { animation: slideDown 0.30s var(--ease-spring) both; }
+.is-entering .content { animation: fadeUp    0.38s var(--ease-spring) 0.04s both; }
+
+.is-entering .card            { animation: fadeUp 0.35s var(--ease-spring) both; }
+.is-entering .card:nth-child(1) { animation-delay: 0.02s; }
+.is-entering .card:nth-child(2) { animation-delay: 0.07s; }
+.is-entering .card:nth-child(3) { animation-delay: 0.12s; }
+.is-entering .card:nth-child(4) { animation-delay: 0.17s; }
+
+.is-entering .stat-card            { animation: scaleIn 0.32s var(--ease-spring) both; }
+.is-entering .stat-grid .stat-card:nth-child(1) { animation-delay: 0.05s; }
+.is-entering .stat-grid .stat-card:nth-child(2) { animation-delay: 0.10s; }
+.is-entering .stat-grid .stat-card:nth-child(3) { animation-delay: 0.15s; }
+.is-entering .stat-grid .stat-card:nth-child(4) { animation-delay: 0.20s; }
+.is-entering .stat-grid .stat-card:nth-child(5) { animation-delay: 0.25s; }
+.is-entering .stat-grid .stat-card:nth-child(6) { animation-delay: 0.30s; }
+
+/* ── Profile cards ───────────────────────────────────────── */
 .profile-card {
-  /* entrance animation — fires once when grid is built */
-  animation: scaleIn 0.32s var(--ease-spring) both;
-  /* smooth hover / active transitions */
   transition: border-color 0.22s ease, background 0.22s ease,
               transform    0.22s var(--ease-spring),
               box-shadow   0.22s ease;
 }
-.grid-auto .profile-card:nth-child(1) { animation-delay: 0.04s; }
-.grid-auto .profile-card:nth-child(2) { animation-delay: 0.09s; }
-.grid-auto .profile-card:nth-child(3) { animation-delay: 0.14s; }
-.grid-auto .profile-card:nth-child(4) { animation-delay: 0.19s; }
-.grid-auto .profile-card:nth-child(5) { animation-delay: 0.24s; }
-.grid-auto .profile-card:nth-child(6) { animation-delay: 0.29s; }
+.is-entering .profile-card            { animation: scaleIn 0.32s var(--ease-spring) both; }
+.is-entering .grid-auto .profile-card:nth-child(1) { animation-delay: 0.04s; }
+.is-entering .grid-auto .profile-card:nth-child(2) { animation-delay: 0.09s; }
+.is-entering .grid-auto .profile-card:nth-child(3) { animation-delay: 0.14s; }
+.is-entering .grid-auto .profile-card:nth-child(4) { animation-delay: 0.19s; }
+.is-entering .grid-auto .profile-card:nth-child(5) { animation-delay: 0.24s; }
+.is-entering .grid-auto .profile-card:nth-child(6) { animation-delay: 0.29s; }
 .profile-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 24px rgba(0,0,0,0.25);
 }
 .profile-card:active { transform: scale(0.98) translateY(0); }
-/* Active state: smooth colour shift only, no animation */
 .profile-card.active {
-  animation: none;    /* ← kills the entrance animation on re-adds */
   transition: border-color 0.22s ease, background 0.22s ease,
               transform    0.22s var(--ease-spring),
               box-shadow   0.22s ease;
@@ -439,15 +433,15 @@ input[type=number]{-moz-appearance:textfield}
 
 /* ── Meal cells ─────────────────────────────────────────── */
 .meal-cell {
-  animation: scaleIn 0.28s var(--ease-spring) both;
   transition: border-color 0.18s ease, background 0.18s ease;
 }
-.meal-grid .meal-cell:nth-child(1) { animation-delay: 0.03s; }
-.meal-grid .meal-cell:nth-child(2) { animation-delay: 0.07s; }
-.meal-grid .meal-cell:nth-child(3) { animation-delay: 0.11s; }
-.meal-grid .meal-cell:nth-child(4) { animation-delay: 0.15s; }
-.meal-grid .meal-cell:nth-child(5) { animation-delay: 0.19s; }
-.meal-grid .meal-cell:nth-child(6) { animation-delay: 0.23s; }
+.is-entering .meal-cell { animation: scaleIn 0.28s var(--ease-spring) both; }
+.is-entering .meal-grid .meal-cell:nth-child(1) { animation-delay: 0.03s; }
+.is-entering .meal-grid .meal-cell:nth-child(2) { animation-delay: 0.07s; }
+.is-entering .meal-grid .meal-cell:nth-child(3) { animation-delay: 0.11s; }
+.is-entering .meal-grid .meal-cell:nth-child(4) { animation-delay: 0.15s; }
+.is-entering .meal-grid .meal-cell:nth-child(5) { animation-delay: 0.19s; }
+.is-entering .meal-grid .meal-cell:nth-child(6) { animation-delay: 0.23s; }
 .meal-num-input {
   transition: border-color 0.18s ease, background 0.18s ease,
               transform 0.15s var(--ease-snap);
@@ -455,45 +449,39 @@ input[type=number]{-moz-appearance:textfield}
 .meal-num-input:focus { transform: scale(1.05); }
 
 /* ── Mini bars ──────────────────────────────────────────── */
-.mini-bar-fill {
-  animation: barGrow 0.65s var(--ease-spring) both;
-}
-.mini-bar:nth-child(1) .mini-bar-fill { animation-delay: 0.18s; }
-.mini-bar:nth-child(2) .mini-bar-fill { animation-delay: 0.28s; }
-.mini-bar:nth-child(3) .mini-bar-fill { animation-delay: 0.38s; }
-.mini-bar:nth-child(4) .mini-bar-fill { animation-delay: 0.48s; }
-.mini-bar:nth-child(5) .mini-bar-fill { animation-delay: 0.58s; }
 .mini-bar-fill { transition: width 0.4s var(--ease-spring); }
+.is-entering .mini-bar-fill { animation: barGrow 0.65s var(--ease-spring) both; }
+.is-entering .mini-bar:nth-child(1) .mini-bar-fill { animation-delay: 0.18s; }
+.is-entering .mini-bar:nth-child(2) .mini-bar-fill { animation-delay: 0.28s; }
+.is-entering .mini-bar:nth-child(3) .mini-bar-fill { animation-delay: 0.38s; }
+.is-entering .mini-bar:nth-child(4) .mini-bar-fill { animation-delay: 0.48s; }
+.is-entering .mini-bar:nth-child(5) .mini-bar-fill { animation-delay: 0.58s; }
 
 /* ── History bars ───────────────────────────────────────── */
-.hist-b {
-  animation: histGrow 0.5s var(--ease-spring) both;
-  transition: background 0.2s ease;
-}
-.hist-wrap .hist-b:nth-child(1) { animation-delay: 0.05s; }
-.hist-wrap .hist-b:nth-child(2) { animation-delay: 0.10s; }
-.hist-wrap .hist-b:nth-child(3) { animation-delay: 0.15s; }
-.hist-wrap .hist-b:nth-child(4) { animation-delay: 0.20s; }
-.hist-wrap .hist-b:nth-child(5) { animation-delay: 0.25s; }
-.hist-wrap .hist-b:nth-child(6) { animation-delay: 0.30s; }
-.hist-wrap .hist-b:nth-child(7) { animation-delay: 0.35s; }
-.hist-wrap .hist-b:nth-child(8) { animation-delay: 0.40s; }
+.hist-b { transition: background 0.2s ease; }
+.is-entering .hist-b { animation: histGrow 0.5s var(--ease-spring) both; }
+.is-entering .hist-wrap .hist-b:nth-child(1) { animation-delay: 0.05s; }
+.is-entering .hist-wrap .hist-b:nth-child(2) { animation-delay: 0.10s; }
+.is-entering .hist-wrap .hist-b:nth-child(3) { animation-delay: 0.15s; }
+.is-entering .hist-wrap .hist-b:nth-child(4) { animation-delay: 0.20s; }
+.is-entering .hist-wrap .hist-b:nth-child(5) { animation-delay: 0.25s; }
+.is-entering .hist-wrap .hist-b:nth-child(6) { animation-delay: 0.30s; }
+.is-entering .hist-wrap .hist-b:nth-child(7) { animation-delay: 0.35s; }
+.is-entering .hist-wrap .hist-b:nth-child(8) { animation-delay: 0.40s; }
 
 /* ── Table rows ─────────────────────────────────────────── */
-tbody tr {
-  animation: fadeUp 0.26s var(--ease-spring) both;
-}
-tbody tr:nth-child(1)  { animation-delay: 0.04s; }
-tbody tr:nth-child(2)  { animation-delay: 0.08s; }
-tbody tr:nth-child(3)  { animation-delay: 0.12s; }
-tbody tr:nth-child(4)  { animation-delay: 0.16s; }
-tbody tr:nth-child(5)  { animation-delay: 0.20s; }
-tbody tr:nth-child(6)  { animation-delay: 0.24s; }
-tbody tr:nth-child(7)  { animation-delay: 0.28s; }
-tbody tr:nth-child(8)  { animation-delay: 0.32s; }
-tbody tr:nth-child(9)  { animation-delay: 0.36s; }
-tbody tr:nth-child(10) { animation-delay: 0.40s; }
 tr { transition: background 0.14s ease; }
+.is-entering tbody tr { animation: fadeUp 0.26s var(--ease-spring) both; }
+.is-entering tbody tr:nth-child(1)  { animation-delay: 0.04s; }
+.is-entering tbody tr:nth-child(2)  { animation-delay: 0.08s; }
+.is-entering tbody tr:nth-child(3)  { animation-delay: 0.12s; }
+.is-entering tbody tr:nth-child(4)  { animation-delay: 0.16s; }
+.is-entering tbody tr:nth-child(5)  { animation-delay: 0.20s; }
+.is-entering tbody tr:nth-child(6)  { animation-delay: 0.24s; }
+.is-entering tbody tr:nth-child(7)  { animation-delay: 0.28s; }
+.is-entering tbody tr:nth-child(8)  { animation-delay: 0.32s; }
+.is-entering tbody tr:nth-child(9)  { animation-delay: 0.36s; }
+.is-entering tbody tr:nth-child(10) { animation-delay: 0.40s; }
 
 /* ── Buttons ────────────────────────────────────────────── */
 .btn {
@@ -555,24 +543,23 @@ tr { transition: background 0.14s ease; }
 
 /* ── Profile mobile list ────────────────────────────────── */
 .profile-mobile-item {
-  animation: fadeUp 0.28s var(--ease-spring) both;
   transition: background 0.15s ease;
 }
-.profile-mobile-list .profile-mobile-item:nth-child(1) { animation-delay: 0.04s; }
-.profile-mobile-list .profile-mobile-item:nth-child(2) { animation-delay: 0.09s; }
-.profile-mobile-list .profile-mobile-item:nth-child(3) { animation-delay: 0.14s; }
-.profile-mobile-list .profile-mobile-item:nth-child(4) { animation-delay: 0.19s; }
-.profile-mobile-list .profile-mobile-item:nth-child(5) { animation-delay: 0.24s; }
-.profile-mobile-list .profile-mobile-item:nth-child(6) { animation-delay: 0.29s; }
+.is-entering .profile-mobile-item { animation: fadeUp 0.28s var(--ease-spring) both; }
+.is-entering .profile-mobile-list .profile-mobile-item:nth-child(1) { animation-delay: 0.04s; }
+.is-entering .profile-mobile-list .profile-mobile-item:nth-child(2) { animation-delay: 0.09s; }
+.is-entering .profile-mobile-list .profile-mobile-item:nth-child(3) { animation-delay: 0.14s; }
+.is-entering .profile-mobile-list .profile-mobile-item:nth-child(4) { animation-delay: 0.19s; }
+.is-entering .profile-mobile-list .profile-mobile-item:nth-child(5) { animation-delay: 0.24s; }
+.is-entering .profile-mobile-list .profile-mobile-item:nth-child(6) { animation-delay: 0.29s; }
 
 /* ── Profile detail sections ────────────────────────────── */
-.detail-section {
-  animation: fadeUp 0.32s var(--ease-spring) both;
-}
-.detail-section:nth-child(1) { animation-delay: 0.06s; }
-.detail-section:nth-child(2) { animation-delay: 0.12s; }
-.detail-section:nth-child(3) { animation-delay: 0.18s; }
-.detail-section:nth-child(4) { animation-delay: 0.24s; }
+.detail-section { }
+.is-entering .detail-section { animation: fadeUp 0.32s var(--ease-spring) both; }
+.is-entering .detail-section:nth-child(1) { animation-delay: 0.06s; }
+.is-entering .detail-section:nth-child(2) { animation-delay: 0.12s; }
+.is-entering .detail-section:nth-child(3) { animation-delay: 0.18s; }
+.is-entering .detail-section:nth-child(4) { animation-delay: 0.24s; }
 
 /* ── Stat value ─────────────────────────────────────────── */
 .stat-value { transition: color 0.3s ease; }
