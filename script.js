@@ -165,10 +165,10 @@ function navigate(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pageEl = document.getElementById('page-' + page);
   pageEl.style.display = 'block';
-  // Force reflow so CSS animations replay on every navigation
+  // Replay page entrance animation on every navigation
+  void pageEl.offsetWidth; // trigger reflow without touching animation property
   pageEl.style.animation = 'none';
-  pageEl.offsetHeight; // trigger reflow
-  pageEl.style.animation = '';
+  requestAnimationFrame(() => { pageEl.style.animation = ''; });
   document.querySelectorAll('.nav-item').forEach(n => {
     if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) n.classList.add('active');
   });
@@ -986,7 +986,7 @@ function buildProfileCards(allMeals, allBazar, allRent, allUtility=[]) {
           <span style="font-size:13px;font-weight:500;color:${netDue>0?'var(--red)':netDue<0?'var(--green)':'var(--text2)'}">${netDue>0?fmtTk(netDue)+' due':netDue<0?fmtTk(-netDue)+' overpaid':'Settled'}</span>
           <span class="badge ${cls}">${rentLabel}</span>
           <span class="badge ${utClsM}">${stats.latestUtilStatus==='paid'?'Util':'Util?'}</span>
-          <span style="color:var(--text3);font-size:14px">${selectedProfileId===m.id?'▲':'▼'}</span>
+          <span class="pmi-arrow" style="color:var(--text3);font-size:14px">${selectedProfileId===m.id?'▲':'▼'}</span>
         </div>
       </div>`;
     }).join('');
@@ -995,13 +995,33 @@ function buildProfileCards(allMeals, allBazar, allRent, allUtility=[]) {
 
 async function selectProfile(id) {
   selectedProfileId = selectedProfileId === id ? null : id;
-  const allMeals = await txGetAll('meals');
-  const allBazar = await txGetAll('bazar');
-  const allRent  = await txGetAll('rent');
-  const { data: allUtility } = await sb.from('utility_payments').select('*');
-  buildProfileCards(allMeals, allBazar, allRent, allUtility||[]);
-  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
-  else document.getElementById('profile-detail-section').innerHTML='';
+
+  // ── Just toggle .active on existing card DOM nodes — no innerHTML rebuild ──
+  // This prevents CSS entrance animations from re-firing on every click.
+  document.querySelectorAll('#profile-card-grid .profile-card').forEach((card, i) => {
+    const memberId = members[i]?.id;
+    card.classList.toggle('active', memberId === selectedProfileId);
+  });
+  document.querySelectorAll('#profile-mobile-list .profile-mobile-item').forEach((item, i) => {
+    const memberId = members[i]?.id;
+    item.classList.toggle('active', memberId === selectedProfileId);
+    // update the ▲▼ arrow
+    const arrow = item.querySelector('.pmi-arrow');
+    if (arrow) arrow.textContent = (memberId === selectedProfileId) ? '▲' : '▼';
+  });
+
+  // ── Only fetch data + render detail panel ──────────────────────────────────
+  if (selectedProfileId) {
+    const allMeals = await txGetAll('meals');
+    const allBazar = await txGetAll('bazar');
+    const allRent  = await txGetAll('rent');
+    const { data: allUtility } = await sb.from('utility_payments').select('*');
+    showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
+  } else {
+    const detail = document.getElementById('profile-detail-section');
+    detail.style.animation = 'none';
+    detail.innerHTML = '';
+  }
 }
 
 function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
