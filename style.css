@@ -293,30 +293,37 @@ input[type=number]{-moz-appearance:textfield}
 .mob-nav-btn.active svg{opacity:1}
 .mob-nav-btn:hover{color:var(--text)}
 
-/* ═══════════════════════════════════════════════════════
-   SMOOTH ANIMATIONS — added layer, zero UI changes
-   ═══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   ANIMATIONS v2 — smooth, non-repeating, profile fix
+   ═══════════════════════════════════════════════════════════ */
 
-/* ── Keyframes ─────────────────────────────────────────── */
+/* ── Easing tokens ──────────────────────────────────────── */
+:root {
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out:    cubic-bezier(0.0,  0,    0.2,  1);
+}
+
+/* ── Keyframes ──────────────────────────────────────────── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-16px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0);     }
 }
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.94); }
-  to   { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.93); }
+  to   { opacity: 1; transform: scale(1);    }
 }
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0);     }
 }
 @keyframes barGrow {
   from { transform: scaleX(0); transform-origin: left; }
@@ -326,86 +333,83 @@ input[type=number]{-moz-appearance:textfield}
   from { transform: scaleY(0); transform-origin: bottom; }
   to   { transform: scaleY(1); transform-origin: bottom; }
 }
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(212,168,83,0); }
-  50%       { box-shadow: 0 0 0 5px rgba(212,168,83,0.12); }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
+@keyframes detailSlide {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 @keyframes dotPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50%       { transform: scale(1.5); opacity: 0.7; }
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.6; transform: scale(1.45); }
 }
 @keyframes mobNavIn {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
 
-/* ── Sidebar entrance ──────────────────────────────────── */
+/* ── Sidebar ────────────────────────────────────────────── */
 .sidebar {
-  animation: slideInLeft 0.4s cubic-bezier(0.22,1,0.36,1) both;
+  animation: slideInLeft 0.42s var(--ease-spring) both;
 }
-.nav-section {
-  animation: fadeIn 0.5s ease both;
-}
-.nav-item {
-  animation: slideInLeft 0.35s cubic-bezier(0.22,1,0.36,1) both;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
-}
-.nav-item:nth-child(1)  { animation-delay: 0.04s; }
-.nav-item:nth-child(2)  { animation-delay: 0.08s; }
-.nav-item:nth-child(3)  { animation-delay: 0.12s; }
-.nav-item:nth-child(4)  { animation-delay: 0.16s; }
-.nav-item:nth-child(5)  { animation-delay: 0.20s; }
-.nav-item:nth-child(6)  { animation-delay: 0.24s; }
-.nav-item:nth-child(7)  { animation-delay: 0.28s; }
-.nav-item:active { transform: scale(0.97); }
 .logo {
   animation: fadeIn 0.5s ease both;
 }
+.nav-item {
+  animation: slideInLeft 0.36s var(--ease-spring) both;
+  transition: background 0.17s ease, color 0.17s ease,
+              transform 0.15s var(--ease-snap);
+}
+.nav-item:nth-child(1) { animation-delay: 0.05s; }
+.nav-item:nth-child(2) { animation-delay: 0.09s; }
+.nav-item:nth-child(3) { animation-delay: 0.13s; }
+.nav-item:nth-child(4) { animation-delay: 0.17s; }
+.nav-item:nth-child(5) { animation-delay: 0.21s; }
+.nav-item:nth-child(6) { animation-delay: 0.25s; }
+.nav-item:nth-child(7) { animation-delay: 0.29s; }
+.nav-item:active { transform: scale(0.96); }
 
-/* ── Page content entrance ─────────────────────────────── */
-.page {
-  animation: fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
-}
-.topbar {
-  animation: slideDown 0.3s cubic-bezier(0.22,1,0.36,1) both;
-}
-.content {
-  animation: fadeUp 0.36s cubic-bezier(0.22,1,0.36,1) 0.04s both;
-}
+/* ── Page & topbar entrance ─────────────────────────────── */
+.page  { animation: fadeUp   0.34s var(--ease-spring) both; }
+.topbar{ animation: slideDown 0.30s var(--ease-spring) both; }
+.content { animation: fadeUp 0.38s var(--ease-spring) 0.04s both; }
 
-/* ── Cards ─────────────────────────────────────────────── */
+/* ── Cards — animate in once, then just transition ──────── */
 .card {
-  animation: fadeUp 0.35s cubic-bezier(0.22,1,0.36,1) both;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.18s ease, box-shadow 0.2s ease;
+  animation: fadeUp 0.35s var(--ease-spring) both;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 .card:nth-child(1) { animation-delay: 0.02s; }
-.card:nth-child(2) { animation-delay: 0.06s; }
-.card:nth-child(3) { animation-delay: 0.10s; }
-.card:nth-child(4) { animation-delay: 0.14s; }
+.card:nth-child(2) { animation-delay: 0.07s; }
+.card:nth-child(3) { animation-delay: 0.12s; }
+.card:nth-child(4) { animation-delay: 0.17s; }
 
-/* ── Stat cards ────────────────────────────────────────── */
+/* ── Stat cards ─────────────────────────────────────────── */
 .stat-card {
-  animation: scaleIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
-  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  animation: scaleIn 0.32s var(--ease-spring) both;
+  transition: background 0.18s ease, border-color 0.18s ease,
+              transform 0.2s var(--ease-spring);
 }
-.stat-grid .stat-card:nth-child(1)  { animation-delay: 0.05s; }
-.stat-grid .stat-card:nth-child(2)  { animation-delay: 0.10s; }
-.stat-grid .stat-card:nth-child(3)  { animation-delay: 0.15s; }
-.stat-grid .stat-card:nth-child(4)  { animation-delay: 0.20s; }
-.stat-grid .stat-card:nth-child(5)  { animation-delay: 0.25s; }
-.stat-grid .stat-card:nth-child(6)  { animation-delay: 0.30s; }
-.stat-card:hover {
-  transform: translateY(-2px);
-}
+.stat-grid .stat-card:nth-child(1) { animation-delay: 0.05s; }
+.stat-grid .stat-card:nth-child(2) { animation-delay: 0.10s; }
+.stat-grid .stat-card:nth-child(3) { animation-delay: 0.15s; }
+.stat-grid .stat-card:nth-child(4) { animation-delay: 0.20s; }
+.stat-grid .stat-card:nth-child(5) { animation-delay: 0.25s; }
+.stat-grid .stat-card:nth-child(6) { animation-delay: 0.30s; }
+.stat-card:hover { transform: translateY(-2px); }
 
-/* ── Profile cards ─────────────────────────────────────── */
+/* ── Profile cards — ONLY animate on first render (page enter).
+      Clicking a card toggles .active via JS class swap,
+      NOT by rebuilding innerHTML, so no animation re-fires. ── */
 .profile-card {
-  animation: scaleIn 0.32s cubic-bezier(0.22,1,0.36,1) both;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.22s cubic-bezier(0.22,1,0.36,1);
+  /* entrance animation — fires once when grid is built */
+  animation: scaleIn 0.32s var(--ease-spring) both;
+  /* smooth hover / active transitions */
+  transition: border-color 0.22s ease, background 0.22s ease,
+              transform    0.22s var(--ease-spring),
+              box-shadow   0.22s ease;
 }
 .grid-auto .profile-card:nth-child(1) { animation-delay: 0.04s; }
 .grid-auto .profile-card:nth-child(2) { animation-delay: 0.09s; }
@@ -415,14 +419,27 @@ input[type=number]{-moz-appearance:textfield}
 .grid-auto .profile-card:nth-child(6) { animation-delay: 0.29s; }
 .profile-card:hover {
   transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25);
 }
+.profile-card:active { transform: scale(0.98) translateY(0); }
+/* Active state: smooth colour shift only, no animation */
 .profile-card.active {
-  animation: pulse 2s ease 0.3s infinite;
+  animation: none;    /* ← kills the entrance animation on re-adds */
+  transition: border-color 0.22s ease, background 0.22s ease,
+              transform    0.22s var(--ease-spring),
+              box-shadow   0.22s ease;
+  border-color: var(--accent);
+  background: var(--accent-bg);
 }
 
-/* ── Meal cells ────────────────────────────────────────── */
+/* ── Profile detail panel — smooth slide each time ──────── */
+#profile-detail-section > * {
+  animation: detailSlide 0.38s var(--ease-spring) both;
+}
+
+/* ── Meal cells ─────────────────────────────────────────── */
 .meal-cell {
-  animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  animation: scaleIn 0.28s var(--ease-spring) both;
   transition: border-color 0.18s ease, background 0.18s ease;
 }
 .meal-grid .meal-cell:nth-child(1) { animation-delay: 0.03s; }
@@ -432,25 +449,25 @@ input[type=number]{-moz-appearance:textfield}
 .meal-grid .meal-cell:nth-child(5) { animation-delay: 0.19s; }
 .meal-grid .meal-cell:nth-child(6) { animation-delay: 0.23s; }
 .meal-num-input {
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+  transition: border-color 0.18s ease, background 0.18s ease,
+              transform 0.15s var(--ease-snap);
 }
-.meal-num-input:focus {
-  transform: scale(1.04);
-}
+.meal-num-input:focus { transform: scale(1.05); }
 
-/* ── Mini bars (bazar leaders) ─────────────────────────── */
+/* ── Mini bars ──────────────────────────────────────────── */
 .mini-bar-fill {
-  animation: barGrow 0.7s cubic-bezier(0.22,1,0.36,1) 0.2s both;
+  animation: barGrow 0.65s var(--ease-spring) both;
 }
-.mini-bar:nth-child(1) .mini-bar-fill { animation-delay: 0.2s; }
-.mini-bar:nth-child(2) .mini-bar-fill { animation-delay: 0.3s; }
-.mini-bar:nth-child(3) .mini-bar-fill { animation-delay: 0.4s; }
-.mini-bar:nth-child(4) .mini-bar-fill { animation-delay: 0.5s; }
-.mini-bar:nth-child(5) .mini-bar-fill { animation-delay: 0.6s; }
+.mini-bar:nth-child(1) .mini-bar-fill { animation-delay: 0.18s; }
+.mini-bar:nth-child(2) .mini-bar-fill { animation-delay: 0.28s; }
+.mini-bar:nth-child(3) .mini-bar-fill { animation-delay: 0.38s; }
+.mini-bar:nth-child(4) .mini-bar-fill { animation-delay: 0.48s; }
+.mini-bar:nth-child(5) .mini-bar-fill { animation-delay: 0.58s; }
+.mini-bar-fill { transition: width 0.4s var(--ease-spring); }
 
-/* ── History bars (profile chart) ─────────────────────── */
+/* ── History bars ───────────────────────────────────────── */
 .hist-b {
-  animation: histGrow 0.5s cubic-bezier(0.22,1,0.36,1) both;
+  animation: histGrow 0.5s var(--ease-spring) both;
   transition: background 0.2s ease;
 }
 .hist-wrap .hist-b:nth-child(1) { animation-delay: 0.05s; }
@@ -462,9 +479,9 @@ input[type=number]{-moz-appearance:textfield}
 .hist-wrap .hist-b:nth-child(7) { animation-delay: 0.35s; }
 .hist-wrap .hist-b:nth-child(8) { animation-delay: 0.40s; }
 
-/* ── Table rows ────────────────────────────────────────── */
+/* ── Table rows ─────────────────────────────────────────── */
 tbody tr {
-  animation: fadeUp 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  animation: fadeUp 0.26s var(--ease-spring) both;
 }
 tbody tr:nth-child(1)  { animation-delay: 0.04s; }
 tbody tr:nth-child(2)  { animation-delay: 0.08s; }
@@ -476,76 +493,69 @@ tbody tr:nth-child(7)  { animation-delay: 0.28s; }
 tbody tr:nth-child(8)  { animation-delay: 0.32s; }
 tbody tr:nth-child(9)  { animation-delay: 0.36s; }
 tbody tr:nth-child(10) { animation-delay: 0.40s; }
-tr { transition: background 0.15s ease; }
+tr { transition: background 0.14s ease; }
 
-/* ── Buttons ───────────────────────────────────────────── */
+/* ── Buttons ────────────────────────────────────────────── */
 .btn {
-  transition: background 0.17s ease, color 0.17s ease, border-color 0.17s ease,
-              transform 0.14s cubic-bezier(0.34,1.56,0.64,1), opacity 0.17s ease;
+  transition: background 0.17s ease, color 0.17s ease,
+              border-color 0.17s ease, opacity 0.17s ease,
+              transform 0.16s var(--ease-snap);
 }
 .btn:hover  { transform: translateY(-1px); }
-.btn:active { transform: scale(0.96) translateY(0); }
-.btn-primary:hover { transform: translateY(-1px); }
+.btn:active { transform: scale(0.95) translateY(0); }
 
-/* ── Inputs & selects ──────────────────────────────────── */
+/* ── Inputs ─────────────────────────────────────────────── */
 .input {
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.18s ease, background 0.18s ease,
+              box-shadow 0.2s ease;
 }
 .input:focus {
-  box-shadow: 0 0 0 3px rgba(212,168,83,0.12);
+  box-shadow: 0 0 0 3px rgba(212,168,83,0.13);
 }
 
-/* ── Badge ─────────────────────────────────────────────── */
+/* ── Badge ──────────────────────────────────────────────── */
 .badge {
-  animation: scaleIn 0.25s cubic-bezier(0.22,1,0.36,1) both;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.15s var(--ease-snap);
 }
 
-/* ── Modal ─────────────────────────────────────────────── */
-.modal-bg {
-  animation: fadeIn 0.22s ease both;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+/* ── Modal ──────────────────────────────────────────────── */
+.modal-bg.open {
+  animation: fadeIn 0.2s ease both;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
-.modal {
-  animation: scaleIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+.modal-bg.open .modal {
+  animation: scaleIn 0.28s var(--ease-spring) both;
   transform-origin: center center;
 }
-.modal-bg:not(.open) .modal {
-  animation: none;
-}
 
-/* ── Toast ─────────────────────────────────────────────── */
-#toast {
-  transition: opacity 0.25s cubic-bezier(0.22,1,0.36,1),
-              transform 0.3s cubic-bezier(0.22,1,0.36,1);
-}
+/* ── Toast ──────────────────────────────────────────────── */
 #toast.show {
-  animation: none;
+  animation: toastIn 0.3s var(--ease-spring) both;
+}
+#toast {
+  transition: opacity 0.22s ease, transform 0.22s var(--ease-spring);
 }
 
-/* ── Mobile nav ────────────────────────────────────────── */
+/* ── Mobile nav ─────────────────────────────────────────── */
 .mobile-nav {
-  animation: mobNavIn 0.4s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+  animation: mobNavIn 0.4s var(--ease-spring) 0.1s both;
 }
 .mob-nav-btn {
-  transition: color 0.18s ease, transform 0.18s cubic-bezier(0.22,1,0.36,1);
+  transition: color 0.17s ease,
+              transform 0.18s var(--ease-spring);
 }
 .mob-nav-btn:hover  { transform: translateY(-2px); }
-.mob-nav-btn:active { transform: scale(0.92); }
+.mob-nav-btn:active { transform: scale(0.90); }
 .mob-nav-btn.active { transform: translateY(-1px); }
 
-/* ── DB status dot ─────────────────────────────────────── */
-.db-dot {
-  transition: background 0.4s ease;
-}
-.db-dot.live {
-  animation: dotPulse 2.5s ease-in-out infinite;
-}
+/* ── DB dot ─────────────────────────────────────────────── */
+.db-dot { transition: background 0.4s ease; }
+.db-dot.live { animation: dotPulse 2.8s ease-in-out infinite; }
 
-/* ── Profile mobile list items ─────────────────────────── */
+/* ── Profile mobile list ────────────────────────────────── */
 .profile-mobile-item {
-  animation: fadeUp 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  animation: fadeUp 0.28s var(--ease-spring) both;
   transition: background 0.15s ease;
 }
 .profile-mobile-list .profile-mobile-item:nth-child(1) { animation-delay: 0.04s; }
@@ -555,21 +565,19 @@ tr { transition: background 0.15s ease; }
 .profile-mobile-list .profile-mobile-item:nth-child(5) { animation-delay: 0.24s; }
 .profile-mobile-list .profile-mobile-item:nth-child(6) { animation-delay: 0.29s; }
 
-/* ── Detail section titles (profile) ───────────────────── */
+/* ── Profile detail sections ────────────────────────────── */
 .detail-section {
-  animation: fadeUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
+  animation: fadeUp 0.32s var(--ease-spring) both;
 }
-.detail-section:nth-child(1) { animation-delay: 0.08s; }
-.detail-section:nth-child(2) { animation-delay: 0.14s; }
-.detail-section:nth-child(3) { animation-delay: 0.20s; }
-.detail-section:nth-child(4) { animation-delay: 0.26s; }
+.detail-section:nth-child(1) { animation-delay: 0.06s; }
+.detail-section:nth-child(2) { animation-delay: 0.12s; }
+.detail-section:nth-child(3) { animation-delay: 0.18s; }
+.detail-section:nth-child(4) { animation-delay: 0.24s; }
 
-/* ── Stat value number pop ──────────────────────────────── */
-.stat-value {
-  transition: color 0.3s ease;
-}
+/* ── Stat value ─────────────────────────────────────────── */
+.stat-value { transition: color 0.3s ease; }
 
-/* ── Reduce motion for accessibility ───────────────────── */
+/* ── Accessibility: respect reduced motion ──────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
