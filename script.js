@@ -162,35 +162,38 @@ function cleanInputText(value) {
 function navigate(page) {
   currentPage = page;
 
-  // Hide all pages, remove .is-entering from any lingering page
+  // Hide all pages + strip .page-enter from any previous page
   document.querySelectorAll('.page').forEach(p => {
     p.style.display = 'none';
-    p.classList.remove('is-entering');
+    p.classList.remove('page-enter');
   });
 
+  // Update nav active states
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
-  const pageEl = document.getElementById('page-' + page);
-
-  // Add .is-entering BEFORE showing — CSS animations fire when element becomes visible
-  pageEl.classList.add('is-entering');
-  pageEl.style.display = 'block';
-
   document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+page+"'")) n.classList.add('active');
+    if (n.getAttribute('onclick')?.includes("'"+page+"'")) n.classList.add('active');
   });
-
-  // sync mobile bottom nav
   document.querySelectorAll('.mob-nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.page === page);
   });
 
-  // Remove .is-entering after animations finish (~700ms covers all delays+durations)
-  // so subsequent re-renders of innerHTML inside the page don't retrigger animations
-  clearTimeout(pageEl._enterTimer);
-  pageEl._enterTimer = setTimeout(() => {
-    pageEl.classList.remove('is-entering');
-  }, 750);
+  // Show the target page
+  const pageEl = document.getElementById('page-' + page);
+  pageEl.style.display = 'block';
+
+  // Add .page-enter so CSS animations fire for this navigation only.
+  // We use two rAFs: first one ensures display:block is painted,
+  // second one adds the class so animations start from a clean state.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      pageEl.classList.add('page-enter');
+      // Auto-remove after all animations finish (~750ms max)
+      clearTimeout(pageEl._enterTimer);
+      pageEl._enterTimer = setTimeout(() => {
+        pageEl.classList.remove('page-enter');
+      }, 750);
+    });
+  });
 
   renderPage(page);
 }
@@ -315,13 +318,15 @@ async function renderDashboard() {
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">Today's meals — ${todayStr}</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
-          <div class="stat-card">
-            <div class="stat-label">Day meals</div>
-            <div class="stat-value">${todayDay}</div>
+          
+            <div class="stat-card badge-blue">
+            <div class="stat-label" style="color:var(--blue)">Day meals</div>
+            <div class="stat-value" style="color:var(--blue)">${todayDay}</div>
+            
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Night meals</div>
-            <div class="stat-value">${todayNight}</div>
+          <div class="stat-card badge-amber">
+            <div class="stat-label" style="color:var(--amber)">Night meals</div>
+            <div class="stat-value" style="color:var(--amber)">${todayNight}</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Total today</div>
@@ -1035,7 +1040,6 @@ async function selectProfile(id) {
     showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
   } else {
     const detail = document.getElementById('profile-detail-section');
-    detail.style.animation = 'none';
     detail.innerHTML = '';
   }
 }
