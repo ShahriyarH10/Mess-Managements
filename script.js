@@ -1,1499 +1,2391 @@
-/* ============================================================
-   DATABASE — Supabase
-   ============================================================ */
-const SUPABASE_URL = 'https://lrzotklutnyzcadutgwf.supabase.co';
-const SUPABASE_KEY = 'sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb';
+"use strict";
+/* ═══════════════════════════════════════════
+   SUPABASE
+═══════════════════════════════════════════ */
+const SUPABASE_URL = "https://lrzotklutnyzcadutgwf.supabase.co";
+const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-/* ── Compatibility shims so all existing code works unchanged ── */
-
-// txGetAll('members') → all rows ordered by created_at
-// txGetAll('meals')   → all rows ordered by date
-// txGetAll('bazar')   → all rows ordered by date
-// txGetAll('rent')    → all rows ordered by month_key (stored as .key on each row)
-async function txGetAll(store) {
-  const orderCol = (store === 'meals' || store === 'bazar') ? 'date'
-                 : store === 'rent' ? 'month_key'
-                 : 'created_at';
-  const { data, error } = await sb.from(store).select('*').order(orderCol);
-  if (error) throw error;
-  // rent rows: expose .key and .monthName aliases so existing code keeps working
-  if (store === 'rent') data.forEach(r => { r.key = r.month_key; r.monthName = r.month_name; });
-  return sanitizeRenderedData(data || []);
-}
-
-// txGet('rent', key)  → single rent row by month_key
-// txGet('members', id) — not used in existing code, but included for safety
-async function txGet(store, key) {
-  if (store === 'rent') {
-    const { data, error } = await sb.from('rent').select('*').eq('month_key', key).maybeSingle();
-    if (error) throw error;
-    if (data) { data.key = data.month_key; data.monthName = data.month_name; }
-    return sanitizeRenderedData(data);
-  }
-  const { data, error } = await sb.from(store).select('*').eq('id', key).maybeSingle();
-  if (error) throw error;
-  return sanitizeRenderedData(data);
-}
-
-// txPut — upsert.  Handles members, meals, bazar, rent.
-async function txPut(store, row) {
-  if (store === 'members') {
-    // members: if row has no id it's a new insert; otherwise update
-    if (!row.id) {
-      const ins = { name: row.name, room: row.room||'', rent: row.rent||0,
-                    phone: row.phone||'', joined: row.joined||null };
-      const { data, error } = await sb.from('members').insert(ins).select().single();
-      if (error) throw error;
-      return data.id;
-    } else {
-      const { error } = await sb.from('members').update({
-        name: row.name, room: row.room||'', rent: row.rent||0,
-        phone: row.phone||'', joined: row.joined||null
-      }).eq('id', row.id);
-      if (error) throw error;
-      return row.id;
-    }
-  }
-
-  if (store === 'meals') {
-    const { data, error } = await sb.from('meals').upsert(
-      { date: row.date, meals: row.meals },
-      { onConflict: 'date' }
-    ).select().single();
-    if (error) throw error;
-    return data.id;
-  }
-
-  if (store === 'bazar') {
-    const { data, error } = await sb.from('bazar').upsert(
-      { date: row.date, bazar: row.bazar, utility: row.utility||{} },
-      { onConflict: 'date' }
-    ).select().single();
-    if (error) throw error;
-    return data.id;
-  }
-
-  if (store === 'rent') {
-    const { data, error } = await sb.from('rent').upsert(
-      { month_key: row.key, month: row.month, year: row.year,
-        month_name: row.monthName, entries: row.entries },
-      { onConflict: 'month_key' }
-    ).select().single();
-    if (error) throw error;
-    return data.month_key;
-  }
-}
-
-// txDelete — delete by id (meals, bazar, members) or month_key (rent)
-async function txDelete(store, key) {
-  if (store === 'rent') {
-    const { error } = await sb.from('rent').delete().eq('month_key', key);
-    if (error) throw error;
-  } else {
-    const { error } = await sb.from(store).delete().eq('id', key);
-    if (error) throw error;
-  }
-}
-
-// txClear — not needed but kept to avoid reference errors
-async function txClear(store) {
-  const { error } = await sb.from(store).delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  if (error) throw error;
-}
-
-/* ============================================================
+/* ═══════════════════════════════════════════
    STATE
-   ============================================================ */
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const AVATAR_PALETTE = [
-  {bg:'#1a2a3a',fg:'#5b9bd5'},{bg:'#1a2e25',fg:'#4caf82'},{bg:'#2e1a1a',fg:'#e05252'},
-  {bg:'#2a2218',fg:'#d4a853'},{bg:'#251a2e',fg:'#9b7fd4'},{bg:'#1e2a2a',fg:'#4cb8b8'},
-  {bg:'#2e1f1a',fg:'#d47a4c'},{bg:'#1a1a2e',fg:'#7a7dd4'}
+═══════════════════════════════════════════ */
+let currentUser = null; // { id, name, role:'manager'|'member'|'superadmin', username, memberId, messId }
+let currentMess = null; // { id, name, location }
+let members = [];
+let currentPage = "";
+
+/* ═══════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════ */
+const SUPERADMIN = {
+  username: "superadmin",
+  password: "super@admin2025",
+  role: "superadmin",
+};
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const PALETTE = [
+  { bg: "#1a2a3a", fg: "#5b9bd5" },
+  { bg: "#1a2e25", fg: "#4caf82" },
+  { bg: "#2e1a1a", fg: "#e05252" },
+  { bg: "#2a2218", fg: "#d4a853" },
+  { bg: "#251a2e", fg: "#9b7fd4" },
+  { bg: "#1e2a2a", fg: "#4cb8b8" },
+  { bg: "#2e1f1a", fg: "#d47a4c" },
+  { bg: "#1a1a2e", fg: "#7a7dd4" },
 ];
 
-let currentPage = 'dashboard';
-let members = [];
-let selectedProfileId = null;
-
-function today() { return new Date().toISOString().slice(0, 10); }
-function thisMonth() {
+/* ═══════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════ */
+const today = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => {
   const n = new Date();
   return { month: n.getMonth(), year: n.getFullYear() };
-}
-function pad2(n) { return String(n+1).padStart(2,'0'); }
-function monthKey(y, m) { return `${y}-${pad2(m)}`; }
-function fmt(n) { return Number(n||0).toLocaleString('en-IN'); }
-function fmtTk(n) { return '৳' + fmt(n); }
-function round2(n) { return Math.round((n||0)*100)/100; }
-function initials(name) { return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
-function avatarColor(i) { return AVATAR_PALETTE[i % AVATAR_PALETTE.length]; }
+};
+const pad2 = (n) => String(n + 1).padStart(2, "0");
+const monthKey = (y, m) => `${y}-${pad2(m)}`;
+const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
+const fmtTk = (n) => "৳" + fmt(n);
+const round2 = (n) => Math.round((n || 0) * 100) / 100;
+const initials = (name) =>
+  name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+const avatarCol = (i) => PALETTE[i % PALETTE.length];
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function escapeHtml(v) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
-
-function sanitizeRenderedData(value) {
-  if (Array.isArray(value)) return value.map(sanitizeRenderedData);
-  if (value && typeof value === 'object') {
-    const out = {};
-    Object.entries(value).forEach(([k, v]) => {
-      out[k] = sanitizeRenderedData(v);
+function sanitize(v) {
+  if (Array.isArray(v)) return v.map(sanitize);
+  if (v && typeof v === "object") {
+    const o = {};
+    Object.entries(v).forEach(([k, vv]) => {
+      o[k] = sanitize(vv);
     });
-    return out;
+    return o;
   }
-  if (typeof value === 'string') return escapeHtml(value);
-  return value;
+  if (typeof v === "string") return escapeHtml(v);
+  return v;
+}
+const cleanText = (v) =>
+  String(v ?? "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .trim();
+
+/* ═══════════════════════════════════════════
+   THEME
+═══════════════════════════════════════════ */
+function loadTheme() {
+  document.documentElement.setAttribute(
+    "data-theme",
+    localStorage.getItem("mm_theme") || "dark",
+  );
+}
+function toggleTheme() {
+  const next =
+    document.documentElement.getAttribute("data-theme") === "dark"
+      ? "light"
+      : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("mm_theme", next);
+}
+function togglePw() {
+  const i = document.getElementById("login-pass");
+  if (i) i.type = i.type === "password" ? "text" : "password";
 }
 
-function cleanInputText(value) {
-  return String(value ?? '').replace(/[\u0000-\u001F\u007F]/g, '').trim();
+/* ═══════════════════════════════════════════
+   SESSION
+═══════════════════════════════════════════ */
+function saveSession(u, m) {
+  currentUser = u;
+  currentMess = m;
+  sessionStorage.setItem("mm_user", JSON.stringify(u));
+  sessionStorage.setItem("mm_mess", JSON.stringify(m));
+}
+function loadSession() {
+  try {
+    const u = sessionStorage.getItem("mm_user");
+    const m = sessionStorage.getItem("mm_mess");
+    if (u) currentUser = JSON.parse(u);
+    if (m) currentMess = JSON.parse(m);
+  } catch (e) {
+    currentUser = null;
+    currentMess = null;
+  }
+}
+function clearSession() {
+  currentUser = null;
+  currentMess = null;
+  members = [];
+  sessionStorage.removeItem("mm_user");
+  sessionStorage.removeItem("mm_mess");
 }
 
+/* ═══════════════════════════════════════════
+   DB HELPERS (mess-scoped)
+═══════════════════════════════════════════ */
+const messId = () => currentMess?.id;
 
-/* ============================================================
+async function dbGetAll(table) {
+  const orderCol =
+    table === "meals" || table === "bazar"
+      ? "date"
+      : table === "rent"
+        ? "month_key"
+        : "created_at";
+  const { data, error } = await sb
+    .from(table)
+    .select("*")
+    .eq("mess_id", messId())
+    .order(orderCol);
+  if (error) throw error;
+  return sanitize(data || []);
+}
+
+async function dbGetMonth(table, key) {
+  if (table === "rent") {
+    const { data, error } = await sb
+      .from("rent")
+      .select("*")
+      .eq("mess_id", messId())
+      .eq("month_key", key)
+      .maybeSingle();
+    if (error) throw error;
+    return sanitize(data);
+  }
+  const { data, error } = await sb
+    .from(table)
+    .select("*")
+    .eq("mess_id", messId())
+    .eq("id", key)
+    .maybeSingle();
+  if (error) throw error;
+  return sanitize(data);
+}
+
+async function dbUpsertMeals(date, meals) {
+  const { error } = await sb
+    .from("meals")
+    .upsert({ mess_id: messId(), date, meals }, { onConflict: "mess_id,date" });
+  if (error) throw error;
+}
+async function dbUpsertBazar(date, bazar) {
+  const ex = await sb
+    .from("bazar")
+    .select("utility")
+    .eq("mess_id", messId())
+    .eq("date", date)
+    .maybeSingle();
+  const { error } = await sb
+    .from("bazar")
+    .upsert(
+      { mess_id: messId(), date, bazar, utility: ex?.data?.utility || {} },
+      { onConflict: "mess_id,date" },
+    );
+  if (error) throw error;
+}
+async function dbUpsertRent(month, year, key, entries) {
+  const { error } = await sb.from("rent").upsert(
+    {
+      mess_id: messId(),
+      month_key: key,
+      month,
+      year,
+      month_name: MONTHS[month],
+      entries,
+    },
+    { onConflict: "mess_id,month_key" },
+  );
+  if (error) throw error;
+}
+async function dbUpsertUtility(month, year, key, bills, payments) {
+  const { error } = await sb.from("utility_payments").upsert(
+    {
+      mess_id: messId(),
+      month_key: key,
+      month,
+      year,
+      month_name: MONTHS[month],
+      bills,
+      payments,
+    },
+    { onConflict: "mess_id,month_key" },
+  );
+  if (error) throw error;
+}
+async function dbDelete(table, id) {
+  const { error } = await sb
+    .from(table)
+    .delete()
+    .eq("id", id)
+    .eq("mess_id", messId());
+  if (error) throw error;
+}
+
+/* Members */
+async function dbGetMembers() {
+  const { data, error } = await sb
+    .from("members")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("created_at");
+  if (error) throw error;
+  return sanitize(data || []);
+}
+async function dbSaveMember(row) {
+  const payload = {
+    name: row.name,
+    username: row.username,
+    password: row.password,
+    role: row.role || "member",
+    room: row.room || "",
+    rent: row.rent || 0,
+    phone: row.phone || "",
+    joined: row.joined || null,
+    mess_id: messId(),
+  };
+  if (row.id) {
+    const { error } = await sb.from("members").update(payload).eq("id", row.id);
+    if (error) throw error;
+  } else {
+    const { error } = await sb.from("members").insert(payload);
+    if (error) throw error;
+  }
+}
+async function dbDeleteMember(id) {
+  const { error } = await sb.from("members").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* Announcements */
+async function dbGetAnnouncements() {
+  const { data, error } = await sb
+    .from("announcements")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("pinned", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return sanitize(data || []);
+}
+async function dbSaveAnnouncement(row) {
+  if (row.id) {
+    const { error } = await sb
+      .from("announcements")
+      .update({ title: row.title, body: row.body, pinned: row.pinned })
+      .eq("id", row.id);
+    if (error) throw error;
+  } else {
+    const { error } = await sb.from("announcements").insert({
+      mess_id: messId(),
+      title: row.title,
+      body: row.body,
+      pinned: row.pinned || false,
+      author: currentUser.name,
+    });
+    if (error) throw error;
+  }
+}
+async function dbDeleteAnnouncement(id) {
+  const { error } = await sb.from("announcements").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* Chores */
+async function dbGetChores() {
+  const { data, error } = await sb
+    .from("chores")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("created_at");
+  if (error) throw error;
+  return sanitize(data || []);
+}
+async function dbSaveChore(row) {
+  if (row.id) {
+    const { error } = await sb
+      .from("chores")
+      .update({
+        task: row.task,
+        assignee: row.assignee,
+        frequency: row.frequency,
+        status: row.status,
+      })
+      .eq("id", row.id);
+    if (error) throw error;
+  } else {
+    const { error } = await sb.from("chores").insert({
+      mess_id: messId(),
+      task: row.task,
+      assignee: row.assignee,
+      frequency: row.frequency || "daily",
+      status: row.status || "pending",
+    });
+    if (error) throw error;
+  }
+}
+async function dbDeleteChore(id) {
+  const { error } = await sb.from("chores").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* Notifications */
+async function dbGetNotifications(statusFilter) {
+  let q = sb
+    .from("notifications")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("created_at", { ascending: false });
+  if (statusFilter) q = q.eq("status", statusFilter);
+  const { data, error } = await q;
+  if (error) throw error;
+  return sanitize(data || []);
+}
+
+async function dbSaveNotification(row) {
+  const { error } = await sb.from("notifications").insert({
+    mess_id: messId(),
+    type: row.type,
+    from_id: currentUser.memberId,
+    from_name: currentUser.name,
+    date: row.date,
+    data: row.data,
+    note: row.note || "",
+    status: "pending",
+  });
+  if (error) throw error;
+}
+
+async function dbUpdateNotifStatus(id, status) {
+  const { error } = await sb
+    .from("notifications")
+    .update({ status })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+async function getPendingCount() {
+  const { count, error } = await sb
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("mess_id", messId())
+    .eq("status", "pending");
+  if (error) return 0;
+  return count || 0;
+}
+
+/* ═══════════════════════════════════════════
+   SCREEN NAVIGATION
+═══════════════════════════════════════════ */
+const screens = [
+  "landing-page",
+  "create-mess-screen",
+  "login-screen",
+  "superadmin-screen",
+  "app-shell",
+];
+function showScreen(id) {
+  screens.forEach((s) => {
+    document.getElementById(s).style.display = s === id ? "" : "none";
+  });
+}
+function showLanding() {
+  showScreen("landing-page");
+}
+function showLogin() {
+  showScreen("login-screen");
+}
+function showCreateMess() {
+  showScreen("create-mess-screen");
+}
+
+/* ═══════════════════════════════════════════
+   LANDING
+═══════════════════════════════════════════ */
+// Landing nav functions already bound via onclick in HTML
+
+/* ═══════════════════════════════════════════
+   CREATE MESS
+═══════════════════════════════════════════ */
+async function doCreateMess() {
+  const messName = cleanText(document.getElementById("cm-name")?.value);
+  const myName = cleanText(document.getElementById("cm-admin-name")?.value);
+  const username = cleanText(document.getElementById("cm-username")?.value);
+  const password = document.getElementById("cm-password")?.value;
+  const location = cleanText(document.getElementById("cm-location")?.value);
+
+  const errEl = document.getElementById("create-error");
+  errEl.style.display = "none";
+
+  if (!messName) {
+    showCreateError("Mess name is required.");
+    return;
+  }
+  if (!myName) {
+    showCreateError("Your name is required.");
+    return;
+  }
+  if (!username) {
+    showCreateError("Username is required.");
+    return;
+  }
+  if (!password || password.length < 6) {
+    showCreateError("Password must be at least 6 characters.");
+    return;
+  }
+
+  const btn = document.getElementById("cm-btn");
+  btn.disabled = true;
+  btn.textContent = "Creating…";
+
+  try {
+    // 1. Create the mess (no admin columns anymore)
+    const { data: mess, error: messErr } = await sb
+      .from("messes")
+      .insert({ name: messName, location: location || "" })
+      .select()
+      .single();
+    if (messErr) throw messErr;
+
+    // 2. Create the creator as a member with role = 'manager'
+    const { data: member, error: memErr } = await sb
+      .from("members")
+      .insert({
+        mess_id: mess.id,
+        name: myName,
+        username,
+        password,
+        role: "manager",
+      })
+      .select()
+      .single();
+    if (memErr) throw memErr;
+
+    toast("Mess created! Signing you in…", "success");
+    saveSession(
+      { name: myName, username, role: "manager", memberId: member.id },
+      mess,
+    );
+    await bootApp();
+  } catch (e) {
+    showCreateError("Failed to create mess: " + (e.message || "Unknown error"));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Create mess & continue →";
+  }
+}
+function showCreateError(msg) {
+  const el = document.getElementById("create-error");
+  el.style.display = "block";
+  el.textContent = msg;
+}
+
+/* ═══════════════════════════════════════════
+   LOGIN
+═══════════════════════════════════════════ */
+async function doLogin() {
+  const user = cleanText(document.getElementById("login-user")?.value);
+  const pass = document.getElementById("login-pass")?.value;
+  const btn = document.getElementById("login-btn");
+  const errEl = document.getElementById("login-error");
+  errEl.style.display = "none";
+
+  if (!user || !pass) {
+    showLoginError("Enter username and password.");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Signing in…";
+
+  try {
+    // Superadmin check
+    if (user === SUPERADMIN.username && pass === SUPERADMIN.password) {
+      saveSession(
+        {
+          name: "Super Admin",
+          username: user,
+          role: "superadmin",
+          memberId: null,
+        },
+        null,
+      );
+      bootSuperAdmin();
+      return;
+    }
+
+    // All regular users are in members table now
+    const { data: member, error } = await sb
+      .from("members")
+      .select("*, messes(*)")
+      .eq("username", user)
+      .eq("password", pass)
+      .maybeSingle();
+
+    if (member) {
+      // role comes directly from the member record ('manager' or 'member')
+      saveSession(
+        {
+          name: member.name,
+          username: user,
+          role: member.role, // 'manager' or 'member'
+          memberId: member.id,
+        },
+        member.messes,
+      );
+      await bootApp();
+      return;
+    }
+
+    showLoginError("Invalid username or password.");
+  } catch (e) {
+    showLoginError("Connection error. Check your network.");
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sign in →";
+  }
+}
+function showLoginError(msg) {
+  const el = document.getElementById("login-error");
+  el.style.display = "block";
+  el.textContent = msg;
+}
+
+function doLogout() {
+  clearSession();
+  showLanding();
+}
+
+/* ═══════════════════════════════════════════
+   SUPERADMIN
+═══════════════════════════════════════════ */
+function bootSuperAdmin() {
+  showScreen("superadmin-screen");
+  document.getElementById("sa-sidebar-user").innerHTML = `
+    <div class="su-avatar" style="background:#2a2218;color:#d4a853">SA</div>
+    <div class="su-info"><div class="su-name">Super Admin</div><div class="su-role">System</div></div>`;
+  saNavigate("messes");
+}
+
+function saNavigate(page) {
+  document
+    .querySelectorAll("[data-sapage]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.sapage === page));
+  renderSAPage(page);
+}
+
+async function renderSAPage(page) {
+  const main = document.getElementById("sa-main");
+  if (page === "messes") await renderSAMesses(main);
+  else if (page === "metrics") await renderSAMetrics(main);
+}
+
+async function renderSAMesses(main) {
+  const { data: messes } = await sb
+    .from("messes")
+    .select("*")
+    .order("created_at", { ascending: false });
+  main.innerHTML = `<div class="topbar"><div><div class="page-title">All Messes</div><div class="page-sub">${(messes || []).length} messes registered</div></div></div>
+  <div class="content">
+    <div class="card">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Mess Name</th><th>Location</th><th>Admin</th><th>Username</th><th>Created</th><th>Members</th><th></th></tr></thead>
+        <tbody id="sa-messes-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>`;
+  if (!messes?.length) {
+    document.getElementById("sa-messes-tbody").innerHTML =
+      '<tr><td colspan="7" class="empty">No messes yet</td></tr>';
+    return;
+  }
+  // Get member counts
+  const { data: memCounts } = await sb.from("members").select("mess_id");
+  const countMap = {};
+  (memCounts || []).forEach((m) => {
+    countMap[m.mess_id] = (countMap[m.mess_id] || 0) + 1;
+  });
+  document.getElementById("sa-messes-tbody").innerHTML = messes
+    .map(
+      (m) => `<tr>
+    <td><b>${m.name}</b></td>
+    <td style="color:var(--text3)">${m.location || "—"}</td>
+    <td>${m.admin_name}</td>
+    <td style="font-family:monospace;color:var(--text3)">${m.admin_username}</td>
+    <td style="color:var(--text3)">${new Date(m.created_at).toLocaleDateString()}</td>
+    <td><span class="badge badge-blue">${countMap[m.id] || 0} members</span></td>
+    <td><button class="btn btn-danger btn-sm" onclick="saDeleteMess('${m.id}')">Delete</button></td>
+  </tr>`,
+    )
+    .join("");
+}
+
+async function saDeleteMess(id) {
+  if (!confirm("Delete this mess and ALL its data? This cannot be undone."))
+    return;
+  try {
+    // cascade delete
+    for (const t of [
+      "meals",
+      "bazar",
+      "rent",
+      "utility_payments",
+      "members",
+      "announcements",
+      "chores",
+    ]) {
+      await sb.from(t).delete().eq("mess_id", id);
+    }
+    await sb.from("messes").delete().eq("id", id);
+    toast("Mess deleted");
+    renderSAPage("messes");
+  } catch (e) {
+    toast("Delete failed: " + e.message, "error");
+  }
+}
+
+async function renderSAMetrics(main) {
+  const [{ data: messes }, { data: members }] = await Promise.all([
+    sb.from("messes").select("id,name,created_at"),
+    sb.from("members").select("mess_id"),
+  ]);
+  const totalMesses = messes?.length || 0;
+  const totalMembers = members?.length || 0;
+  const today30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const newMesses = (messes || []).filter((m) => m.created_at > today30).length;
+
+  main.innerHTML = `<div class="topbar"><div><div class="page-title">Platform Metrics</div><div class="page-sub">System-wide overview</div></div></div>
+  <div class="content">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Total Messes</div><div class="stat-value">${totalMesses}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Members</div><div class="stat-value">${totalMembers}</div></div>
+      <div class="stat-card"><div class="stat-label">New Messes (30d)</div><div class="stat-value" style="color:var(--green)">${newMesses}</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Members/Mess</div><div class="stat-value">${totalMesses ? round2(totalMembers / totalMesses) : 0}</div></div>
+    </div>
+    <div class="card"><div class="card-title">Recent messes</div><div class="tbl-wrap"><table>
+      <thead><tr><th>Mess</th><th>Created</th><th>Members</th></tr></thead>
+      <tbody>${(messes || [])
+        .slice(0, 10)
+        .map((m) => {
+          const mc = (members || []).filter((x) => x.mess_id === m.id).length;
+          return `<tr><td><b>${m.name}</b></td><td style="color:var(--text3)">${new Date(m.created_at).toLocaleDateString()}</td><td>${mc}</td></tr>`;
+        })
+        .join("")}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════
+   BOOT APP
+═══════════════════════════════════════════ */
+async function bootApp() {
+  showScreen("app-shell");
+  members = await dbGetMembers();
+  buildNav();
+  updateSidebarUser();
+  updateMessBranding();
+  await checkDB();
+  // Both manager and member start on their own dashboard
+  navigate(currentUser.role === "manager" ? "dashboard" : "my-dashboard");
+}
+
+function updateMessBranding() {
+  const n = currentMess?.name || "MessManager";
+  const l = currentMess?.location || "Dhaka · 2025";
+  const el1 = document.getElementById("app-mess-name"),
+    el2 = document.getElementById("app-mess-location"),
+    el3 = document.getElementById("mob-mess-name");
+  if (el1) el1.textContent = n;
+  if (el2) el2.textContent = l;
+  if (el3) el3.textContent = n;
+  const li = document.getElementById("app-logo-icon");
+  if (li) li.textContent = (n[0] || "M").toUpperCase();
+}
+
+async function checkDB() {
+  try {
+    await sb.from("messes").select("id", { count: "exact", head: true });
+    document.getElementById("db-dot").style.background = "var(--green)";
+    document.getElementById("db-dot").classList.add("live");
+    document.getElementById("db-label").textContent = "Connected";
+  } catch (e) {
+    document.getElementById("db-dot").style.background = "var(--red)";
+    document.getElementById("db-label").textContent = "DB error";
+  }
+}
+
+/* ═══════════════════════════════════════════
+   NAV BUILDING
+═══════════════════════════════════════════ */
+const IC = {
+  dash: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>`,
+  profile: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>`,
+  meal: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2v12M8 2v4M13 2v12M8 6c0 2.5-2 3-2 5"/></svg>`,
+  bazar: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12l-1.5 7H3.5L2 4z"/><circle cx="6" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>`,
+  util: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v3M8 12v3M3.5 3.5l2 2M10.5 10.5l2 2M1 8h3M12 8h3M3.5 12.5l2-2M10.5 5.5l2-2"/></svg>`,
+  rent: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="12" height="9" rx="1"/><path d="M5 5V4a3 3 0 016 0v1"/><path d="M8 9v2"/></svg>`,
+  log: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 6h6M5 9h4"/></svg>`,
+  members: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 13c0-2.8 2.2-5 5-5"/><circle cx="12" cy="7" r="2"/><path d="M9 14c0-1.7 1.3-3 3-3s3 1.3 3 3"/></svg>`,
+  announce: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 5L8 8 3 5M3 4h10a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V5a1 1 0 011-1z"/></svg>`,
+  chores: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h12M2 4h12M2 12h8"/></svg>`,
+  bell: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a5 5 0 015 5v3l1.5 2H1.5L3 9V6a5 5 0 015-5zM6.5 13a1.5 1.5 0 003 0"/></svg>`,
+};
+
+const MANAGER_NAV = [
+  { section: "Overview" },
+  { page: "dashboard", label: "Dashboard", icon: IC.dash },
+  { page: "profiles", label: "Member Profiles", icon: IC.profile },
+  { section: "Entry" },
+  { page: "meals", label: "Meal Entry", icon: IC.meal },
+  { page: "bazar", label: "Bazar Entry", icon: IC.bazar },
+  { page: "utility", label: "Utility Entry", icon: IC.util },
+  { page: "rent", label: "Room Rent", icon: IC.rent },
+  { section: "Reports" },
+  { page: "log", label: "Monthly Log", icon: IC.log },
+  { section: "Mess" },
+  { page: "announce", label: "Announcements", icon: IC.announce },
+  { page: "chores", label: "Chore Roster", icon: IC.chores },
+  { page: "notifications", label: "Requests", icon: IC.bell },
+  { page: "members", label: "Members", icon: IC.members },
+  {
+    page: "transfer",
+    label: "Transfer Role",
+    icon: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 3l3 3-3 3M2 6h12M5 13l-3-3 3-3M14 10H2"/></svg>`,
+    bell: `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a5 5 0 015 5v3l1.5 2H1.5L3 9V6a5 5 0 015-5zM6.5 13a1.5 1.5 0 003 0"/></svg>`,
+  },
+];
+const MEMBER_NAV = [
+  { section: "My Account" },
+  { page: "my-dashboard", label: "My Dashboard", icon: IC.dash },
+  { page: "my-profile", label: "My Profile", icon: IC.profile },
+  { section: "Mess" },
+  { page: "my-meals", label: "Meal Log", icon: IC.meal },
+  { page: "my-bazar", label: "Bazar Log", icon: IC.bazar },
+  { page: "my-payments", label: "My Payments", icon: IC.rent },
+  { page: "mess-overview", label: "Mess Overview", icon: IC.log },
+  { page: "my-announce", label: "Announcements", icon: IC.announce },
+  { page: "my-chores", label: "Chore Roster", icon: IC.chores },
+];
+
+function buildNav() {
+  const isManager = currentUser.role === "manager";
+  const nav = isManager ? MANAGER_NAV : MEMBER_NAV;
+
+  document.getElementById("sidebar-nav").innerHTML = nav
+    .map((i) =>
+      i.section
+        ? `<div class="nav-section">${i.section}</div>`
+        : `<button class="nav-item" onclick="navigate('${i.page}')" data-page="${i.page}">
+      ${i.icon}${i.label}
+      ${i.page === "notifications" ? `<span class="notif-badge" id="notif-badge" style="display:none">0</span>` : ""}
+    </button>`,
+    )
+    .join("");
+
+  const mobileItems = isManager
+    ? [
+        { page: "dashboard", label: "Home", icon: IC.dash },
+        { page: "meals", label: "Meals", icon: IC.meal },
+        { page: "bazar", label: "Bazar", icon: IC.bazar },
+        { page: "notifications", label: "Requests", icon: IC.bell },
+        { page: "log", label: "Log", icon: IC.log },
+      ]
+    : [
+        { page: "my-dashboard", label: "Home", icon: IC.dash },
+        { page: "my-meals", label: "Meals", icon: IC.meal },
+        { page: "my-bazar", label: "Bazar", icon: IC.bazar },
+        { page: "my-payments", label: "Pay", icon: IC.rent },
+        { page: "my-profile", label: "Me", icon: IC.profile },
+      ];
+
+  document.getElementById("mobile-nav").innerHTML = mobileItems
+    .map(
+      (i) =>
+        `<button class="mob-nav-btn" onclick="navigate('${i.page}')" data-page="${i.page}">
+      ${i.icon}<span>${i.label}</span>
+    </button>`,
+    )
+    .join("");
+
+  if (isManager) refreshNotifBadge();
+}
+
+async function refreshNotifBadge() {
+  const count = await getPendingCount();
+  const badge = document.getElementById("notif-badge");
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = "inline-flex";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function updateSidebarUser() {
+  if (!currentUser) return;
+  const isManager = currentUser.role === "manager";
+  const idx = members.findIndex((m) => m.id === currentUser.memberId);
+  const col = isManager ? { bg: "#2a2218", fg: "#d4a853" } : avatarCol(idx);
+
+  document.getElementById("sidebar-user").innerHTML = `
+    <div class="su-avatar" style="background:${col.bg};color:${col.fg}">${initials(currentUser.name)}</div>
+    <div class="su-info">
+      <div class="su-name">${currentUser.name}</div>
+      <div class="su-role">${isManager ? "👑 Manager" : "Member"}</div>
+    </div>`;
+
+  const mob = document.getElementById("mob-user-badge");
+  if (mob) {
+    mob.style.background = col.bg;
+    mob.style.color = col.fg;
+    mob.textContent = initials(currentUser.name);
+  }
+}
+
+/* ═══════════════════════════════════════════
    NAVIGATION
-   ============================================================ */
+═══════════════════════════════════════════ */
 function navigate(page) {
   currentPage = page;
-
-  // Hide all pages + strip .page-enter from any previous page
-  document.querySelectorAll('.page').forEach(p => {
-    p.style.display = 'none';
-    p.classList.remove('page-enter');
-  });
-
-  // Update nav active states
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.getAttribute('onclick')?.includes("'"+page+"'")) n.classList.add('active');
-  });
-  document.querySelectorAll('.mob-nav-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.page === page);
-  });
-
-  // Show the target page
-  const pageEl = document.getElementById('page-' + page);
-  pageEl.style.display = 'block';
-
-  // Add .page-enter so CSS animations fire for this navigation only.
-  // We use two rAFs: first one ensures display:block is painted,
-  // second one adds the class so animations start from a clean state.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      pageEl.classList.add('page-enter');
-      // Auto-remove after all animations finish (~750ms max)
-      clearTimeout(pageEl._enterTimer);
-      pageEl._enterTimer = setTimeout(() => {
-        pageEl.classList.remove('page-enter');
-      }, 750);
-    });
-  });
-
+  document
+    .querySelectorAll(".nav-item")
+    .forEach((n) => n.classList.toggle("active", n.dataset.page === page));
+  document
+    .querySelectorAll(".mob-nav-btn")
+    .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  const main = document.getElementById("main-content");
+  main.innerHTML =
+    '<div class="loading" style="min-height:200px"><div class="spinner"></div>Loading…</div>';
   renderPage(page);
 }
 
 async function renderPage(page) {
-  members = await txGetAll('members');
-  switch(page) {
-    case 'dashboard': await renderDashboard(); break;
-    case 'profiles': await renderProfiles(); break;
-    case 'meals': renderMeals(); break;
-    case 'bazar': renderBazar(); break;
-    case 'utility': await renderUtility(); break;
-    case 'rent': renderRent(); break;
-    case 'log': renderLog(); break;
-    case 'members': renderMembers(); break;
-  }
-}
+  members = await dbGetMembers();
+  updateSidebarUser();
+  const main = document.getElementById("main-content");
+  const isManager = currentUser.role === "manager";
 
-/* ============================================================
-   DASHBOARD
-   ============================================================ */
-async function renderDashboard() {
-  const {month, year} = thisMonth();
-  const key = monthKey(year, month);
-  const todayStr = today();
-  const allMeals = await txGetAll('meals');
-  const allBazar = await txGetAll('bazar');
-  const rentRec = await txGet('rent', key);
-  const { data: utilRec } = await sb.from('utility_payments').select('*').eq('month_key', key).maybeSingle();
+  // Role guard — only manager can access these pages
+  const managerOnly = [
+    "dashboard",
+    "profiles",
+    "meals",
+    "bazar",
+    "utility",
+    "rent",
+    "log",
+    "members",
+    "announce",
+    "chores",
+    "transfer",
+    "notifications",
+  ];
+  if (!isManager && managerOnly.includes(page)) page = "my-dashboard";
 
-  const monthMeals = allMeals.filter(r => r.date.startsWith(key));
-  const monthBazar = allBazar.filter(r => r.date.startsWith(key));
+  main.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "page-enter";
+  div.style.minHeight = "100%";
+  main.appendChild(div);
 
-  // Helper: sum only day+night keys (avoid triple-counting the legacy total key)
-  function sumMeals(mealsObj) {
-    let d=0, n=0;
-    Object.entries(mealsObj||{}).forEach(([k,v]) => {
-      if (k.endsWith('_day'))   d += Number(v);
-      else if (k.endsWith('_night')) n += Number(v);
-      // if no _day/_night keys exist (legacy), fall back to plain name keys
-    });
-    if (d===0 && n===0) {
-      // legacy format: sum all values that aren't _day/_night
-      Object.entries(mealsObj||{}).forEach(([k,v]) => { d += Number(v); });
+  try {
+    switch (page) {
+      case "dashboard":
+        await renderDashboard(div);
+        break;
+      case "profiles":
+        await renderProfiles(div);
+        break;
+      case "meals":
+        renderMeals(div);
+        break;
+      case "bazar":
+        renderBazar(div);
+        break;
+      case "utility":
+        await renderUtility(div);
+        break;
+      case "rent":
+        renderRent(div);
+        break;
+      case "log":
+        renderLog(div);
+        break;
+      case "members":
+        renderMembers(div);
+        break;
+      case "announce":
+        await renderAnnouncements(div, true);
+        break;
+      case "chores":
+        await renderChores(div, true);
+        break;
+      case "transfer":
+        await renderTransferRole(div);
+        break;
+      case "my-dashboard":
+        await renderMyDashboard(div);
+        break;
+      case "my-profile":
+        await renderMyProfile(div);
+        break;
+      case "my-meals":
+        await renderMyMeals(div);
+        break;
+      case "my-bazar":
+        await renderMyBazar(div);
+        break;
+      case "my-payments":
+        await renderMyPayments(div);
+        break;
+      case "mess-overview":
+        await renderMessOverview(div);
+        break;
+      case "my-announce":
+        await renderAnnouncements(div, false);
+        break;
+      case "my-chores":
+        await renderChores(div, false);
+        break;
+      case "notifications":
+        await renderNotifications(div);
+        break;
+      default:
+        div.innerHTML =
+          '<div class="content"><div class="empty">Page not found</div></div>';
     }
-    return { day: d, night: n };
+  } catch (e) {
+    div.innerHTML = `<div class="content"><div class="empty">Error loading page: ${e.message}</div></div>`;
+    console.error(e);
   }
-
-  let totalDay = 0, totalNight = 0, totalBazar = 0;
-  monthMeals.forEach(r => { const s=sumMeals(r.meals); totalDay+=s.day; totalNight+=s.night; });
-  monthBazar.forEach(r => Object.values(r.bazar||{}).forEach(v => totalBazar += Number(v)));
-  const totalMeals = round2(totalDay + totalNight);
-  const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
-
-  const totalRentDue  = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.rent||0),0) : 0;
-  const totalRentPaid = rentRec ? rentRec.entries.reduce((s,e)=>s+Number(e.paid||0),0) : 0;
-  const bills = utilRec?.bills || {};
-  const totalUtilDue  = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(Number(bills[k])||0),0);
-  const payments = utilRec?.payments || {};
-  const totalUtilCollected = Object.values(payments).reduce((s,p)=>s+Number(p.paid||0),0);
-
-  // Today's meal record
-  const todayRec = allMeals.find(r => r.date === todayStr);
-  const todayDay   = todayRec ? members.reduce((s,m)=>s+Number(todayRec.meals[m.name+'_day']  ??todayRec.meals[m.name]??0),0) : null;
-  const todayNight = todayRec ? members.reduce((s,m)=>s+Number(todayRec.meals[m.name+'_night']??0),0) : null;
-
-  // Recent activity — only use the legacy total key or sum day+night correctly
-  const recentMeals = [...allMeals].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
-
-  // Per-member bazar totals this month
-  let memBazar = {};
-  monthBazar.forEach(r => { Object.entries(r.bazar||{}).forEach(([k,v]) => { memBazar[k] = (memBazar[k]||0) + Number(v); }); });
-  const topBazar = Object.entries(memBazar).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const maxBazar = topBazar.length ? topBazar[0][1] : 1;
-
-  const html = `
-    <div class="topbar">
-      <div>
-        <div class="page-title">Dashboard</div>
-        <div class="page-sub">${MONTHS[month]} ${year} — ${members.length} members</div>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn btn-ghost btn-sm" onclick="navigate('meals')">+ Meal</button>
-        <button class="btn btn-primary btn-sm" onclick="navigate('bazar')">+ Bazar</button>
-      </div>
-    </div>
-    <div class="content">
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total meals</div>
-          <div class="stat-value">${totalMeals}</div>
-          <div class="stat-sub">${MONTHS[month]}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Meal rate</div>
-          <div class="stat-value">${fmtTk(mealRate)}</div>
-          <div class="stat-sub">per meal</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Total bazar</div>
-          <div class="stat-value">${fmtTk(totalBazar)}</div>
-          <div class="stat-sub">groceries</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Utility collected</div>
-          <div class="stat-value">${fmtTk(round2(totalUtilCollected))}</div>
-          <div class="stat-sub">of ${fmtTk(round2(totalUtilDue))} due</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Rent collected</div>
-          <div class="stat-value">${fmtTk(totalRentPaid)}</div>
-          <div class="stat-sub">of ${fmtTk(totalRentDue)} due</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Days logged</div>
-          <div class="stat-value">${monthMeals.length}</div>
-          <div class="stat-sub">meal entries</div>
-        </div>
-      </div>
-
-      ${todayRec ? `
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title">Today's meals — ${todayStr}</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
-          
-            <div class="stat-card badge-blue">
-            <div class="stat-label" style="color:var(--blue)">Day meals</div>
-            <div class="stat-value" style="color:var(--blue)">${todayDay}</div>
-            
-          </div>
-          <div class="stat-card badge-amber">
-            <div class="stat-label" style="color:var(--amber)">Night meals</div>
-            <div class="stat-value" style="color:var(--amber)">${todayNight}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total today</div>
-            <div class="stat-value">${round2(todayDay+todayNight)}</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${members.map(m => {
-            const d = Number(todayRec.meals[m.name+'_day']  ?? todayRec.meals[m.name] ?? 0);
-            const n = Number(todayRec.meals[m.name+'_night'] ?? 0);
-            const hasMeal = d>0 || n>0;
-            return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
-              <span style="font-size:13px;font-weight:500;color:${hasMeal?'var(--text)':'var(--text3)'}">${m.name}</span>
-              ${d>0?`<span class="badge badge-blue">Day ${d}</span>`:''}
-              ${n>0?`<span class="badge badge-amber">Night ${n}</span>`:''}
-              ${!hasMeal?`<span class="badge badge-red">Absent</span>`:''}
-            </div>`;
-          }).join('')}
-        </div>
-      </div>` : `
-      <div class="card" style="margin-bottom:14px;text-align:center;padding:20px">
-        <div class="card-title">Today's meals — ${todayStr}</div>
-        <div style="color:var(--text3);font-size:13px;margin-top:8px">No meal entry for today yet</div>
-        <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="navigate('meals')">+ Add today's meals</button>
-      </div>`}
-
-      <div class="grid-2" style="gap:14px">
-        <div class="card">
-          <div class="card-title">Bazar leaders — ${MONTHS[month]}</div>
-          ${topBazar.length ? topBazar.map(([name,amt]) => `
-            <div class="mini-bar">
-              <div class="mini-bar-label" style="overflow:hidden;text-overflow:ellipsis">${name}</div>
-              <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt/maxBazar)*100)}%"></div></div>
-              <div class="mini-bar-val">${fmtTk(amt)}</div>
-            </div>`).join('') : '<div class="empty"><div class="empty-text">No bazar data yet</div></div>'}
-        </div>
-        <div class="card">
-          <div class="card-title">Recent meal entries</div>
-          ${recentMeals.length ? `<div class="tbl-wrap"><table>
-            <thead><tr><th>Date</th><th>Day</th><th>Night</th><th>Total</th><th>Members</th></tr></thead>
-            <tbody>${recentMeals.map(r => {
-              const s = sumMeals(r.meals);
-              const activeMembers = members.filter(m => {
-                const d = Number(r.meals[m.name+'_day']  ?? r.meals[m.name] ?? 0);
-                const n = Number(r.meals[m.name+'_night'] ?? 0);
-                return d>0 || n>0;
-              }).length;
-              return `<tr><td>${r.date}</td><td>${s.day}</td><td>${s.night}</td><td>${round2(s.day+s.night)}</td><td>${activeMembers}</td></tr>`;
-            }).join('')}</tbody>
-          </table></div>` : '<div class="empty"><div class="empty-text">No meal data yet</div></div>'}
-        </div>
-      </div>
-
-      ${rentRec && rentRec.entries.length ? `
-      <div class="card" style="margin-top:14px">
-        <div class="card-title">Rent status — ${MONTHS[month]} ${year}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${rentRec.entries.map(e => {
-            const cls = e.status==='paid'?'badge-green':e.status==='partial'?'badge-amber':'badge-red';
-            const label = e.status==='paid'?'Paid':e.status==='partial'?'Partial':'Due';
-            return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
-              <span style="font-size:13px;font-weight:500">${e.name}</span>
-              <span class="badge ${cls}">${label}</span>
-              <span style="font-size:12px;color:var(--text2)">${fmtTk(e.paid)}/${fmtTk(e.rent)}</span>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>` : ''}
-
-      ${utilRec && Object.keys(utilRec.payments||{}).length ? `
-      <div class="card" style="margin-top:14px">
-        <div class="card-title">Utility status — ${MONTHS[month]} ${year}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${members.map(m => {
-            const p = (utilRec.payments||{})[m.name] || {};
-            const share = members.length > 0 ? round2(totalUtilDue / members.length) : 0;
-            const cls = p.status==='paid'?'badge-green':p.status==='partial'?'badge-amber':'badge-red';
-            const label = p.status==='paid'?'Paid':p.status==='partial'?'Partial':'Due';
-            return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
-              <span style="font-size:13px;font-weight:500">${m.name}</span>
-              <span class="badge ${cls}">${label}</span>
-              <span style="font-size:12px;color:var(--text2)">${fmtTk(p.paid||0)}/${fmtTk(share)}</span>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>` : ''}
-    </div>`;
-  document.getElementById('page-dashboard').innerHTML = html;
 }
 
-/* ============================================================
-   MEAL ENTRY
-   ============================================================ */
-function renderMeals() {
-  const el = document.getElementById('page-meals');
+/* ═══════════════════════════════════════════
+   ── ADMIN PAGES ──
+═══════════════════════════════════════════ */
+
+/* --- DASHBOARD --- */
+async function renderDashboard(el) {
+  const { month, year } = thisMonth();
+  const key = monthKey(year, month);
+  const [allMeals, allBazar, rentRec, utilRes] = await Promise.all([
+    dbGetAll("meals"),
+    dbGetAll("bazar"),
+    dbGetMonth("rent", key),
+    sb
+      .from("utility_payments")
+      .select("*")
+      .eq("mess_id", messId())
+      .eq("month_key", key)
+      .maybeSingle(),
+  ]);
+  const utilRec = utilRes.data;
+  const mM = allMeals.filter((r) => r.date.startsWith(key));
+  const mB = allBazar.filter((r) => r.date.startsWith(key));
+  let totalMeals = 0,
+    totalBazar = 0;
+  mM.forEach((r) =>
+    Object.values(r.meals || {}).forEach((v) => (totalMeals += Number(v))),
+  );
+  mB.forEach((r) =>
+    Object.values(r.bazar || {}).forEach((v) => (totalBazar += Number(v))),
+  );
+  const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
+  const totalRentDue =
+    rentRec?.entries?.reduce((s, e) => s + Number(e.rent || 0), 0) || 0;
+  const totalRentPaid =
+    rentRec?.entries?.reduce((s, e) => s + Number(e.paid || 0), 0) || 0;
+  const bills = utilRec?.bills || {};
+  const totalUtil = ["elec", "wifi", "gas", "khala", "other"].reduce(
+    (s, k) => s + (Number(bills[k]) || 0),
+    0,
+  );
+  const totalUtilPaid = Object.values(utilRec?.payments || {}).reduce(
+    (s, p) => s + Number(p.paid || 0),
+    0,
+  );
+  const todayStr = today();
+  const todayRec = allMeals.find((r) => r.date === todayStr);
+  let memBazar = {};
+  mB.forEach((r) =>
+    Object.entries(r.bazar || {}).forEach(([k, v]) => {
+      memBazar[k] = (memBazar[k] || 0) + Number(v);
+    }),
+  );
+  const topBazar = Object.entries(memBazar)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const maxB = topBazar[0]?.[1] || 1;
+
+  let todayDayTotal = 0,
+    todayNightTotal = 0;
+  if (todayRec) {
+    members.forEach((m) => {
+      todayDayTotal += Number(
+        todayRec.meals[m.name + "_day"] ?? todayRec.meals[m.name] ?? 0,
+      );
+      todayNightTotal += Number(todayRec.meals[m.name + "_night"] ?? 0);
+    });
+    todayDayTotal = round2(todayDayTotal);
+    todayNightTotal = round2(todayNightTotal);
+  }
+
   el.innerHTML = `
-    <div class="topbar">
-      <div><div class="page-title">Meal Entry</div><div class="page-sub">Log day & night meals per member</div></div>
+  <div class="topbar">
+    <div><div class="page-title">Dashboard</div><div class="page-sub">${MONTHS[month]} ${year} — ${members.length} members</div></div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="navigate('announce')">📢 Post notice</button>
+      <button class="btn btn-primary btn-sm" onclick="navigate('meals')">+ Meal</button>
     </div>
-    <div class="content">
-      <div class="card" style="margin-bottom:14px">
-        <div class="date-row">
-          <label>Date</label>
-          <input type="date" class="input" id="meal-date" value="${today()}" style="width:180px" onchange="loadMealForDate()"/>
-          <button class="btn btn-ghost btn-sm" onclick="loadMealForDate()">Load existing</button>
-        </div>
-        <div class="stat-grid" style="margin-bottom:16px">
-          <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value" id="m-total">0</div></div>
-          <div class="stat-card"><div class="stat-label">Day meals</div><div class="stat-value" id="m-day">0</div></div>
-          <div class="stat-card"><div class="stat-label">Night meals</div><div class="stat-value" id="m-night">0</div></div>
-          <div class="stat-card"><div class="stat-label">Members eating</div><div class="stat-value" id="m-eating">0</div></div>
-        </div>
-        <div class="card-title" style="margin-bottom:10px">Meal per member</div>
-        <div class="meal-grid" id="meal-input-grid"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
-          <button class="btn btn-ghost" onclick="setAllMeals(1)">All → 1</button>
-          <button class="btn btn-ghost" onclick="setAllMeals(0)">Clear</button>
-        </div>
+  </div>
+  <div class="content">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalMeals)}</div></div>
+      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div></div>
+      <div class="stat-card"><div class="stat-label">Utility</div><div class="stat-value" style="font-size:17px">${fmtTk(round2(totalUtilPaid))}<span style="font-size:11px;color:var(--text3)">/${fmtTk(round2(totalUtil))}</span></div></div>
+      <div class="stat-card"><div class="stat-label">Rent</div><div class="stat-value" style="font-size:17px">${fmtTk(totalRentPaid)}<span style="font-size:11px;color:var(--text3)">/${fmtTk(totalRentDue)}</span></div></div>
+      <div class="stat-card"><div class="stat-label">Days logged</div><div class="stat-value">${mM.length}</div></div>
+    </div>
+
+    
+   ${
+     todayRec
+       ? `
+<div class="card" style="margin-bottom:14px">
+  <div class="card-title">Today's meals — ${todayStr}</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
+    <div class="stat-card badge-blue">
+      <div class="stat-label" style="color:var(--blue)">Day meals</div>
+      <div class="stat-value" style="color:var(--blue)">${todayDayTotal}</div>
+    </div>
+    <div class="stat-card badge-amber">
+      <div class="stat-label" style="color:var(--amber)">Night meals</div>
+      <div class="stat-value" style="color:var(--amber)">${todayNightTotal}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total today</div>
+      <div class="stat-value">${round2(todayDayTotal + todayNightTotal)}</div>
+    </div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    ${members
+      .map((m) => {
+        const d = Number(
+          todayRec.meals[m.name + "_day"] ?? todayRec.meals[m.name] ?? 0,
+        );
+        const n = Number(todayRec.meals[m.name + "_night"] ?? 0);
+        const t = round2(d + n) || Number(todayRec.meals[m.name] || 0);
+        return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:500;color:${t > 0 ? "var(--text)" : "var(--text3)"}">${m.name}</span>
+        ${d > 0 ? `<span class="badge badge-blue">Day ${d}</span>` : ""}
+        ${n > 0 ? `<span class="badge badge-amber">Night ${n}</span>` : ""}
+        ${t === 0 ? `<span class="badge badge-red">Absent</span>` : ""}
+      </div>`;
+      })
+      .join("")}
+  </div>
+</div>`
+       : `
+<div class="card" style="margin-bottom:14px;text-align:center;padding:24px">
+  <div style="color:var(--text3);font-size:13px">No meal entry for today yet</div>
+  <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="navigate('meals')">+ Add today's meals</button>
+</div>`
+   }
+    <div class="grid-2" style="gap:12px">
+      <div class="card">
+        <div class="card-title">Bazar leaders — ${MONTHS[month]}</div>
+        ${topBazar.length ? topBazar.map(([name, amt]) => `<div class="mini-bar"><div class="mini-bar-label">${name}</div><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt / maxB) * 100)}%"></div></div><div class="mini-bar-val">${fmtTk(amt)}</div></div>`).join("") : '<div class="empty">No bazar data</div>'}
       </div>
       <div class="card">
-        <div class="card-title">Recent entries</div>
-        <div class="tbl-wrap" id="meals-recent-table"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+        <div class="card-title">Rent status — ${MONTHS[month]}</div>
+        ${
+          rentRec?.entries?.length
+            ? rentRec.entries
+                .map((e) => {
+                  const cls =
+                    e.status === "paid"
+                      ? "badge-green"
+                      : e.status === "partial"
+                        ? "badge-amber"
+                        : "badge-red";
+                  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:5px">
+            <span style="font-size:13px;font-weight:500">${e.name}</span>
+            <div style="display:flex;gap:7px;align-items:center">
+              <span class="badge ${cls}">${e.status === "paid" ? "Paid" : e.status === "partial" ? "Part" : "Due"}</span>
+              <span style="font-size:12px;color:var(--text2)">${fmtTk(e.paid)}/${fmtTk(e.rent)}</span>
+            </div>
+          </div>`;
+                })
+                .join("")
+            : '<div class="empty">No rent data this month</div>'
+        }
       </div>
+    </div>
+  </div>`;
+}
+
+/* --- PROFILES --- */
+let selectedProfileId = null;
+async function renderProfiles(el) {
+  el.innerHTML=`
+  <div class="topbar">
+    <div><div class="page-title">Member Profiles</div><div class="page-sub">Individual summaries</div></div>
+    <div class="topbar-actions">
+      <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:180px">
+      <option value="1" selected>This month</option>
+      <option value="last">Last month</option>
+      <option value="3">Last 3 months</option>
+      <option value="6">Last 6 months</option>
+      <option value="all">All time</option>
+      </select>
+    </div>
+  </div>
+  <div class="content">
+    <div class="grid-auto" id="profile-card-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px"></div>
+  </div>`;
+  await loadProfiles();
+}
+
+async function loadProfiles() {
+  const [allMeals, allBazar, allRent, { data: allUtil }] = await Promise.all([
+    dbGetAll("meals"),
+    dbGetAll("bazar"),
+    dbGetAll("rent"),
+    sb.from("utility_payments").select("*").eq("mess_id", messId()),
+  ]);
+  buildProfileCards(allMeals, allBazar, allRent, allUtil || []);
+  if (selectedProfileId)
+    showProfileDetail(
+      selectedProfileId,
+      allMeals,
+      allBazar,
+      allRent,
+      allUtil || [],
+    );
+}
+
+async function refreshProfiles() {
+  await loadProfiles();
+}
+
+function getFilteredData(allM, allB, allR, period, allU=[]) {
+  if(period === 'all') return {meals:allM, bazar:allB, rent:allR, utility:allU};
+
+  // Last month specifically
+  if(period === 'last') {
+    const now = new Date();
+    let m = now.getMonth() - 1, y = now.getFullYear();
+    if(m < 0) { m = 11; y--; }
+    const key = y + '-' + String(m+1).padStart(2,'0');
+    return {
+      meals:   allM.filter(r => r.date.slice(0,7) === key),
+      bazar:   allB.filter(r => r.date.slice(0,7) === key),
+      rent:    allR.filter(r => r.month_key === key),
+      utility: allU.filter(r => r.month_key === key),
+    };
+  }
+
+  // This month (1) or last N months (3, 6)
+  const months = parseInt(period);
+  const now = new Date();
+  let cm = now.getMonth() - months + 1, cy = now.getFullYear();
+  while(cm < 0) { cm += 12; cy--; }
+  const cut = cy + '-' + String(cm+1).padStart(2,'0');
+  return {
+    meals:   allM.filter(r => r.date.slice(0,7) >= cut),
+    bazar:   allB.filter(r => r.date.slice(0,7) >= cut),
+    rent:    allR.filter(r => r.month_key >= cut),
+    utility: allU.filter(r => r.month_key >= cut),
+  };
+}
+
+function getMemberStats(member, meals, bazar, rent, utility = []) {
+  let tm = 0,
+    tb = 0,
+    rd = 0,
+    rp = 0,
+    ud = 0,
+    up = 0,
+    ad = 0;
+  const byM = {};
+  const em = (k) => {
+    byM[k] = byM[k] || { meals: 0, bazar: 0, rentPaid: 0, utilityPaid: 0 };
+  };
+  meals.forEach((r) => {
+    const d = Number(r.meals[member.name + "_day"] ?? 0),
+      n = Number(r.meals[member.name + "_night"] ?? 0);
+    const v = round2(d + n) || Number(r.meals[member.name] || 0);
+    tm += v;
+    if (v > 0) ad++;
+    const k = r.date.slice(0, 7);
+    em(k);
+    byM[k].meals += v;
+  });
+  bazar.forEach((r) => {
+    const v = Number(r.bazar[member.name] || 0);
+    tb += v;
+    const k = r.date.slice(0, 7);
+    em(k);
+    byM[k].bazar += v;
+  });
+  rent.forEach((r) => {
+    const e = r.entries?.find((x) => x.name === member.name);
+    if (e) {
+      rd += Number(e.rent || 0);
+      rp += Number(e.paid || 0);
+      em(r.month_key);
+      byM[r.month_key].rentPaid += Number(e.paid || 0);
+    }
+  });
+  utility.forEach((r) => {
+    const bills = r.bills || {};
+    const total = ["elec", "wifi", "gas", "khala", "other"].reduce(
+      (s, k) => s + (Number(bills[k]) || 0),
+      0,
+    );
+    const perHead = members.length > 0 ? round2(total / members.length) : 0;
+    const p = (r.payments || {})[member.name] || {};
+    ud += perHead;
+    up += Number(p.paid || 0);
+    em(r.month_key);
+    byM[r.month_key].utilityPaid += Number(p.paid || 0);
+  });
+  const allMealsTotal = meals.reduce(
+    (s, r) =>
+      s + Object.values(r.meals || {}).reduce((a, v) => a + Number(v), 0),
+    0,
+  );
+  const allBazarTotal = bazar.reduce(
+    (s, r) =>
+      s + Object.values(r.bazar || {}).reduce((a, v) => a + Number(v), 0),
+    0,
+  );
+  const mr = allMealsTotal > 0 ? allBazarTotal / allMealsTotal : 0;
+  const mc = round2(tm * mr);
+  const days = meals.length;
+  const latestR = [...rent].sort((a, b) =>
+    b.month_key.localeCompare(a.month_key),
+  )[0];
+  const latestRS =
+    latestR?.entries?.find((x) => x.name === member.name)?.status || "unpaid";
+  const latestU = [...utility].sort((a, b) =>
+    b.month_key.localeCompare(a.month_key),
+  )[0];
+  const latestUS = (latestU?.payments || {})[member.name]?.status || "unpaid";
+  return {
+    totalMeals: round2(tm),
+    totalBazar: tb,
+    mealRate: round2(mr),
+    mealCost: mc,
+    mealBalance: round2(tb - mc),
+    rentDue: rd,
+    rentPaid: rp,
+    utilityDue: round2(ud),
+    utilityPaid: round2(up),
+    activeDays: ad,
+    avgMeals: days > 0 ? round2(tm / days) : 0,
+    latestStatus: latestRS,
+    latestUtilStatus: latestUS,
+    byMonth: byM,
+  };
+}
+
+function buildProfileCards(allM, allB, allR, allU) {
+  const period = document.getElementById('prof-period')?.value || '1';
+  const {meals, bazar, rent, utility} = getFilteredData(allM, allB, allR, period, allU);
+  const grid = document.getElementById('profile-card-grid'); if(!grid) return;
+  if(!members.length){ grid.innerHTML='<div class="empty">No members yet.</div>'; return; }
+
+  grid.innerHTML = members.map((m, i) => {
+    const s = getMemberStats(m, meals, bazar, rent, utility);
+    const col = avatarCol(i);
+    const rc = s.latestStatus==='paid'?'badge-green':s.latestStatus==='partial'?'badge-amber':'badge-red';
+    const uc = s.latestUtilStatus==='paid'?'badge-green':s.latestUtilStatus==='partial'?'badge-amber':'badge-red';
+    const rentLabel = s.latestStatus==='paid'?'Rent ✓':s.latestStatus==='partial'?'Rent partial':'Rent due';
+    const utilLabel = s.latestUtilStatus==='paid'?'Utility ✓':s.latestUtilStatus==='partial'?'Utility partial':'Utility due';
+
+    return `<div class="profile-card" onclick="selectProfile('${m.id}')" style="padding:16px">
+
+      <!-- Header: Avatar + Name + Badges -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div class="avatar" style="background:${col.bg};color:${col.fg};width:40px;height:40px;font-size:14px;flex-shrink:0">${initials(m.name)}</div>
+        <div>
+          <div style="font-weight:700;font-size:15px;margin-bottom:4px">${m.name}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <span class="badge ${rc}" style="font-size:10px">${rentLabel}</span>
+            <span class="badge ${uc}" style="font-size:10px">${utilLabel}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="stat-card" style="padding:10px;border-radius:var(--radius-sm)">
+          <div class="stat-label" style="font-size:11px;margin-bottom:4px">Meals</div>
+          <div style="font-size:20px;font-weight:700">${s.totalMeals}</div>
+        </div>
+        <div class="stat-card" style="padding:10px;border-radius:var(--radius-sm)">
+          <div class="stat-label" style="font-size:11px;margin-bottom:4px">Avg/day</div>
+          <div style="font-size:20px;font-weight:700">${s.avgMeals}</div>
+        </div>
+        <div class="stat-card" style="padding:10px;border-radius:var(--radius-sm)">
+          <div class="stat-label" style="font-size:11px;margin-bottom:4px">Bazar</div>
+          <div style="font-size:16px;font-weight:700">${fmtTk(s.totalBazar)}</div>
+        </div>
+        <div class="stat-card" style="padding:10px;border-radius:var(--radius-sm)">
+          <div class="stat-label" style="font-size:11px;margin-bottom:4px">Utility paid</div>
+          <div style="font-size:16px;font-weight:700;color:var(--green)">${fmtTk(round2(s.utilityPaid))}</div>
+        </div>
+        <div class="stat-card" style="padding:10px;border-radius:var(--radius-sm);grid-column:span 2">
+          <div class="stat-label" style="font-size:11px;margin-bottom:4px">Rent paid</div>
+          <div style="font-size:16px;font-weight:700;color:var(--green)">${fmtTk(s.rentPaid)}</div>
+        </div>
+      </div>
+
     </div>`;
-  buildMealInputs();
-  loadMealForDate();
+  }).join('');
+}
+
+async function selectProfile(id) {
+  const [allM, allB, allR, { data: allU }] = await Promise.all([
+    dbGetAll("meals"),
+    dbGetAll("bazar"),
+    dbGetAll("rent"),
+    sb.from("utility_payments").select("*").eq("mess_id", messId()),
+  ]);
+  showProfileDetail(id, allM, allB, allR, allU || []);
+}
+
+function showProfileDetail(id, allM, allB, allR, allU) {
+  const member = members.find((m) => m.id === id);
+  if (!member) return;
+  const period = document.getElementById("prof-period")?.value || "1";
+  const { meals, bazar, rent, utility } = getFilteredData(
+    allM,
+    allB,
+    allR,
+    period,
+    allU,
+  );
+  const s = getMemberStats(member, meals, bazar, rent, utility);
+  const col = avatarCol(members.indexOf(member));
+  const allMK = Object.keys(s.byMonth).sort(),
+    r8 = allMK.slice(-8);
+  const maxM = Math.max(...r8.map((k) => s.byMonth[k]?.meals || 0), 1);
+
+  // Balances
+  const mealNet = s.mealBalance;
+  const rentNet = round2(s.rentPaid - s.rentDue);
+  const utilNet = round2(s.utilityPaid - s.utilityDue);
+
+  // Share in mess (all time)
+  const allMealsTotal = allM.reduce(
+    (s, r) =>
+      s + Object.values(r.meals || {}).reduce((a, v) => a + Number(v), 0),
+    0,
+  );
+  const allBazarTotal = allB.reduce(
+    (s, r) =>
+      s + Object.values(r.bazar || {}).reduce((a, v) => a + Number(v), 0),
+    0,
+  );
+  const mealShare =
+    allMealsTotal > 0 ? Math.round((s.totalMeals / allMealsTotal) * 100) : 0;
+  const bazarShare =
+    allBazarTotal > 0 ? Math.round((s.totalBazar / allBazarTotal) * 100) : 0;
+
+  document.getElementById("modal-content").innerHTML = `
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div class="avatar" style="width:50px;height:50px;font-size:16px;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${initials(member.name)}</div>
+        <div>
+          <div style="font-family:var(--font-serif);font-size:22px;font-weight:600">${member.name}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px">
+            Default rent: ${fmtTk(member.rent || 0)} / month · @${member.username || "—"}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay / get</div>
+          <div style="font-size:18px;font-weight:700" class="${mealNet >= 0 ? "net-pos" : "net-neg"}">
+            ${mealNet >= 0 ? "Get " : "Pay "}${fmtTk(Math.abs(mealNet))}
+          </div>
+        </div>
+        <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
+          <div style="font-size:18px;font-weight:700" class="${rentNet >= 0 ? "net-pos" : "net-neg"}">
+            ${rentNet >= 0 ? "+" : ""}${fmtTk(rentNet)}
+          </div>
+        </div>
+        <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
+          <div style="font-size:18px;font-weight:700" class="${utilNet >= 0 ? "net-pos" : "net-neg"}">
+            ${utilNet >= 0 ? "+" : ""}${fmtTk(utilNet)}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:18px">
+      ${[
+        ["Total meals", s.totalMeals, null],
+        ["Active days", s.activeDays, null],
+        ["Avg / day", s.avgMeals, null],
+        ["Bazar spent", fmtTk(s.totalBazar), null],
+        ["Meal cost", fmtTk(s.mealCost), null],
+        ["Rent due", fmtTk(s.rentDue), null],
+        ["Rent paid", fmtTk(s.rentPaid), "var(--green)"],
+        ["Utility due", fmtTk(round2(s.utilityDue)), null],
+        ["Utility paid", fmtTk(round2(s.utilityPaid)), "var(--green)"],
+      ]
+        .map(
+          ([l, v, c]) => `
+        <div class="stat-card" style="padding:10px">
+          <div class="stat-label">${l}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:4px${c ? ";color:" + c : ""}">${v}</div>
+        </div>`,
+        )
+        .join("")}
+    </div>
+
+    <!-- SHARE IN MESS -->
+    <div class="detail-section">
+      <div class="detail-section-title">Share in mess (all time)</div>
+      <div style="margin-bottom:10px">
+        <div class="mini-bar">
+          <div class="mini-bar-label">Meal share</div>
+          <div class="mini-bar-track" style="height:8px">
+            <div class="mini-bar-fill" style="width:${mealShare}%"></div>
+          </div>
+          <div class="mini-bar-val">${mealShare}%</div>
+        </div>
+        <div class="mini-bar">
+          <div class="mini-bar-label">Bazar share</div>
+          <div class="mini-bar-track" style="height:8px">
+            <div class="mini-bar-fill" style="width:${bazarShare}%"></div>
+          </div>
+          <div class="mini-bar-val">${bazarShare}%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MONTHLY MEAL HISTORY -->
+    <div class="detail-section">
+      <div class="detail-section-title">Monthly meal history</div>
+      ${
+        r8.length
+          ? `
+        <div class="hist-labels" style="margin-bottom:4px">
+          ${r8.map((k) => `<span>${MONTHS[parseInt(k.slice(5)) - 1].slice(0, 3)}</span>`).join("")}
+        </div>
+        <div class="hist-wrap">
+          ${r8
+            .map((k) => {
+              const v = s.byMonth[k]?.meals || 0;
+              const h = Math.max(Math.round((v / maxM) * 44), 3);
+              return `<div class="hist-b" style="height:${h}px">
+              <div class="tip">${MONTHS[parseInt(k.slice(5)) - 1].slice(0, 3)}: ${v}</div>
+            </div>`;
+            })
+            .join("")}
+        </div>`
+          : '<div style="color:var(--text3);font-size:13px">No history</div>'
+      }
+    </div>
+
+    <!-- RECENT MONTHS BREAKDOWN -->
+    <div class="detail-section">
+      <div class="detail-section-title">Recent months breakdown</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Utility paid</th></tr></thead>
+        <tbody>
+          ${allMK
+            .slice(-6)
+            .reverse()
+            .map((k) => {
+              const d = s.byMonth[k] || {};
+              return `<tr>
+              <td>${MONTHS[parseInt(k.slice(5)) - 1]} ${k.slice(0, 4)}</td>
+              <td>${d.meals || 0}</td>
+              <td>${fmtTk(d.bazar || 0)}</td>
+              <td style="color:var(--green)">${fmtTk(d.rentPaid || 0)}</td>
+              <td style="color:var(--green)">${fmtTk(d.utilityPaid || 0)}</td>
+            </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>`;
+
+  document.querySelector(".modal").classList.add("modal-wide");
+  openModal();
+}
+
+/* --- MEAL ENTRY --- */
+const mealDayVals = {},
+  mealNightVals = {};
+function renderMeals(el) {
+  el.innerHTML=`
+  <div class="topbar"><div><div class="page-title">Meal Entry</div><div class="page-sub">Log day & night meals per member</div></div></div>
+  <div class="content">
+    <div class="card" style="margin-bottom:12px">
+      <div class="date-row">
+        <label>Date</label>
+        <input type="date" class="input" id="meal-date" value="${today()}" style="width:170px" onchange="loadMealDate()"/>
+        <button class="btn btn-ghost btn-sm" onclick="loadMealDate()">Load</button>
+      </div>
+      <div class="stat-grid" style="margin-bottom:12px">
+        <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="mt-total">0</div></div>
+        <div class="stat-card"><div class="stat-label">Day</div><div class="stat-value" id="mt-day">0</div></div>
+        <div class="stat-card"><div class="stat-label">Night</div><div class="stat-value" id="mt-night">0</div></div>
+        <div class="stat-card"><div class="stat-label">Eating</div><div class="stat-value" id="mt-eating">0</div></div>
+      </div>
+      <div class="meal-grid" id="meal-grid"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
+        <button class="btn btn-ghost" onclick="setAllMeals('day', 1)">Day All → 1</button>
+        <button class="btn btn-ghost" onclick="setAllMeals('night', 1)">Night All → 1</button>
+        <button class="btn btn-ghost" onclick="setAllMeals('both', 1)">All → 1</button>
+        <button class="btn btn-ghost" onclick="setAllMeals('both', 0)">Clear</button>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">Recent entries</div><div class="tbl-wrap" id="meals-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+  </div>`;
+
+  // Default all to 0 on fresh render
+  members.forEach(m => {
+    mealDayVals[m.id]   = 0;
+    mealNightVals[m.id] = 0;
+  });
+
+  buildMealGrid();
+  loadMealDate();
   loadMealsRecent();
 }
 
-const mealDayVals = {}, mealNightVals = {};
-
-function buildMealInputs() {
-  const grid = document.getElementById('meal-input-grid');
-  if (!grid) return;
-  members.forEach(m => {
-    if (mealDayVals[m.id] == null) mealDayVals[m.id] = 1;
-    if (mealNightVals[m.id] == null) mealNightVals[m.id] = 1;
-  });
-  grid.innerHTML = members.map(m => `
-    <div class="meal-cell">
-      <div class="meal-cell-name">${m.name}</div>
-      <div class="meal-cell-row" style="margin-bottom:8px">
-        <span class="meal-cell-label">Day</span>
-        <input type="number" class="meal-num-input" id="mi-day-${m.id}" min="0" max="4" step="0.5"
-          value="${mealDayVals[m.id] ?? 1}" oninput="updMealSummary()"/>
-      </div>
-      <div class="meal-cell-row">
-        <span class="meal-cell-label">Night</span>
-        <input type="number" class="meal-num-input" id="mi-night-${m.id}" min="0" max="4" step="0.5"
-          value="${mealNightVals[m.id] ?? 1}" oninput="updMealSummary()"/>
-      </div>
-    </div>`).join('');
-  updMealSummary();
-}
-
-function updMealSummary() {
-  let dayTotal = 0, nightTotal = 0, eating = 0;
-  members.forEach(m => {
-    const d = parseFloat(document.getElementById('mi-day-'+m.id)?.value || 0);
-    const n = parseFloat(document.getElementById('mi-night-'+m.id)?.value || 0);
-    mealDayVals[m.id] = d;
-    mealNightVals[m.id] = n;
-    dayTotal += d;
-    nightTotal += n;
-    if (d > 0 || n > 0) eating++;
-  });
-  const te=document.getElementById('m-total'), td=document.getElementById('m-day'),
-        tn=document.getElementById('m-night'), ce=document.getElementById('m-eating');
-  if (te) te.textContent = round2(dayTotal + nightTotal);
-  if (td) td.textContent = round2(dayTotal);
-  if (tn) tn.textContent = round2(nightTotal);
-  if (ce) ce.textContent = eating;
-}
-
-function setAllMeals(v) {
-  members.forEach(m => {
-    const dayEl = document.getElementById('mi-day-'+m.id);
-    const nightEl = document.getElementById('mi-night-'+m.id);
-    if (dayEl) dayEl.value = v;
-    if (nightEl) nightEl.value = v;
-    mealDayVals[m.id] = v;
-    mealNightVals[m.id] = v;
-  });
-  updMealSummary();
-}
-
-async function loadMealForDate() {
-  const date = document.getElementById('meal-date')?.value;
-  if (!date) return;
-  const { data: rec, error } = await sb.from('meals').select('*').eq('date', date).maybeSingle();
-  if (error) { toast('Error loading: '+error.message); return; }
-  if (rec) {
-    members.forEach(m => {
-      // meals stored as {name: total} or {name_day, name_night}
-      const dayKey = m.name+'_day', nightKey = m.name+'_night';
-      if (rec.meals[dayKey] != null || rec.meals[nightKey] != null) {
-        mealDayVals[m.id]   = Number(rec.meals[dayKey]  ?? 0);
-        mealNightVals[m.id] = Number(rec.meals[nightKey]?? 0);
-      } else {
-        // legacy: single value split evenly
-        const total = Number(rec.meals[m.name]||0);
-        mealDayVals[m.id]   = total;
-        mealNightVals[m.id] = 0;
-      }
-    });
-    buildMealInputs();
-    toast('Loaded entry for '+date);
-  } else {
-    members.forEach(m => { mealDayVals[m.id]=1; mealNightVals[m.id]=1; });
-    buildMealInputs();
-    toast('No entry for '+date+' — starting fresh');
-  }
-}
-
-async function saveMeals() {
-  const date = document.getElementById('meal-date')?.value;
-  if (!date) { toast('Select a date first'); return; }
-  const meals = {};
-  members.forEach(m => {
-    meals[m.name+'_day']   = mealDayVals[m.id]   || 0;
-    meals[m.name+'_night'] = mealNightVals[m.id] || 0;
-    // keep legacy total key for backward compat with stats
-    meals[m.name] = round2((mealDayVals[m.id]||0) + (mealNightVals[m.id]||0));
-  });
-  try {
-    await txPut('meals', { date, meals });
-    toast('Meals saved for '+date);
-    loadMealsRecent();
-  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
-}
-
-async function loadMealsRecent() {
-  const wrap = document.getElementById('meals-recent-table');
-  if (!wrap) return;
-  const all = await txGetAll('meals');
-  const recent = all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
-  if (!recent.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No meal entries yet</div></div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th><th></th></tr></thead>
-    <tbody>${recent.map(r=>{
-      let t=0;
-      const cells = members.map(m=>{
-        const d = Number(r.meals[m.name+'_day'] ?? 0);
-        const n = Number(r.meals[m.name+'_night'] ?? 0);
-        const total = (r.meals[m.name+'_day'] != null || r.meals[m.name+'_night'] != null)
-          ? d + n
-          : Number(r.meals[m.name] ?? 0);
-        t += total;
-        return `<td>${round2(total)}</td>`;
-      }).join('');
-      return `<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td>
-        <td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteMeal('${r.id}')" title="Delete">✕</button></td></tr>`;
-    }).join('')}</tbody></table>`;
-}
-
-async function deleteMeal(id) {
-  if (!confirm('Delete this entry?')) return;
-  try {
-    await txDelete('meals', id);
-    toast('Entry deleted');
-    loadMealsRecent();
-    if (currentPage === 'dashboard') renderDashboard();
-  } catch(e) { toast('Delete failed: '+e.message, 'error'); console.error(e); }
-}
-
-/* ============================================================
-   BAZAR ENTRY
-   ============================================================ */
-function renderBazar() {
-  const el = document.getElementById('page-bazar');
-  el.innerHTML = `
-    <div class="topbar">
-      <div><div class="page-title">Bazar Entry</div><div class="page-sub">Log daily grocery spending per member</div></div>
-    </div>
-    <div class="content">
-      <div class="card" style="margin-bottom:14px">
-        <div class="date-row">
-          <label>Date</label>
-          <input type="date" class="input" id="bazar-date" value="${today()}" style="width:180px" onchange="loadBazarForDate()"/>
-          <button class="btn btn-ghost btn-sm" onclick="loadBazarForDate()">Load existing</button>
-        </div>
-        <div class="card-title">Bazar per member (৳)</div>
-        <div class="meal-grid" id="bazar-input-grid" style="margin-bottom:16px"></div>
-        <div class="stat-grid" style="margin-bottom:16px">
-          <div class="stat-card"><div class="stat-label">Bazar total</div><div class="stat-value" id="bazar-tot">৳0</div></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="saveBazar()">Save bazar</button>
-          <button class="btn btn-ghost" onclick="clearBazar()">Clear</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Recent entries</div>
-        <div class="tbl-wrap" id="bazar-recent-table"><div class="loading"><div class="spinner"></div>Loading...</div></div>
-      </div>
-    </div>`;
-  buildBazarInputs();
-  loadBazarRecent();
-}
-
-function buildBazarInputs() {
-  const g = document.getElementById('bazar-input-grid');
-  if (!g) return;
+function buildMealGrid() {
+  const g = document.getElementById('meal-grid'); if(!g) return;
   g.innerHTML = members.map(m => `
     <div class="meal-cell">
       <div class="meal-cell-name">${m.name}</div>
       <div class="meal-cell-row">
-        <span class="meal-cell-label">৳</span>
-        <input type="number" class="meal-num-input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSummary()"/>
+        <span class="meal-cell-label">Day</span>
+        <input type="number" class="meal-num-input" id="md-${m.id}" min="0" max="4" step="0.5" value="${mealDayVals[m.id] ?? 0}" oninput="updMealSum()"/>
+      </div>
+      <div class="meal-cell-row">
+        <span class="meal-cell-label">Night</span>
+        <input type="number" class="meal-num-input" id="mn-${m.id}" min="0" max="4" step="0.5" value="${mealNightVals[m.id] ?? 0}" oninput="updMealSum()"/>
       </div>
     </div>`).join('');
+  updMealSum();
 }
 
-function updBazarSummary() {
-  let b=0;
-  members.forEach(m => { b+=parseFloat(document.getElementById('bz-'+m.id)?.value||0); });
-  const bt=document.getElementById('bazar-tot');
-  if(bt)bt.textContent=fmtTk(b);
+function updMealSum() {
+  let d = 0,
+    n = 0,
+    e = 0;
+  members.forEach((m) => {
+    const dv = parseFloat(document.getElementById("md-" + m.id)?.value || 0),
+      nv = parseFloat(document.getElementById("mn-" + m.id)?.value || 0);
+    mealDayVals[m.id] = dv;
+    mealNightVals[m.id] = nv;
+    d += dv;
+    n += nv;
+    if (dv > 0 || nv > 0) e++;
+  });
+  const te = document.getElementById("mt-total"),
+    td = document.getElementById("mt-day"),
+    tn = document.getElementById("mt-night"),
+    ce = document.getElementById("mt-eating");
+  if (te) te.textContent = round2(d + n);
+  if (td) td.textContent = round2(d);
+  if (tn) tn.textContent = round2(n);
+  if (ce) ce.textContent = e;
 }
 
-async function loadBazarForDate() {
-  const date = document.getElementById('bazar-date')?.value;
+function setAllMeals(target, v) {
+  members.forEach(m => {
+    if(target === 'day' || target === 'both') {
+      const de = document.getElementById('md-' + m.id);
+      if(de) de.value = v;
+      mealDayVals[m.id] = v;
+    }
+    if(target === 'night' || target === 'both') {
+      const ne = document.getElementById('mn-' + m.id);
+      if(ne) ne.value = v;
+      mealNightVals[m.id] = v;
+    }
+  });
+  updMealSum();
+}
+
+async function loadMealDate() {
+  const date = document.getElementById("meal-date")?.value;
   if (!date) return;
-  const { data: rec, error } = await sb.from('bazar').select('*').eq('date', date).maybeSingle();
-  if (error) { toast('Error loading: '+error.message); return; }
+  const { data: rec } = await sb
+    .from("meals")
+    .select("*")
+    .eq("mess_id", messId())
+    .eq("date", date)
+    .maybeSingle();
   if (rec) {
-    members.forEach(m => { const el=document.getElementById('bz-'+m.id); if(el)el.value=rec.bazar[m.name]??0; });
-    updBazarSummary();
-    toast('Loaded entry for '+date);
+    members.forEach((m) => {
+      mealDayVals[m.id] = Number(
+        rec.meals[m.name + "_day"] ?? rec.meals[m.name] ?? 0,
+      );
+      mealNightVals[m.id] = Number(rec.meals[m.name + "_night"] ?? 0);
+    });
+    buildMealGrid();
+    toast("Loaded entry for " + date);
   } else {
-    toast('No entry for '+date+' — starting fresh');
+    members.forEach((m) => {
+      mealDayVals[m.id] = 1;
+      mealNightVals[m.id] = 1;
+    });
+    buildMealGrid();
   }
 }
 
-function clearBazar() {
-  members.forEach(m => { const el=document.getElementById('bz-'+m.id); if(el)el.value=''; });
-  updBazarSummary();
-}
-
-async function saveBazar() {
-  const date = document.getElementById('bazar-date')?.value;
-  if (!date) { toast('Select a date first'); return; }
-  const bazar = {};
-  members.forEach(m => { bazar[m.name] = parseFloat(document.getElementById('bz-'+m.id)?.value||0); });
+async function saveMeals() {
+  const date = document.getElementById("meal-date")?.value;
+  if (!date) {
+    toast("Select a date");
+    return;
+  }
+  const meals = {};
+  members.forEach((m) => {
+    meals[m.name + "_day"] = mealDayVals[m.id] || 0;
+    meals[m.name + "_night"] = mealNightVals[m.id] || 0;
+    meals[m.name] = round2(
+      (mealDayVals[m.id] || 0) + (mealNightVals[m.id] || 0),
+    );
+  });
   try {
-    // Preserve any existing utility data for this date
-    const { data: existing } = await sb.from('bazar').select('utility').eq('date', date).maybeSingle();
-    const utility = existing?.utility || {};
-    await txPut('bazar', { date, bazar, utility });
-    toast('Bazar saved for '+date);
-    loadBazarRecent();
-  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+    await dbUpsertMeals(date, meals);
+    toast("Meals saved", "success");
+    loadMealsRecent();
+  } catch (e) {
+    toast("Save failed: " + e.message, "error");
+  }
 }
 
-async function loadBazarRecent() {
-  const wrap = document.getElementById('bazar-recent-table');
+async function loadMealsRecent() {
+  const wrap = document.getElementById("meals-tbl");
   if (!wrap) return;
-  const all = await txGetAll('bazar');
-  const recent = all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
-  if (!recent.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No bazar entries yet</div></div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th><th></th></tr></thead>
-    <tbody>${recent.map(r=>{
-      const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);
-      return `<tr><td>${r.date}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'—'}</td>`).join('')}
-        <td><b>${fmtTk(bt)}</b></td>
-        <td><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteBazar('${r.id}')" title="Delete">✕</button></td></tr>`;
-    }).join('')}</tbody></table>`;
+  const all = await dbGetAll("meals");
+  const recent = all.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  if (!recent.length) {
+    wrap.innerHTML = '<div class="empty">No meal entries yet</div>';
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr><th>Date</th>${members.map((m) => `<th>${m.name}</th>`).join("")}<th>Total</th><th></th></tr></thead>
+    <tbody>${recent
+      .map((r) => {
+        let t = 0;
+        const cells = members
+          .map((m) => {
+            const d = Number(r.meals[m.name + "_day"] ?? 0),
+              n = Number(r.meals[m.name + "_night"] ?? 0),
+              v = round2(d + n) || Number(r.meals[m.name] ?? 0);
+            t += v;
+            return `<td>${v}</td>`;
+          })
+          .join("");
+        return `<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delMeal('${r.id}')">✕</button></td></tr>`;
+      })
+      .join("")}</tbody></table>`;
 }
-
-async function deleteBazar(id) {
-  if (!confirm('Delete this entry?')) return;
+async function delMeal(id) {
+  if (!confirm("Delete?")) return;
   try {
-    await txDelete('bazar', id);
-    toast('Entry deleted');
-    loadBazarRecent();
-  } catch(e) { toast('Delete failed: '+e.message, 'error'); console.error(e); }
+    await dbDelete("meals", id);
+    toast("Deleted");
+    loadMealsRecent();
+  } catch (e) {
+    toast("Error", "error");
+  }
 }
 
-/* ============================================================
-   ROOM RENT
-   ============================================================ */
-async function renderRent() {
-  const el = document.getElementById('page-rent');
-  const n = new Date();
-  el.innerHTML = `
-    <div class="topbar">
-      <div><div class="page-title">Room Rent</div><div class="page-sub">Track monthly rent collection</div></div>
+/* --- BAZAR ENTRY --- */
+function renderBazar(el) {
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Bazar Entry</div><div class="page-sub">Log grocery spending per member</div></div></div>
+  <div class="content">
+    <div class="card" style="margin-bottom:12px">
+      <div class="date-row"><label>Date</label><input type="date" class="input" id="bazar-date" value="${today()}" style="width:170px" onchange="loadBazarDate()"/><button class="btn btn-ghost btn-sm" onclick="loadBazarDate()">Load</button></div>
+      <div class="meal-grid" id="bazar-grid"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary" onclick="saveBazar()">Save bazar</button>
+        <button class="btn btn-ghost" onclick="clearBazar()">Clear</button>
+        <span style="font-size:13px;color:var(--text2)">Total: <b id="bazar-tot">৳0</b></span>
+      </div>
     </div>
-    <div class="content">
-      <div class="month-sel" style="margin-bottom:16px">
-        <label>Month</label>
-        <select class="input" id="rent-month" style="width:240px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
-        <label>Year</label>
-        <select class="input" id="rent-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
-        <button class="btn btn-ghost" onclick="loadRentMonth()">Load</button>
+    <div class="card"><div class="card-title">Recent entries</div><div class="tbl-wrap" id="bazar-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+  </div>`;
+  buildBazarGrid();
+  loadBazarRecent();
+}
+function buildBazarGrid() {
+  const g = document.getElementById("bazar-grid");
+  if (!g) return;
+  g.innerHTML = members
+    .map(
+      (m) =>
+        `<div class="meal-cell"><div class="meal-cell-name">${m.name}</div><div class="meal-cell-row"><span class="meal-cell-label">৳</span><input type="number" class="meal-num-input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSum()"/></div></div>`,
+    )
+    .join("");
+}
+function updBazarSum() {
+  let b = 0;
+  members.forEach((m) => {
+    b += parseFloat(document.getElementById("bz-" + m.id)?.value || 0);
+  });
+  const bt = document.getElementById("bazar-tot");
+  if (bt) bt.textContent = fmtTk(b);
+}
+async function loadBazarDate() {
+  const date = document.getElementById("bazar-date")?.value;
+  if (!date) return;
+  const { data: rec } = await sb
+    .from("bazar")
+    .select("*")
+    .eq("mess_id", messId())
+    .eq("date", date)
+    .maybeSingle();
+  if (rec) {
+    members.forEach((m) => {
+      const e = document.getElementById("bz-" + m.id);
+      if (e) e.value = rec.bazar[m.name] ?? 0;
+    });
+    updBazarSum();
+    toast("Loaded");
+  }
+}
+function clearBazar() {
+  members.forEach((m) => {
+    const e = document.getElementById("bz-" + m.id);
+    if (e) e.value = "";
+  });
+  updBazarSum();
+}
+async function saveBazar() {
+  const date = document.getElementById("bazar-date")?.value;
+  if (!date) {
+    toast("Select a date");
+    return;
+  }
+  const bazar = {};
+  members.forEach((m) => {
+    bazar[m.name] = parseFloat(
+      document.getElementById("bz-" + m.id)?.value || 0,
+    );
+  });
+  try {
+    await dbUpsertBazar(date, bazar);
+    toast("Bazar saved", "success");
+    loadBazarRecent();
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+async function loadBazarRecent() {
+  const wrap = document.getElementById("bazar-tbl");
+  if (!wrap) return;
+  const all = await dbGetAll("bazar");
+  const recent = all.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+  if (!recent.length) {
+    wrap.innerHTML = '<div class="empty">No bazar entries</div>';
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr><th>Date</th>${members.map((m) => `<th>${m.name}</th>`).join("")}<th>Total</th><th></th></tr></thead><tbody>${recent
+    .map((r) => {
+      const bt = Object.values(r.bazar || {}).reduce(
+        (s, v) => s + Number(v),
+        0,
+      );
+      return `<tr><td>${r.date}</td>${members.map((m) => `<td>${r.bazar[m.name] != null ? fmtTk(r.bazar[m.name]) : "—"}</td>`).join("")}<td><b>${fmtTk(bt)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delBazar('${r.id}')">✕</button></td></tr>`;
+    })
+    .join("")}</tbody></table>`;
+}
+async function delBazar(id) {
+  if (!confirm("Delete?")) return;
+  try {
+    await dbDelete("bazar", id);
+    toast("Deleted");
+    loadBazarRecent();
+  } catch (e) {
+    toast("Error", "error");
+  }
+}
+
+/* --- UTILITY --- */
+async function renderUtility(el) {
+  const n = new Date();
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Utility Entry</div><div class="page-sub">Track bills & payments</div></div></div>
+  <div class="content">
+    <div class="month-sel"><label>Month</label><select class="input" id="ut-month" style="width:180px">${MONTHS.map((m, i) => `<option value="${i}"${i === n.getMonth() ? " selected" : ""}>${m}</option>`).join("")}</select><label>Year</label><select class="input" id="ut-year" style="width:90px">${Array.from(
+      { length: 5 },
+      (_, i) => 2023 + i,
+    )
+      .map(
+        (y) =>
+          `<option${y === n.getFullYear() ? " selected" : ""}>${y}</option>`,
+      )
+      .join(
+        "",
+      )}</select><button class="btn btn-ghost" onclick="loadUtilMonth()">Load</button></div>
+    <div class="card" style="margin-bottom:12px">
+      <!-- Prepaid bills -->
+      <div class="card-title">Prepaid bills</div>
+      <div class="util-fields">
+        ${['elec','wifi','gas','other'].map(k=>`
+          <div class="field" style="margin:0">
+            <label>${{elec:'Electricity',wifi:'WiFi',gas:'Gas',other:'Other'}[k]} (৳)</label>
+            <input type="number" class="input" id="ut-${k}" min="0" placeholder="0" oninput="updUtilSum()"/>
+          </div>`).join('')}
       </div>
-      <div class="stat-grid" id="rent-stats"></div>
-      <div class="card">
-        <div class="card-title">Rent entries</div>
-        <div class="tbl-wrap">
-          <table class="utility-pay-table"><thead><tr><th>Member</th><th>Default rent</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
-          <tbody id="rent-tbody"></tbody></table>
+
+      <!-- Postpaid -->
+      <div class="card-title" style="margin-top:14px">Postpaid (Khala)</div>
+      <div class="util-fields">
+        <div class="field" style="margin:0">
+          <label>Khala salary (৳)</label>
+          <input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilSum()"/>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
-          <button class="btn btn-primary" onclick="saveRent()">Save rent</button>
-          <button class="btn btn-ghost" onclick="markAllPaid()">Mark all paid</button>
-        </div>
       </div>
-      <div class="card" style="margin-top:14px">
-        <div class="card-title">All months history</div>
-        <div class="tbl-wrap" id="rent-history"></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Member payments</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Share</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead><tbody id="ut-tbody"></tbody></table></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn btn-primary" onclick="saveUtility()">Save</button>
+        <button class="btn btn-ghost" onclick="markAllUtilPaid()">Mark all paid</button>
+        <button class="btn btn-ghost" onclick="clearUtil()">Clear bills</button>
       </div>
-    </div>`;
+    </div>
+    <div class="card"><div class="card-title">History</div><div class="tbl-wrap" id="ut-history"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+  </div>`;
+  loadUtilMonth();
+  loadUtilHistory();
+}
+function getUtilTotal() {
+  return ["elec", "wifi", "gas", "khala", "other"].reduce(
+    (s, k) => s + parseFloat(document.getElementById("ut-" + k)?.value || 0),
+    0,
+  );
+}
+function updUtilSum() {
+  const total = getUtilTotal(),
+    perHead = members.length > 0 ? round2(total / members.length) : 0;
+  const te = document.getElementById("ut-total"),
+    tp = document.getElementById("ut-per");
+  if (te) te.textContent = fmtTk(total);
+  if (tp) tp.textContent = fmtTk(perHead);
+  buildUtilRows(perHead);
+  updUtilCollected();
+}
+function buildUtilRows(perHead) {
+  const tbody = document.getElementById("ut-tbody");
+  if (!tbody || tbody.hasChildNodes()) return;
+  tbody.innerHTML = members
+    .map(
+      (m) =>
+        `<tr><td><b>${m.name}</b></td><td id="us-${m.id}">${fmtTk(perHead)}</td><td><input type="number" class="input input-sm" id="up-${m.id}" value="0" style="width:90px" oninput="updUtilCollected()"/></td><td><select class="input input-sm" id="ust-${m.id}" style="width:100px"><option value="unpaid">Not paid</option><option value="paid">Paid</option><option value="partial">Partial</option></select></td><td><input type="text" class="input input-sm" id="un-${m.id}" placeholder="—" style="width:100px"/></td></tr>`,
+    )
+    .join("");
+}
+function updUtilCollected() {
+  let collected = 0;
+  members.forEach((m) => {
+    collected += parseFloat(document.getElementById("up-" + m.id)?.value || 0);
+  });
+  const total = getUtilTotal();
+  const ce = document.getElementById("ut-collected"),
+    oe = document.getElementById("ut-outstanding");
+  if (ce) ce.textContent = fmtTk(round2(collected));
+  if (oe) oe.textContent = fmtTk(Math.max(0, round2(total - collected)));
+  const tbody = document.getElementById("ut-tbody");
+  const perHead = members.length > 0 ? round2(total / members.length) : 0;
+  if (tbody)
+    members.forEach((m) => {
+      const sc = document.getElementById("us-" + m.id);
+      if (sc) sc.textContent = fmtTk(perHead);
+    });
+}
+function markAllUtilPaid() {
+  const perHead =
+    members.length > 0 ? round2(getUtilTotal() / members.length) : 0;
+  members.forEach((m) => {
+    const pp = document.getElementById("up-" + m.id),
+      ps = document.getElementById("ust-" + m.id);
+    if (pp) pp.value = perHead;
+    if (ps) ps.value = "paid";
+  });
+  updUtilCollected();
+}
+function clearUtil() {
+  ["elec", "wifi", "gas", "khala", "other"].forEach((k) => {
+    const e = document.getElementById("ut-" + k);
+    if (e) e.value = "";
+  });
+  updUtilSum();
+}
+async function loadUtilMonth() {
+  const month = parseInt(document.getElementById("ut-month")?.value || 0),
+    year = parseInt(
+      document.getElementById("ut-year")?.value || new Date().getFullYear(),
+    ),
+    key = monthKey(year, month);
+  const { data: rec } = await sb
+    .from("utility_payments")
+    .select("*")
+    .eq("mess_id", messId())
+    .eq("month_key", key)
+    .maybeSingle();
+  if (rec) {
+    const u = rec.bills || {};
+    ["elec", "wifi", "gas", "khala", "other"].forEach((k) => {
+      const e = document.getElementById("ut-" + k);
+      if (e) e.value = u[k] || 0;
+    });
+    const total = ["elec", "wifi", "gas", "khala", "other"].reduce(
+        (s, k) => s + (u[k] || 0),
+        0,
+      ),
+      perHead = members.length > 0 ? round2(total / members.length) : 0;
+    const tbody = document.getElementById("ut-tbody");
+    if (tbody && !tbody.hasChildNodes()) buildUtilRows(perHead);
+    const payments = rec.payments || {};
+    members.forEach((m) => {
+      const p = payments[m.name] || {};
+      const pp = document.getElementById("up-" + m.id),
+        ps = document.getElementById("ust-" + m.id),
+        pn = document.getElementById("un-" + m.id),
+        sc = document.getElementById("us-" + m.id);
+      if (pp) pp.value = p.paid ?? 0;
+      if (ps) ps.value = p.status || "unpaid";
+      if (pn) pn.value = p.notes || "";
+      if (sc) sc.textContent = fmtTk(perHead);
+    });
+    updUtilCollected();
+  } else updUtilSum();
+}
+async function saveUtility() {
+  const month = parseInt(document.getElementById("ut-month")?.value || 0),
+    year = parseInt(
+      document.getElementById("ut-year")?.value || new Date().getFullYear(),
+    ),
+    key = monthKey(year, month);
+  const bills = {
+    elec: parseFloat(document.getElementById("ut-elec")?.value || 0),
+    wifi: parseFloat(document.getElementById("ut-wifi")?.value || 0),
+    gas: parseFloat(document.getElementById("ut-gas")?.value || 0),
+    khala: parseFloat(document.getElementById("ut-khala")?.value || 0),
+    other: parseFloat(document.getElementById("ut-other")?.value || 0),
+  };
+  const payments = {};
+  members.forEach((m) => {
+    payments[m.name] = {
+      paid: parseFloat(document.getElementById("up-" + m.id)?.value || 0),
+      status: document.getElementById("ust-" + m.id)?.value || "unpaid",
+      notes: document.getElementById("un-" + m.id)?.value || "",
+    };
+  });
+  try {
+    await dbUpsertUtility(month, year, key, bills, payments);
+    toast("Saved", "success");
+    loadUtilHistory();
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+async function loadUtilHistory() {
+  const wrap = document.getElementById("ut-history");
+  if (!wrap) return;
+  const { data: all } = await sb
+    .from("utility_payments")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("month_key", { ascending: false });
+  if (!all?.length) {
+    wrap.innerHTML = '<div class="empty">No utility records</div>';
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr><th>Month</th><th>Total</th><th>Per member</th>${members.map((m) => `<th>${m.name}</th>`).join("")}<th>Collected</th></tr></thead><tbody>${all
+    .slice(0, 12)
+    .map((r) => {
+      const bills = r.bills || {},
+        total = ["elec", "wifi", "gas", "khala", "other"].reduce(
+          (s, k) => s + (bills[k] || 0),
+          0,
+        ),
+        perHead = members.length > 0 ? round2(total / members.length) : 0,
+        payments = r.payments || {};
+      let collected = 0;
+      const mc = members
+        .map((m) => {
+          const p = payments[m.name] || {};
+          collected += Number(p.paid || 0);
+          const cls =
+            p.status === "paid"
+              ? "badge-green"
+              : p.status === "partial"
+                ? "badge-amber"
+                : "badge-red";
+          return `<td><span class="badge ${cls}">${p.status === "paid" ? "Paid" : p.status === "partial" ? "Part" : "Due"}</span></td>`;
+        })
+        .join("");
+      return `<tr><td><b>${r.month_name} ${r.year}</b></td><td>${fmtTk(total)}</td><td>${fmtTk(perHead)}</td>${mc}<td style="color:var(--green)"><b>${fmtTk(round2(collected))}</b></td></tr>`;
+    })
+    .join("")}</tbody></table>`;
+}
+
+/* --- RENT --- */
+function renderRent(el) {
+  const n = new Date();
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Room Rent</div><div class="page-sub">Track monthly rent collection</div></div></div><div class="content"><div class="month-sel"><label>Month</label><select class="input" id="rent-month" style="width:180px">${MONTHS.map((m, i) => `<option value="${i}"${i === n.getMonth() ? " selected" : ""}>${m}</option>`).join("")}</select><label>Year</label><select class="input" id="rent-year" style="width:90px">${Array.from(
+    { length: 5 },
+    (_, i) => 2023 + i,
+  )
+    .map(
+      (y) => `<option${y === n.getFullYear() ? " selected" : ""}>${y}</option>`,
+    )
+    .join(
+      "",
+    )}</select><button class="btn btn-ghost" onclick="loadRentMonth()">Load</button></div><div class="stat-grid" id="rent-stats"></div><div class="card" style="margin-bottom:12px"><div class="card-title">Rent entries</div><div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Default</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead><tbody id="rent-tbody"></tbody></table></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn btn-primary" onclick="saveRent()">Save rent</button><button class="btn btn-ghost" onclick="markAllRentPaid()">Mark all paid</button></div></div><div class="card"><div class="card-title">History</div><div class="tbl-wrap" id="rent-history"></div></div></div>`;
   loadRentMonth();
   loadRentHistory();
 }
-
 async function loadRentMonth() {
-  const month = parseInt(document.getElementById('rent-month')?.value||0);
-  const year = parseInt(document.getElementById('rent-year')?.value||2025);
-  const key = monthKey(year, month);
-  const rec = await txGet('rent', key);
-  const tb = document.getElementById('rent-tbody');
-  if (!tb) return;
-  tb.innerHTML = members.map(m => {
-    const e = rec?.entries?.find(x=>x.name===m.name)||{};
-    const due = e.rent ?? m.rent ?? 0;
-    const paid = e.paid ?? 0;
-    const status = e.status ?? 'unpaid';
-    const notes = e.notes ?? '';
-    const cls = status==='paid'?'badge-green':status==='partial'?'badge-amber':'badge-red';
+  // Always re-fetch members first to get latest default rents
+  members = await dbGetMembers();
+
+  const month = parseInt(document.getElementById('rent-month')?.value || 0);
+  const year  = parseInt(document.getElementById('rent-year')?.value  || new Date().getFullYear());
+  const key   = monthKey(year, month);
+
+  const {data:rec} = await sb.from('rent').select('*')
+    .eq('mess_id', messId()).eq('month_key', key).maybeSingle();
+
+  const tbody = document.getElementById('rent-tbody'); if(!tbody) return;
+
+  tbody.innerHTML = members.map(m => {
+    // If existing record has an entry for this member use it,
+    // otherwise fall back to current default rent from members table
+    const e       = rec?.entries?.find(x => x.name === m.name) || {};
+    const due = m.rent || 0;  // always use current default rent, not stale DB value
+    const paid    = e.paid   || 0;
+    const status  = e.status || 'unpaid';
+    const notes   = e.notes  || '';
+
     return `<tr>
       <td><b>${m.name}</b></td>
-      <td style="color:var(--text3)">${fmtTk(m.rent||0)}</td>
-      <td><input type="number" class="input input-sm" id="rp-${m.id}" value="${paid}" data-due="${due}" style="width:100px" oninput="updRentSummary()"/></td>
-      <td><select class="input input-sm" id="rs-${m.id}" style="width:110px">
-        <option value="paid"${status==='paid'?' selected':''}>Paid</option>
-        <option value="unpaid"${status==='unpaid'?' selected':''}>Not paid</option>
-        <option value="partial"${status==='partial'?' selected':''}>Partial</option>
-      </select></td>
-      <td><input type="text" class="input input-sm notes-input" id="rn-${m.id}" placeholder="—" value="${notes}"/></td>
+      <td style="color:var(--text3)">${fmtTk(m.rent || 0)}</td>
+      <td>
+        <input type="number" class="input input-sm" id="rp-${m.id}"
+          value="${paid}"
+          data-due="${due}"
+          style="width:95px"
+          oninput="updRentSum()"/>
+      </td>
+      <td>
+        <select class="input input-sm" id="rs-${m.id}" style="width:100px">
+          <option value="paid"    ${status==='paid'    ?'selected':''}>Paid</option>
+          <option value="unpaid"  ${status==='unpaid'  ?'selected':''}>Not paid</option>
+          <option value="partial" ${status==='partial' ?'selected':''}>Partial</option>
+        </select>
+      </td>
+      <td>
+        <input type="text" class="input input-sm" id="rn-${m.id}"
+          placeholder="—" value="${notes}" style="width:100px"/>
+      </td>
     </tr>`;
   }).join('');
-  updRentSummary();
+
+  updRentSum();
 }
 
-function updRentSummary() {
-  let due=0,paid=0;
+function updRentSum() {
+  let due = 0, paid = 0;
   members.forEach(m => {
-    const paidInput = document.getElementById('rp-'+m.id);
-    due += parseFloat(paidInput?.dataset.due||0);
-    paid += parseFloat(paidInput?.value||0);
+    const pi = document.getElementById('rp-' + m.id);
+    if(!pi) return;
+    // Always read due from current member's default rent
+    const memberDue = m.rent || 0;
+    pi.dataset.due = memberDue;  // keep dataset.due in sync
+    due  += memberDue;
+    paid += parseFloat(pi.value || 0);
   });
-  const el = document.getElementById('rent-stats');
-  if (!el) return;
+
+  const el = document.getElementById('rent-stats'); if(!el) return;
   el.innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total due</div><div class="stat-value">${fmtTk(due)}</div></div>
-    <div class="stat-card"><div class="stat-label">Collected</div><div class="stat-value" style="color:var(--green)">${fmtTk(paid)}</div></div>
-    <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" style="color:${due-paid>0?'var(--red)':'var(--green)'}">${fmtTk(due-paid)}</div></div>
-    <div class="stat-card"><div class="stat-label">Collection rate</div><div class="stat-value">${due>0?Math.round((paid/due)*100):0}%</div></div>`;
+    <div class="stat-card">
+      <div class="stat-label">Total due</div>
+      <div class="stat-value" style="font-size:17px">${fmtTk(due)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Collected</div>
+      <div class="stat-value" style="font-size:17px;color:var(--green)">${fmtTk(paid)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Outstanding</div>
+      <div class="stat-value" style="font-size:17px;color:${due - paid > 0 ? 'var(--red)' : 'var(--green)'}">${fmtTk(round2(due - paid))}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Collection rate</div>
+      <div class="stat-value">${due > 0 ? Math.round((paid / due) * 100) : 0}%</div>
+    </div>`;
 }
 
-function markAllPaid() {
+function markAllRentPaid() {
   members.forEach(m => {
-    const rp=document.getElementById('rp-'+m.id), rs=document.getElementById('rs-'+m.id);
-    if(rp&&rs){ rp.value=rp.dataset.due||0; rs.value='paid'; }
+    const rp = document.getElementById('rp-' + m.id);
+    const rs = document.getElementById('rs-' + m.id);
+    if(rp && rs) {
+      // Use dataset.due if set, otherwise fall back to member's default rent
+      const due = parseFloat(rp.dataset.due || m.rent || 0);
+      rp.value = due;
+      rp.dataset.due = due;
+      rs.value = 'paid';
+    }
   });
-  updRentSummary();
+  updRentSum();
 }
 
 async function saveRent() {
-  const month = parseInt(document.getElementById('rent-month')?.value||0);
-  const year = parseInt(document.getElementById('rent-year')?.value||2025);
-  const key = monthKey(year, month);
+  const month = parseInt(document.getElementById('rent-month')?.value || 0);
+  const year  = parseInt(document.getElementById('rent-year')?.value  || new Date().getFullYear());
+  const key   = monthKey(year, month);
+
   const entries = members.map(m => ({
-    name: m.name,
-    rent: parseFloat(document.getElementById('rp-'+m.id)?.dataset.due||0),
-    paid: parseFloat(document.getElementById('rp-'+m.id)?.value||0),
-    status: document.getElementById('rs-'+m.id)?.value||'unpaid',
-    notes: cleanInputText(document.getElementById('rn-'+m.id)?.value||'')
+    name:   m.name,
+    rent:   parseFloat(document.getElementById('rp-'+m.id)?.dataset.due || m.rent || 0),
+    paid:   parseFloat(document.getElementById('rp-'+m.id)?.value || 0),
+    status: document.getElementById('rs-'+m.id)?.value || 'unpaid',
+    notes:  cleanText(document.getElementById('rn-'+m.id)?.value || '')
   }));
+
   try {
-    await txPut('rent', { key, month, year, monthName: MONTHS[month], entries });
-    toast('Rent saved for '+MONTHS[month]+' '+year);
+    await dbUpsertRent(month, year, key, entries);
+    toast('Rent saved', 'success');
     loadRentHistory();
-  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
 }
 
 async function loadRentHistory() {
-  const wrap = document.getElementById('rent-history');
+  const wrap = document.getElementById("rent-history");
   if (!wrap) return;
-  const all = await txGetAll('rent');
-  if (!all.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No rent records yet</div></div>'; return; }
-  all.sort((a,b)=>b.key.localeCompare(a.key));
-  wrap.innerHTML=`<table><thead><tr><th>Month</th><th>Total due</th><th>Collected</th><th>Outstanding</th><th>Status</th></tr></thead>
-    <tbody>${all.map(r=>{
-      const due=r.entries.reduce((s,e)=>s+Number(e.rent||0),0);
-      const paid=r.entries.reduce((s,e)=>s+Number(e.paid||0),0);
-      const allPaid=r.entries.every(e=>e.status==='paid');
-      const anyUnpaid=r.entries.some(e=>e.status==='unpaid');
-      const cls=allPaid?'badge-green':anyUnpaid?'badge-red':'badge-amber';
-      const label=allPaid?'Complete':anyUnpaid?'Pending':'Partial';
-      return `<tr><td><b>${r.monthName} ${r.year}</b></td><td>${fmtTk(due)}</td><td style="color:var(--green)">${fmtTk(paid)}</td><td style="color:${due-paid>0?'var(--red)':'var(--green)'}">${fmtTk(due-paid)}</td><td><span class="badge ${cls}">${label}</span></td></tr>`;
-    }).join('')}</tbody></table>`;
-}
-
-/* ============================================================
-   PROFILES
-   ============================================================ */
-async function renderProfiles() {
-  const el = document.getElementById('page-profiles');
-
-  // Only build the shell once — preserve the select value on period changes
-  if (!document.getElementById('prof-period')) {
-    el.innerHTML = `
-      <div class="topbar">
-        <div><div class="page-title">Member Profiles</div><div class="page-sub">Individual summaries & history</div></div>
-        <div class="topbar-actions">
-          <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:160px">
-            <option value="all">All time</option>
-            <option value="1" selected>This month</option>
-            <option value="3">Last 3 months</option>
-            <option value="6">Last 6 months</option>
-          </select>
-        </div>
-      </div>
-      <div class="content">
-        <div class="grid-auto" id="profile-card-grid" style="margin-bottom:20px"></div>
-        <div class="card profile-mobile-list" id="profile-mobile-list" style="margin-bottom:14px;padding:4px 16px"></div>
-        <div id="profile-detail-section"></div>
-      </div>`;
-  }
-
-  const allMeals = await txGetAll('meals');
-  const allBazar = await txGetAll('bazar');
-  const allRent  = await txGetAll('rent');
-  const { data: allUtility } = await sb.from('utility_payments').select('*');
-
-  buildProfileCards(allMeals, allBazar, allRent, allUtility||[]);
-  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
-}
-
-async function refreshProfiles() {
-  const allMeals = await txGetAll('meals');
-  const allBazar = await txGetAll('bazar');
-  const allRent  = await txGetAll('rent');
-  const { data: allUtility } = await sb.from('utility_payments').select('*');
-
-  buildProfileCards(allMeals, allBazar, allRent, allUtility||[]);
-  if (selectedProfileId) showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
-  else document.getElementById('profile-detail-section').innerHTML = '';
-}
-
-function getFilteredData(allMeals, allBazar, allRent, period, allUtility=[]) {
-  if (period === 'all') return { meals: allMeals, bazar: allBazar, rent: allRent, utility: allUtility };
-  const months = parseInt(period);
-  const now = new Date();
-  let cutMonth = now.getMonth() - months + 1;
-  let cutYear  = now.getFullYear();
-  while (cutMonth < 0)  { cutMonth += 12; cutYear--; }
-  while (cutMonth > 11) { cutMonth -= 12; cutYear++; }
-  const cutStr = cutYear + '-' + String(cutMonth + 1).padStart(2, '0');
-  return {
-    meals:   allMeals.filter(r => r.date.slice(0,7) >= cutStr),
-    bazar:   allBazar.filter(r => r.date.slice(0,7) >= cutStr),
-    rent:    allRent.filter(r => r.key >= cutStr),
-    utility: allUtility.filter(r => r.month_key >= cutStr)
-  };
-}
-
-function getMemberStats(member, meals, bazar, rent, utility=[]) {
-  let totalMeals=0, totalBazar=0, rentDue=0, rentPaid=0, utilityDue=0, utilityPaid=0, activeDays=0;
-  const byMonth = {};
-  const ensureMonth = k => { byMonth[k] = byMonth[k]||{meals:0,bazar:0,rentPaid:0,utilityPaid:0}; };
-  meals.forEach(r => {
-    const v = Number(r.meals[member.name]||0);
-    totalMeals += v; if(v>0) activeDays++;
-    const k = r.date.slice(0,7); ensureMonth(k);
-    byMonth[k].meals += v;
-  });
-  bazar.forEach(r => {
-    const v = Number(r.bazar[member.name]||0);
-    totalBazar += v;
-    const k = r.date.slice(0,7); ensureMonth(k);
-    byMonth[k].bazar += v;
-  });
-  rent.forEach(r => {
-    const e = r.entries?.find(x=>x.name===member.name);
-    if (e) {
-      rentDue  += Number(e.rent||0);
-      rentPaid += Number(e.paid||0);
-      ensureMonth(r.key);
-      byMonth[r.key].rentPaid += Number(e.paid||0);
-    }
-  });
-  utility.forEach(r => {
-    const bills = r.bills || {};
-    const total = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(Number(bills[k])||0),0);
-    const perHead = members.length > 0 ? round2(total / members.length) : 0;
-    const p = (r.payments || {})[member.name] || {};
-    utilityDue  += perHead;
-    utilityPaid += Number(p.paid||0);
-    ensureMonth(r.month_key);
-    byMonth[r.month_key].utilityPaid += Number(p.paid||0);
-  });
-
-  const filteredTotalMeals = meals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
-  const filteredTotalBazar = bazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
-  const mealRate = filteredTotalMeals > 0 ? (filteredTotalBazar / filteredTotalMeals) : 0;
-  const mealCost = round2(totalMeals * mealRate);
-  const mealBalance = round2(totalBazar - mealCost);
-
-  const totalDays = meals.length;
-  const avgMeals = totalDays>0 ? round2(totalMeals/totalDays) : 0;
-  const latestRent = [...rent].sort((a,b)=>b.key.localeCompare(a.key))[0];
-  const latestStatus = latestRent?.entries?.find(x=>x.name===member.name)?.status||'unpaid';
-  const latestUtil = [...utility].sort((a,b)=>b.month_key.localeCompare(a.month_key))[0];
-  const latestUtilStatus = (latestUtil?.payments||{})[member.name]?.status||'unpaid';
-  return { totalMeals, totalBazar, mealRate, mealCost, mealBalance, rentDue, rentPaid, utilityDue, utilityPaid, activeDays, avgMeals, latestStatus, latestUtilStatus, byMonth };
-}
-
-function buildProfileCards(allMeals, allBazar, allRent, allUtility=[]) {
-  const period = document.getElementById('prof-period')?.value || '1';
-  const { meals, bazar, rent, utility } = getFilteredData(allMeals, allBazar, allRent, period, allUtility);
-  const grid = document.getElementById('profile-card-grid');
-  if (!grid) return;
-  if (!members.length) {
-    grid.innerHTML='<div class="empty"><div class="empty-text">No members yet. Add members first.</div></div>';
-    const mob = document.getElementById('profile-mobile-list'); if(mob) mob.innerHTML='';
+  const { data: all } = await sb
+    .from("rent")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("month_key", { ascending: false });
+  if (!all?.length) {
+    wrap.innerHTML = '<div class="empty">No rent records</div>';
     return;
   }
-
-  // Desktop grid cards (hidden on mobile via CSS)
-  grid.innerHTML = members.map((m, i) => {
-    const stats = getMemberStats(m, meals, bazar, rent, utility);
-    const col = avatarColor(i);
-    const cls = stats.latestStatus==='paid'?'badge-green':stats.latestStatus==='partial'?'badge-amber':'badge-red';
-    const rentLabel = stats.latestStatus==='paid'?'Rent paid':stats.latestStatus==='partial'?'Partial':'Rent due';
-    const utCls = stats.latestUtilStatus==='paid'?'badge-green':stats.latestUtilStatus==='partial'?'badge-amber':'badge-red';
-    const utLabel = stats.latestUtilStatus==='paid'?'Utility paid':stats.latestUtilStatus==='partial'?'Util partial':'Utility due';
-    return `<div class="profile-card${selectedProfileId===m.id?' active':''}" onclick="selectProfile('${m.id}')">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-        <div class="avatar" style="background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
-        <div>
-          <div style="font-weight:600;font-size:15px">${m.name}</div>
-          <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-            <span class="badge ${cls}">${rentLabel}</span>
-            <span class="badge ${utCls}">${utLabel}</span>
-          </div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div class="stat-card" style="padding:10px"><div class="stat-label">Meals</div><div style="font-size:18px;font-weight:600">${stats.totalMeals}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label">Avg/day</div><div style="font-size:18px;font-weight:600">${stats.avgMeals}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label">Bazar</div><div style="font-size:15px;font-weight:600">${fmtTk(stats.totalBazar)}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label">Utility paid</div><div style="font-size:15px;font-weight:600;color:var(--green)">${fmtTk(stats.utilityPaid)}</div></div>
-        <div class="stat-card" style="padding:10px;grid-column:span 2"><div class="stat-label">Rent paid</div><div style="font-size:15px;font-weight:600;color:var(--green)">${fmtTk(stats.rentPaid)}</div></div>
-      </div>
-    </div>`;
-  }).join('');
-
-  // Mobile list (name + rent due only, tap for full detail)
-  const mob = document.getElementById('profile-mobile-list');
-  if (mob) {
-    mob.innerHTML = members.map((m, i) => {
-      const stats = getMemberStats(m, meals, bazar, rent, utility);
-      const col = avatarColor(i);
-      const cls = stats.latestStatus==='paid'?'badge-green':stats.latestStatus==='partial'?'badge-amber':'badge-red';
-      const rentLabel = stats.latestStatus==='paid'?'Paid':stats.latestStatus==='partial'?'Partial':'Due';
-      const utClsM = stats.latestUtilStatus==='paid'?'badge-green':stats.latestUtilStatus==='partial'?'badge-amber':'badge-red';
-      const netDue = stats.rentDue - stats.rentPaid;
-      return `<div class="profile-mobile-item${selectedProfileId===m.id?' active':''}" onclick="selectProfile('${m.id}')">
-        <div class="pmi-left">
-          <div class="avatar" style="width:34px;height:34px;font-size:11px;flex-shrink:0;background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
-          <div class="pmi-name">${m.name}</div>
-        </div>
-        <div class="pmi-right">
-          <span style="font-size:13px;font-weight:500;color:${netDue>0?'var(--red)':netDue<0?'var(--green)':'var(--text2)'}">${netDue>0?fmtTk(netDue)+' due':netDue<0?fmtTk(-netDue)+' overpaid':'Settled'}</span>
-          <span class="badge ${cls}">${rentLabel}</span>
-          <span class="badge ${utClsM}">${stats.latestUtilStatus==='paid'?'Util':'Util?'}</span>
-          <span class="pmi-arrow" style="color:var(--text3);font-size:14px">${selectedProfileId===m.id?'▲':'▼'}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }
+  wrap.innerHTML = `<table><thead><tr><th>Month</th><th>Total due</th><th>Collected</th><th>Status</th></tr></thead><tbody>${all
+    .map((r) => {
+      const due = r.entries.reduce((s, e) => s + Number(e.rent || 0), 0),
+        paid = r.entries.reduce((s, e) => s + Number(e.paid || 0), 0),
+        allPaid = r.entries.every((e) => e.status === "paid"),
+        anyUnpaid = r.entries.some((e) => e.status === "unpaid");
+      const cls = allPaid
+        ? "badge-green"
+        : anyUnpaid
+          ? "badge-red"
+          : "badge-amber";
+      return `<tr><td><b>${r.month_name} ${r.year}</b></td><td>${fmtTk(due)}</td><td style="color:var(--green)">${fmtTk(paid)}</td><td><span class="badge ${cls}">${allPaid ? "Complete" : anyUnpaid ? "Pending" : "Partial"}</span></td></tr>`;
+    })
+    .join("")}</tbody></table>`;
 }
 
-async function selectProfile(id) {
-  selectedProfileId = selectedProfileId === id ? null : id;
-
-  // ── Just toggle .active on existing card DOM nodes — no innerHTML rebuild ──
-  // This prevents CSS entrance animations from re-firing on every click.
-  document.querySelectorAll('#profile-card-grid .profile-card').forEach((card, i) => {
-    const memberId = members[i]?.id;
-    card.classList.toggle('active', memberId === selectedProfileId);
-  });
-  document.querySelectorAll('#profile-mobile-list .profile-mobile-item').forEach((item, i) => {
-    const memberId = members[i]?.id;
-    item.classList.toggle('active', memberId === selectedProfileId);
-    // update the ▲▼ arrow
-    const arrow = item.querySelector('.pmi-arrow');
-    if (arrow) arrow.textContent = (memberId === selectedProfileId) ? '▲' : '▼';
-  });
-
-  // ── Only fetch data + render detail panel ──────────────────────────────────
-  if (selectedProfileId) {
-    const allMeals = await txGetAll('meals');
-    const allBazar = await txGetAll('bazar');
-    const allRent  = await txGetAll('rent');
-    const { data: allUtility } = await sb.from('utility_payments').select('*');
-    showProfileDetail(selectedProfileId, allMeals, allBazar, allRent, allUtility||[]);
-  } else {
-    const detail = document.getElementById('profile-detail-section');
-    detail.innerHTML = '';
-  }
-}
-
-function showProfileDetail(id, allMeals, allBazar, allRent, allUtility=[]) {
-  const member = members.find(m=>m.id===id);
-  if (!member) return;
-  const period = document.getElementById('prof-period')?.value || '1';
-  const { meals, bazar, rent, utility } = getFilteredData(allMeals, allBazar, allRent, period, allUtility);
-  const stats = getMemberStats(member, meals, bazar, rent, utility);
-  const col = avatarColor(members.indexOf(member));
-  const net = stats.rentPaid - stats.rentDue;
-  const netCls = net >= 0 ? 'net-pos' : 'net-neg';
-  const utilNet = round2(stats.utilityPaid - stats.utilityDue);
-  const mealNet = round2(stats.mealBalance);
-  const mealNetText = mealNet > 0 ? 'Get ' + fmtTk(mealNet) : mealNet < 0 ? 'Pay ' + fmtTk(Math.abs(mealNet)) : 'Settled';
-
-  // All months sorted
-  const allMonthKeys = Object.keys(stats.byMonth).sort();
-  const recent8 = allMonthKeys.slice(-8);
-  const maxMeals = Math.max(...recent8.map(k=>stats.byMonth[k]?.meals||0), 1);
-
-  // All meals total share
-  const totalAllMeals = allMeals.reduce((s,r)=>s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0),0);
-  const totalAllBazar = allBazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
-  const mealShare = totalAllMeals > 0 ? Math.round((stats.totalMeals/totalAllMeals)*100) : 0;
-  const bazarShare = totalAllBazar > 0 ? Math.round((stats.totalBazar/totalAllBazar)*100) : 0;
-
-  const detail = document.getElementById('profile-detail-section');
-  detail.innerHTML = `
-    <div class="card">
-      <div class="profile-head">
-        <div class="avatar" style="width:52px;height:52px;font-size:17px;background:${col.bg};color:${col.fg}">${initials(member.name)}</div>
-        <div class="profile-meta">
-          <div style="font-family:var(--font-serif);font-size:22px">${member.name}</div>
-          <div style="font-size:13px;color:var(--text2);margin-top:3px">Default rent: ${fmtTk(member.rent||0)} / month · ${member.room||'—'}</div>
-        </div>
-        <div class="profile-balances">
-          <div class="profile-balance-item">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay / get</div>
-            <div style="font-size:18px;font-weight:600" class="${mealNet>=0?'net-pos':'net-neg'}">${mealNetText}</div>
-          </div>
-          <div class="profile-balance-item sep">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
-            <div style="font-size:18px;font-weight:600" class="${netCls}">${net>=0?'+':''}${fmtTk(Math.abs(net))}</div>
-          </div>
-          <div class="profile-balance-item sep">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
-            <div style="font-size:18px;font-weight:600" class="${utilNet>=0?'net-pos':'net-neg'}">${utilNet>=0?'+':''}${fmtTk(Math.abs(utilNet))}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="profile-stats-grid">
-        <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${stats.totalMeals}</div></div>
-        <div class="stat-card"><div class="stat-label">Active days</div><div class="stat-value">${stats.activeDays}</div></div>
-        <div class="stat-card"><div class="stat-label">Avg / day</div><div class="stat-value">${stats.avgMeals}</div></div>
-        <div class="stat-card"><div class="stat-label">Bazar spent</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.totalBazar)}</div></div>
-        <div class="stat-card"><div class="stat-label">Meal cost</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.mealCost)}</div></div>
-        <div class="stat-card"><div class="stat-label">Rent due</div><div class="stat-value" style="font-size:16px">${fmtTk(stats.rentDue)}</div></div>
-        <div class="stat-card"><div class="stat-label">Rent paid</div><div class="stat-value" style="font-size:16px;color:var(--green)">${fmtTk(stats.rentPaid)}</div></div>
-        <div class="stat-card"><div class="stat-label">Utility due</div><div class="stat-value" style="font-size:16px">${fmtTk(round2(stats.utilityDue))}</div></div>
-        <div class="stat-card"><div class="stat-label">Utility paid</div><div class="stat-value" style="font-size:16px;color:var(--green)">${fmtTk(round2(stats.utilityPaid))}</div></div>
-      </div>
-
-      <div class="detail-section">
-        <div class="detail-section-title">Share in mess (all time)</div>
-        <div class="mini-bar"><div class="mini-bar-label">Meal share</div><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${mealShare}%"></div></div><div class="mini-bar-val">${mealShare}%</div></div>
-        <div class="mini-bar"><div class="mini-bar-label">Bazar share</div><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${bazarShare}%"></div></div><div class="mini-bar-val">${bazarShare}%</div></div>
-      </div>
-
-      <div class="detail-section">
-        <div class="detail-section-title">Monthly meal history</div>
-        ${recent8.length ? `
-          <div class="hist-labels">${recent8.map(k=>`<span>${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}</span>`).join('')}</div>
-          <div class="hist-wrap">${recent8.map(k=>{
-            const v=stats.byMonth[k]?.meals||0;
-            const h=Math.max(Math.round((v/maxMeals)*44),3);
-            return `<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5))-1].slice(0,3)} ${k.slice(0,4)}: ${v} meals</div></div>`;
-          }).join('')}</div>` : '<div style="color:var(--text3);font-size:13px">No history</div>'}
-      </div>
-
-      <div class="detail-section">
-        <div class="detail-section-title">Recent months breakdown</div>
-        <div class="tbl-wrap">
-          <table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Utility paid</th></tr></thead>
-          <tbody>${allMonthKeys.slice(-6).reverse().map(k=>{
-            const d=stats.byMonth[k]||{};
-            return `<tr><td>${MONTHS[parseInt(k.slice(5))-1]} ${k.slice(0,4)}</td><td>${d.meals||0}</td><td>${fmtTk(d.bazar||0)}</td><td>${fmtTk(d.rentPaid||0)}</td><td>${fmtTk(d.utilityPaid||0)}</td></tr>`;
-          }).join('')}</tbody></table>
-        </div>
-      </div>
-    </div>`;
-}
-
-/* ============================================================
-   UTILITY ENTRY
-   ============================================================ */
-async function renderUtility() {
-  const el = document.getElementById('page-utility');
+/* --- MONTHLY LOG --- */
+function renderLog(el) {
   const n = new Date();
-  el.innerHTML = `
-    <div class="topbar">
-      <div><div class="page-title">Utility Entry</div><div class="page-sub">Track bills & who has paid their share</div></div>
-    </div>
-    <div class="content">
-      <div class="month-sel" style="margin-bottom:16px">
-        <label>Month</label>
-        <select class="input" id="ut-month" style="width:240px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
-        <label>Year</label>
-        <select class="input" id="ut-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
-        <button class="btn btn-ghost" onclick="loadUtilityMonth()">Load</button>
-      </div>
-
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title">Bill amounts</div>
-        <div class="util-fields">
-          <div class="field" style="margin:0"><label>Electricity (৳)</label><input type="number" class="input" id="ut-elec"  min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>WiFi (৳)</label>        <input type="number" class="input" id="ut-wifi"  min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>Gas (৳)</label>         <input type="number" class="input" id="ut-gas"   min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>Khala bill (৳)</label>  <input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-          <div class="field" style="margin:0"><label>Other (৳)</label>       <input type="number" class="input" id="ut-other" min="0" placeholder="0" oninput="updUtilSummary()"/></div>
-        </div>
-        <div class="stat-grid" style="margin-top:16px;margin-bottom:0">
-          <div class="stat-card"><div class="stat-label">Total bill</div><div class="stat-value" id="ut-total">৳0</div></div>
-          <div class="stat-card"><div class="stat-label">Per member</div><div class="stat-value" id="ut-per">৳0</div></div>
-          <div class="stat-card"><div class="stat-label">Collected</div><div class="stat-value" id="ut-collected" style="color:var(--green)">৳0</div></div>
-          <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" id="ut-outstanding" style="color:var(--red)">৳0</div></div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-title">Payment status per member</div>
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr><th>Member</th><th>Share (৳)</th><th>Paid (৳)</th><th>Status</th><th>Notes</th></tr></thead>
-            <tbody id="ut-pay-tbody"></tbody>
-          </table>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-          <button class="btn btn-primary" onclick="saveUtility()">Save</button>
-          <button class="btn btn-ghost"   onclick="markAllUtilPaid()">Mark all paid</button>
-          <button class="btn btn-ghost"   onclick="clearUtility()">Clear bills</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">History</div>
-        <div class="tbl-wrap" id="ut-history"><div class="loading"><div class="spinner"></div>Loading...</div></div>
-      </div>
-    </div>`;
-  loadUtilityMonth();
-  loadUtilityHistory();
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Monthly Log</div><div class="page-sub">Full settlement report</div></div></div><div class="content"><div class="month-sel"><label>Month</label><select class="input" id="log-month" style="width:180px">${MONTHS.map((m, i) => `<option value="${i}"${i === n.getMonth() ? " selected" : ""}>${m}</option>`).join("")}</select><label>Year</label><select class="input" id="log-year" style="width:90px">${Array.from(
+    { length: 5 },
+    (_, i) => 2023 + i,
+  )
+    .map(
+      (y) => `<option${y === n.getFullYear() ? " selected" : ""}>${y}</option>`,
+    )
+    .join(
+      "",
+    )}</select><button class="btn btn-primary" onclick="loadLog()">Generate</button></div><div id="log-content"><div class="empty">Select a month and click Generate</div></div></div>`;
 }
-
-function updUtilSummary() {
-  const total = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other']
-    .reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
-  const perHead = members.length > 0 ? round2(total / members.length) : 0;
-  const te = document.getElementById('ut-total'), tp = document.getElementById('ut-per');
-  if(te) te.textContent = fmtTk(total);
-  if(tp) tp.textContent = fmtTk(perHead);
-  // If rows don't exist yet, build them; otherwise just update the share display
-  const tbody = document.getElementById('ut-pay-tbody');
-  if (!tbody) return;
-  if (!tbody.hasChildNodes()) {
-    buildUtilPayRows(perHead);
-  } else {
-    // update only the share amount cell per row without rebuilding
-    members.forEach(m => {
-      const shareCell = document.getElementById('utp-share-'+m.id);
-      if (shareCell) shareCell.textContent = fmtTk(perHead);
-    });
-  }
-  updUtilPaySummary();
-}
-
-function buildUtilPayRows(perHead) {
-  const tbody = document.getElementById('ut-pay-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = members.map(m => {
-    return `<tr>
-      <td><b>${m.name}</b></td>
-      <td style="color:var(--text2)" id="utp-share-${m.id}">${fmtTk(perHead)}</td>
-      <td><input type="number" class="input input-sm" id="utp-paid-${m.id}"
-            value="0" style="width:95px" oninput="updUtilPaySummary()"/></td>
-      <td><select class="input input-sm" id="utp-status-${m.id}" style="width:110px" onchange="updUtilPaySummary()">
-        <option value="unpaid" selected>Not paid</option>
-        <option value="paid">Paid</option>
-        <option value="partial">Partial</option>
-      </select></td>
-      <td class="notes-cell"><input type="text" class="input input-sm notes-input" id="utp-notes-${m.id}" placeholder="—"/></td>
-    </tr>`;
-  }).join('');
-}
-
-function updUtilPaySummary() {
-  let collected = 0;
-  members.forEach(m => { collected += parseFloat(document.getElementById('utp-paid-'+m.id)?.value||0); });
-  const total = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other']
-    .reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
-  const outstanding = Math.max(0, round2(total - collected));
-  const ce = document.getElementById('ut-collected'), oe = document.getElementById('ut-outstanding');
-  if(ce) ce.textContent = fmtTk(round2(collected));
-  if(oe) oe.textContent = fmtTk(outstanding);
-}
-
-function markAllUtilPaid() {
-  const total = ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other']
-    .reduce((s,id) => s + parseFloat(document.getElementById(id)?.value||0), 0);
-  const perHead = members.length > 0 ? round2(total / members.length) : 0;
-  members.forEach(m => {
-    const pp = document.getElementById('utp-paid-'+m.id);
-    const ps = document.getElementById('utp-status-'+m.id);
-    if(pp) pp.value = perHead;
-    if(ps) ps.value = 'paid';
-  });
-  updUtilPaySummary();
-}
-
-async function loadUtilityMonth() {
-  const month = parseInt(document.getElementById('ut-month')?.value || 0);
-  const year  = parseInt(document.getElementById('ut-year')?.value  || new Date().getFullYear());
-  const key   = monthKey(year, month);
-
-  // Load from utility_payments table (or fall back to bazar utility field)
-  const { data: rec } = await sb.from('utility_payments')
-    .select('*').eq('month_key', key).maybeSingle();
-
-  if (rec) {
-    const u = rec.bills || {};
-    ['elec','wifi','gas','khala','other'].forEach(k => {
-      const el = document.getElementById('ut-'+k); if(el) el.value = u[k] || 0;
-    });
-    const total = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(u[k]||0),0);
-    const perHead = members.length > 0 ? round2(total / members.length) : 0;
-    // ensure rows exist first
-    const tbody = document.getElementById('ut-pay-tbody');
-    if (tbody && !tbody.hasChildNodes()) buildUtilPayRows(perHead);
-    // restore saved payment values
-    const payments = rec.payments || {};
-    members.forEach(m => {
-      const p = payments[m.name] || {};
-      const pp = document.getElementById('utp-paid-'+m.id);
-      const ps = document.getElementById('utp-status-'+m.id);
-      const pn = document.getElementById('utp-notes-'+m.id);
-      const sc = document.getElementById('utp-share-'+m.id);
-      if(pp) pp.value = p.paid ?? 0;
-      if(ps) ps.value = p.status || 'unpaid';
-      if(pn) pn.value = p.notes || '';
-      if(sc) sc.textContent = fmtTk(perHead);
-    });
-    toast('Loaded utility for ' + MONTHS[month] + ' ' + year);
-  } else {
-    ['elec','wifi','gas','khala','other'].forEach(k => {
-      const el = document.getElementById('ut-'+k); if(el) el.value = '';
-    });
-    toast('No utility record for ' + MONTHS[month] + ' ' + year);
-  }
-  updUtilSummary();
-}
-
-function clearUtility() {
-  ['ut-elec','ut-wifi','ut-gas','ut-khala','ut-other'].forEach(id => {
-    const el = document.getElementById(id); if(el) el.value = '';
-  });
-  updUtilSummary();
-}
-
-async function saveUtility() {
-  const month = parseInt(document.getElementById('ut-month')?.value || 0);
-  const year  = parseInt(document.getElementById('ut-year')?.value  || new Date().getFullYear());
-  const key   = monthKey(year, month);
-
-  const bills = {
-    elec:  parseFloat(document.getElementById('ut-elec')?.value  || 0),
-    wifi:  parseFloat(document.getElementById('ut-wifi')?.value  || 0),
-    gas:   parseFloat(document.getElementById('ut-gas')?.value   || 0),
-    khala: parseFloat(document.getElementById('ut-khala')?.value || 0),
-    other: parseFloat(document.getElementById('ut-other')?.value || 0)
-  };
-  const payments = {};
-  members.forEach(m => {
-    payments[m.name] = {
-      paid:   parseFloat(document.getElementById('utp-paid-'+m.id)?.value   || 0),
-      status: document.getElementById('utp-status-'+m.id)?.value            || 'unpaid',
-      notes:  document.getElementById('utp-notes-'+m.id)?.value             || ''
-    };
-  });
-
-  try {
-    const { error } = await sb.from('utility_payments').upsert(
-      { month_key: key, month, year, month_name: MONTHS[month], bills, payments },
-      { onConflict: 'month_key' }
-    );
-    if (error) throw error;
-    toast('Utility saved for ' + MONTHS[month] + ' ' + year);
-    loadUtilityHistory();
-  } catch(e) { toast('Save failed: ' + e.message, 'error'); console.error(e); }
-}
-
-async function loadUtilityHistory() {
-  const wrap = document.getElementById('ut-history');
-  if (!wrap) return;
-  const { data: all, error } = await sb.from('utility_payments').select('*').order('month_key', { ascending: false });
-  if (error || !all?.length) {
-    wrap.innerHTML = '<div class="empty"><div class="empty-text">No utility records yet</div></div>'; return;
-  }
-  wrap.innerHTML = `<table>
-    <thead>
-      <tr>
-        <th>Month</th><th>Total bill</th><th>Per member</th>
-        ${members.map(m=>`<th>${m.name}</th>`).join('')}
-        <th>Collected</th><th>Outstanding</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${all.slice(0,12).map(r => {
-        const bills = r.bills || {};
-        const total = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(bills[k]||0),0);
-        const perHead = members.length > 0 ? round2(total / members.length) : 0;
-        const payments = r.payments || {};
-        let collected = 0;
-        const memberCells = members.map(m => {
-          const p = payments[m.name] || {};
-          collected += Number(p.paid || 0);
-          const cls = p.status==='paid'?'badge-green':p.status==='partial'?'badge-amber':'badge-red';
-          const lbl = p.status==='paid'?'Paid':p.status==='partial'?'Part':'Due';
-          return `<td><span class="badge ${cls}">${lbl}</span><span style="font-size:11px;color:var(--text2);margin-left:4px">${fmtTk(p.paid||0)}</span></td>`;
-        }).join('');
-        const outstanding = Math.max(0, round2(total - collected));
-        return `<tr>
-          <td><b>${r.month_name} ${r.year}</b></td>
-          <td>${fmtTk(total)}</td>
-          <td style="color:var(--text2)">${fmtTk(perHead)}</td>
-          ${memberCells}
-          <td style="color:var(--green)"><b>${fmtTk(round2(collected))}</b></td>
-          <td style="color:${outstanding>0?'var(--red)':'var(--green)'}">${fmtTk(outstanding)}</td>
-        </tr>`;
-      }).join('')}
-    </tbody>
-  </table>`;
-}
-
-/* ============================================================
-   MONTHLY LOG
-   ============================================================ */
-async function renderLog() {
-  const el = document.getElementById('page-log');
-  const n = new Date();
-  el.innerHTML = `
-    <div class="topbar">
-      <div><div class="page-title">Monthly Log</div><div class="page-sub">Full month report</div></div>
-    </div>
-    <div class="content">
-      <div class="month-sel" style="margin-bottom:16px">
-        <label>Month</label>
-        <select class="input" id="log-month" style="width:240px">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}</select>
-        <label>Year</label>
-        <select class="input" id="log-year" style="width:100px">${Array.from({length:5},(_,i)=>2023+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
-        <button class="btn btn-primary" onclick="loadLog()">Generate report</button>
-      </div>
-      <div id="log-content"><div class="empty"><div class="empty-text">Select a month and click Generate report</div></div></div>
-    </div>`;
-}
-
 async function loadLog() {
-  const month = parseInt(document.getElementById('log-month').value);
-  const year = parseInt(document.getElementById('log-year').value);
-  const key = monthKey(year, month);
-  const allMeals = await txGetAll('meals');
-  const allBazar = await txGetAll('bazar');
-  const rentRec = await txGet('rent', key);
+  const month   = parseInt(document.getElementById('log-month').value);
+  const year    = parseInt(document.getElementById('log-year').value);
+  const key     = monthKey(year, month);
 
-  const fm = allMeals.filter(r=>r.date.startsWith(key)).sort((a,b)=>a.date.localeCompare(b.date));
-  const fb = allBazar.filter(r=>r.date.startsWith(key)).sort((a,b)=>a.date.localeCompare(b.date));
+  const [allMeals, allBazar, rentRec, {data:utilRec}] = await Promise.all([
+    dbGetAll('meals'), dbGetAll('bazar'), dbGetMonth('rent', key),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', key).maybeSingle()
+  ]);
 
-  function getMemberMealTotal(mealsObj, memberName) {
-    if ((mealsObj||{})[memberName+'_day'] != null || (mealsObj||{})[memberName+'_night'] != null) {
-      return round2(Number((mealsObj||{})[memberName+'_day'] || 0) + Number((mealsObj||{})[memberName+'_night'] || 0));
-    }
-    return round2(Number((mealsObj||{})[memberName] || 0));
-  }
+  const fm = allMeals.filter(r => r.date.startsWith(key)).sort((a,b) => a.date.localeCompare(b.date));
+  const fb = allBazar.filter(r => r.date.startsWith(key)).sort((a,b) => a.date.localeCompare(b.date));
 
-  let totalMeals=0, totalBazar=0, totalUtility=0;
-  const memMeals={}, memBazar={};
-  members.forEach(m=>{memMeals[m.name]=0;memBazar[m.name]=0;});
+  const getMT = (mObj, n) => {
+    if(mObj[n+'_day'] != null || mObj[n+'_night'] != null)
+      return round2(Number(mObj[n+'_day']||0) + Number(mObj[n+'_night']||0));
+    return Number(mObj[n]||0);
+  };
 
-  fm.forEach(r=>{
-    members.forEach(m => {
-      const memberTotal = getMemberMealTotal(r.meals, m.name);
-      memMeals[m.name] += memberTotal;
-      totalMeals += memberTotal;
-    });
-  });
+  // Meal & bazar totals
+  let totalMeals = 0, totalBazar = 0;
+  const memMeals = {}, memBazar = {};
+  members.forEach(m => { memMeals[m.name]=0; memBazar[m.name]=0; });
+  fm.forEach(r => { members.forEach(m => { const t=getMT(r.meals,m.name); memMeals[m.name]+=t; totalMeals+=t; }); });
+  fb.forEach(r => { Object.entries(r.bazar||{}).forEach(([n,v]) => { memBazar[n]=(memBazar[n]||0)+Number(v); totalBazar+=Number(v); }); });
+  members.forEach(m => memMeals[m.name] = round2(memMeals[m.name]));
 
-  fb.forEach(r=>{
-    Object.entries(r.bazar||{}).forEach(([n,v])=>{memBazar[n]=(memBazar[n]||0)+Number(v); totalBazar += Number(v);});
-    if(r.utility) Object.values(r.utility).forEach(v=>totalUtility+=Number(v));
-  });
+  const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
 
-  Object.keys(memMeals).forEach(name => memMeals[name] = round2(memMeals[name]));
-  const mealRate = totalMeals>0?round2(totalBazar/totalMeals):0;
+  // ── Bills split: Prepaid vs Postpaid ──────────────────
+  const bills = utilRec?.bills || {};
+  const prepaidKeys  = ['elec','wifi','gas','other'];
+  const postpaidKeys = ['khala'];
 
-  // Payment calc
-  const paymentData = members.map(m=>{
-    const rentEntry = rentRec?.entries?.find(e=>e.name===m.name)||{};
-    const meals = memMeals[m.name]||0;
-    const bazar = memBazar[m.name]||0;
+  const totalPrepaid  = prepaidKeys.reduce((s,k)  => s + (Number(bills[k])||0), 0);
+  const totalPostpaid = postpaidKeys.reduce((s,k) => s + (Number(bills[k])||0), 0);
+  const totalUtil     = totalPrepaid + totalPostpaid;
+
+  const prepaidPerHead  = members.length > 0 ? round2(totalPrepaid  / members.length) : 0;
+  const khalaPerHead    = members.length > 0 ? round2(totalPostpaid / members.length) : 0;
+
+  // Per-member settlement
+  const payData = members.map(m => {
+    const re       = rentRec?.entries?.find(e => e.name === m.name) || {};
+    const meals    = memMeals[m.name] || 0;
+    const bazar    = memBazar[m.name] || 0;
     const mealCost = round2(meals * mealRate);
-    const utility = members.length>0 ? round2(totalUtility/members.length) : 0;
-    const rent = Number(rentEntry.rent||m.rent||0);
-    const totalOwed = round2(mealCost + utility + rent);
-    const bazarCredit = bazar;
-    const net = round2(totalOwed - bazarCredit);
-    return { name:m.name, meals, bazar, mealCost, utility, rent, totalOwed, bazarCredit, net };
+    const rent     = Number(re.rent || m.rent || 0);
+    // Postpaid: meal cost + khala
+    const postpaid = round2(mealCost + khalaPerHead);
+    // Prepaid: utility + rent
+    const prepaid  = round2(prepaidPerHead + rent);
+    const totalOwed = round2(postpaid + prepaid);
+    const net       = round2(totalOwed - bazar);
+    return { name:m.name, meals, bazar, mealCost, khala:khalaPerHead, utility:prepaidPerHead, rent, postpaid, prepaid, totalOwed, net };
   });
 
-  const wrap = document.getElementById('log-content');
-  wrap.innerHTML = `
-    <div class="stat-grid" style="margin-bottom:16px">
+  document.getElementById('log-content').innerHTML = `
+
+    <!-- SUMMARY STATS -->
+    <div class="stat-grid" style="margin-bottom:14px">
       <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalMeals)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:18px">${fmtTk(totalBazar)}</div></div>
-      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:18px">${fmtTk(mealRate)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total utility</div><div class="stat-value" style="font-size:18px">${fmtTk(totalUtility)}</div></div>
+      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div></div>
+      <div class="stat-card"><div class="stat-label">Prepaid bills</div><div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(totalPrepaid)}</div></div>
+      <div class="stat-card"><div class="stat-label">Khala (postpaid)</div><div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(totalPostpaid)}</div></div>
+      <div class="stat-card"><div class="stat-label">Per head utility</div><div class="stat-value" style="font-size:17px">${fmtTk(prepaidPerHead + khalaPerHead)}</div></div>
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">Payment summary — ${MONTHS[month]} ${year}</div>
+    <!-- LEGEND -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);display:inline-block"></span>Postpaid (settle at month end)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--blue);display:inline-block"></span>Prepaid (collect at month start)</span>
+    </div>
+
+    <!-- SETTLEMENT TABLE -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">Settlement — ${MONTHS[month]} ${year}</div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Member</th><th>Meals</th><th>Meal cost</th><th>Utility share</th><th>Rent</th><th>Total owed</th><th>Bazar credit</th><th>Net (pay/get)</th></tr></thead>
-        <tbody>${paymentData.map(p=>{
-          const netCls = p.net>0?'net-neg':p.net<0?'net-pos':'';
-          const netLabel = p.net>0?`Pay ${fmtTk(p.net)}`:p.net<0?`Get ${fmtTk(-p.net)}`:'Settled';
-          return `<tr><td><b>${p.name}</b></td><td>${p.meals}</td><td>${fmtTk(p.mealCost)}</td><td>${fmtTk(p.utility)}</td><td>${fmtTk(p.rent)}</td><td>${fmtTk(p.totalOwed)}</td><td style="color:var(--green)">${fmtTk(p.bazarCredit)}</td><td class="${netCls}"><b>${netLabel}</b></td></tr>`;
-        }).join('')}</tbody>
+        <thead>
+          <tr>
+            <th rowspan="2">Member</th>
+            <th rowspan="2">Meals</th>
+            <th colspan="2" style="text-align:center;color:var(--red);border-bottom:1px solid var(--border)">🔴 Postpaid</th>
+            <th colspan="2" style="text-align:center;color:var(--blue);border-bottom:1px solid var(--border)">🔵 Prepaid</th>
+            <th rowspan="2">Bazar credit</th>
+            <th rowspan="2">Net</th>
+          </tr>
+          <tr>
+            <th style="color:var(--red)">Meal cost</th>
+            <th style="color:var(--red)">Khala</th>
+            <th style="color:var(--blue)">Utility</th>
+            <th style="color:var(--blue)">Rent</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${payData.map(p => {
+            const nc = p.net > 0 ? 'net-neg' : p.net < 0 ? 'net-pos' : '';
+            const nl = p.net > 0 ? `Pay ${fmtTk(p.net)}` : p.net < 0 ? `Get ${fmtTk(-p.net)}` : 'Settled';
+            return `<tr>
+              <td><b>${p.name}</b></td>
+              <td>${p.meals}</td>
+              <td style="color:var(--red)">${fmtTk(p.mealCost)}</td>
+              <td style="color:var(--red)">${fmtTk(p.khala)}</td>
+              <td style="color:var(--blue)">${fmtTk(p.utility)}</td>
+              <td style="color:var(--blue)">${fmtTk(p.rent)}</td>
+              <td style="color:var(--green)">${fmtTk(p.bazar)}</td>
+              <td class="${nc}"><b>${nl}</b></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td><b>Total</b></td>
+            <td>${round2(totalMeals)}</td>
+            <td style="color:var(--red)">${fmtTk(round2(payData.reduce((s,p)=>s+p.mealCost,0)))}</td>
+            <td style="color:var(--red)">${fmtTk(totalPostpaid)}</td>
+            <td style="color:var(--blue)">${fmtTk(totalPrepaid)}</td>
+            <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p)=>s+p.rent,0)))}</td>
+            <td style="color:var(--green)">${fmtTk(totalBazar)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table></div>
     </div>
 
-    <div class="grid-2" style="gap:14px">
+    <!-- MEAL & BAZAR LOGS -->
+    <div class="grid-2" style="gap:12px">
       <div class="card">
         <div class="card-title">Meal log</div>
         <div class="scroll-table tbl-wrap"><table>
           <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
-          <tbody>${fm.map(r=>{
-            let t = 0;
-            const rowCells = members.map(m => {
-              const memberTotal = getMemberMealTotal(r.meals, m.name);
-              t += memberTotal;
-              return `<td>${memberTotal}</td>`;
-            }).join('');
-            return `<tr><td>${r.date.slice(8)}</td>${rowCells}<td><b>${round2(t)}</b></td></tr>`;
-          }).join('')}
-          </tbody>
+          <tbody>${fm.map(r => {
+            let t=0;
+            const cells = members.map(m => { const mv=getMT(r.meals,m.name); t+=mv; return `<td>${mv}</td>`; }).join('');
+            return `<tr><td>${r.date.slice(8)}</td>${cells}<td><b>${round2(t)}</b></td></tr>`;
+          }).join('')}</tbody>
           <tfoot><tr><td>Total</td>${members.map(m=>`<td>${memMeals[m.name]||0}</td>`).join('')}<td>${round2(totalMeals)}</td></tr></tfoot>
         </table></div>
       </div>
@@ -1501,217 +2393,1554 @@ async function loadLog() {
         <div class="card-title">Bazar log</div>
         <div class="scroll-table tbl-wrap"><table>
           <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
-          <tbody>${fb.map(r=>{const t=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);return`<tr><td>${r.date.slice(8)}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'0'}</td>`).join('')}<td><b>${fmtTk(t)}</b></td></tr>`;}).join('')}
-          </tbody>
+          <tbody>${fb.map(r => {
+            const bt = Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);
+            return `<tr><td>${r.date.slice(8)}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'0'}</td>`).join('')}<td><b>${fmtTk(bt)}</b></td></tr>`;
+          }).join('')}</tbody>
           <tfoot><tr><td>Total</td>${members.map(m=>`<td>${fmtTk(memBazar[m.name]||0)}</td>`).join('')}<td>${fmtTk(totalBazar)}</td></tr></tfoot>
         </table></div>
       </div>
     </div>`;
 }
 
-/* ============================================================
-   MEMBERS
-   ============================================================ */
-async function renderMembers() {
-  const el = document.getElementById('page-members');
-  el.innerHTML = `
-    <div class="topbar">
-      <div><div class="page-title">Members</div><div class="page-sub">Manage mess members & rent defaults</div></div>
-      <div class="topbar-actions">
-        <button class="btn btn-primary" onclick="openAddMemberModal()">+ Add member</button>
+/* --- ANNOUNCEMENTS --- */
+async function renderAnnouncements(el, isAdmin) {
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Announcements</div><div class="page-sub">Mess-wide notices & updates</div></div>${isAdmin ? `<div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="openAnnounceModal()">+ Post notice</button></div>` : ""}</div>
+  <div class="content"><div id="announce-list"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>`;
+  await loadAnnouncements(isAdmin);
+}
+
+async function loadAnnouncements(isAdmin) {
+  const items = await dbGetAnnouncements();
+  const list = document.getElementById("announce-list");
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">No announcements yet.</div>';
+    return;
+  }
+  list.innerHTML = items
+    .map(
+      (a) => `<div class="announce-item">
+    <div class="announce-item-header">
+      <div class="announce-item-title">${a.pinned ? '<span class="announce-pin">📌 </span>' : ""}${a.title}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="announce-item-meta">${a.author} · ${new Date(a.created_at).toLocaleDateString()}</div>
+        ${isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="deleteAnnounce('${a.id}')">✕</button>` : ""}
       </div>
     </div>
-    <div class="content">
-      <div class="card">
-        <div class="card-title">Current members (${members.length})</div>
-        <div class="tbl-wrap" id="members-table"></div>
+    <div class="announce-item-body">${a.body}</div>
+  </div>`,
+    )
+    .join("");
+}
+
+function openAnnounceModal() {
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">Post announcement</div>
+    <div class="modal-sub">Visible to all members of your mess</div>
+    <div class="field"><label>Title *</label><input type="text" class="input" id="an-title" placeholder="e.g. Rent due reminder"/></div>
+    <div class="field"><label>Message *</label><textarea class="input" id="an-body" rows="4" placeholder="Write your message here…" style="height:auto;resize:vertical"></textarea></div>
+    <div class="field"><label><input type="checkbox" id="an-pin" style="margin-right:6px"/>Pin this announcement</label></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="postAnnounce()">Post</button></div>`;
+  openModal();
+}
+
+async function postAnnounce() {
+  const title = cleanText(document.getElementById("an-title")?.value);
+  const body = cleanText(document.getElementById("an-body")?.value);
+  const pinned = document.getElementById("an-pin")?.checked || false;
+  if (!title || !body) {
+    toast("Title and message required");
+    return;
+  }
+  try {
+    await dbSaveAnnouncement({ title, body, pinned });
+    closeModal();
+    toast("Posted", "success");
+    navigate("announce");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+async function deleteAnnounce(id) {
+  if (!confirm("Delete?")) return;
+  try {
+    await dbDeleteAnnouncement(id);
+    toast("Deleted");
+    navigate("announce");
+  } catch (e) {
+    toast("Error", "error");
+  }
+}
+
+/* --- CHORES --- */
+async function renderChores(el, isAdmin) {
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Chore Roster</div><div class="page-sub">Assign & track cleaning duties</div></div>${isAdmin ? `<div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="openChoreModal()">+ Add chore</button></div>` : ""}</div>
+  <div class="content">
+    <div class="card"><div class="card-title">Current duties</div><div id="chores-list"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+  </div>`;
+  await loadChores(isAdmin);
+}
+
+async function renderNotifications(el) {
+  const all = await dbGetNotifications();
+  const pending = all.filter((n) => n.status === "pending");
+  const resolved = all.filter((n) => n.status !== "pending");
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div>
+      <div class="page-title">Member Requests</div>
+      <div class="page-sub">${pending.length} pending approval</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="navigate('notifications')">Refresh</button>
+    </div>
+  </div>
+  <div class="content">
+    ${
+      pending.length === 0
+        ? `<div class="card" style="text-align:center;padding:32px">
+           <div style="font-size:28px;margin-bottom:10px">✅</div>
+           <div style="color:var(--text2);font-size:14px">No pending requests</div>
+         </div>`
+        : `<div class="card" style="margin-bottom:14px">
+          <div class="card-title">Pending (${pending.length})</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            ${pending.map((n) => notifCard(n, true)).join("")}
+          </div>
+        </div>`
+    }
+    ${
+      resolved.length > 0
+        ? `
+    <div class="card">
+      <div class="card-title">Recent resolved (${resolved.length})</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${resolved
+          .slice(0, 20)
+          .map((n) => notifCard(n, false))
+          .join("")}
       </div>
+    </div>`
+        : ""
+    }
+  </div>`;
+}
+
+function notifCard(n, showActions) {
+  const typeMap = {
+    meal_request:  { icon:'🍽️', label:'Meal entry' },
+    bazar_request: { icon:'🛒', label:'Bazar entry' },
+    bill_payment:  { icon:'💡', label:'Bill payment' },
+  };
+  const {icon, label} = typeMap[n.type] || {icon:'📋', label:n.type};
+  const statusCls   = n.status==='approved'?'badge-green':n.status==='rejected'?'badge-red':'badge-amber';
+  const statusLabel = n.status==='approved'?'Approved':n.status==='rejected'?'Rejected':'Pending';
+
+  const billTypeLabel = {elec:'⚡ Electricity',wifi:'📶 WiFi',gas:'🔥 Gas',khala:'👩 Khala',other:'📦 Other',rent:'🏠 Rent'};
+
+  // Build data preview per type
+  let dataHtml = '';
+  if(n.type === 'meal_request') {
+    const entries = Object.entries(n.data||{}).filter(([k]) => !['day','night'].includes(k));
+    dataHtml = entries.map(([k,v]) =>
+      `<span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">${k}: <b>${v}</b></span>`
+    ).join(' ');
+  } else if(n.type === 'bazar_request') {
+    const amount = Object.values(n.data)[0] || 0;
+    dataHtml = `<span style="font-size:13px;font-weight:600;color:var(--green)">${fmtTk(amount)}</span>`;
+  } else if(n.type === 'bill_payment') {
+    dataHtml = `
+      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">${billTypeLabel[n.data.billType]||n.data.billType}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--green)">${fmtTk(n.data.amount)}</span>
+      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">${n.data.monthName} ${n.data.year}</span>`;
+  }
+
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span>${icon}</span>
+          <span style="font-weight:600;font-size:14px">${n.from_name}</span>
+          <span style="font-size:12px;color:var(--text3)">submitted a ${label}</span>
+          <span class="badge ${statusCls}" style="font-size:10px">${statusLabel}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
+          📅 ${n.date} · ${new Date(n.created_at).toLocaleString()}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${n.note?'8px':'0'}">
+          ${dataHtml}
+        </div>
+        ${n.note ? `<div style="font-size:12px;color:var(--text2);margin-top:6px">💬 "${n.note}"</div>` : ''}
+      </div>
+      ${showActions ? `
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" onclick="approveRequest('${n.id}')">✓ Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectRequest('${n.id}')">✕ Reject</button>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
+async function approveRequest(id) {
+  const billTypeLabel = {elec:'Electricity',wifi:'WiFi',gas:'Gas',khala:'Khala',other:'Other',rent:'Rent'};
+  const all = await dbGetNotifications();
+  const n   = all.find(x => x.id === id);
+  if (!n) return;
+
+  try {
+    if (n.type === "meal_request") {
+      // Merge into existing meal record
+      const { data: existing } = await sb
+        .from("meals")
+        .select("*")
+        .eq("mess_id", messId())
+        .eq("date", n.date)
+        .maybeSingle();
+      const merged = { ...(existing?.meals || {}), ...n.data };
+      // Recalculate totals
+      members.forEach((m) => {
+        const d = Number(merged[m.name + "_day"] || 0);
+        const nt = Number(merged[m.name + "_night"] || 0);
+        merged[m.name] = round2(d + nt);
+      });
+      await dbUpsertMeals(n.date, merged);
+    } else if (n.type === "bazar_request") {
+      const { data: existing } = await sb
+        .from("bazar")
+        .select("*")
+        .eq("mess_id", messId())
+        .eq("date", n.date)
+        .maybeSingle();
+
+      // Strip internal keys before merging — only keep member name keys
+      const cleanData = { ...n.data };
+      delete cleanData.amount; // remove the plain 'amount' key
+
+      const merged = { ...(existing?.bazar || {}), ...cleanData };
+      await dbUpsertBazar(n.date, merged);
+    } else if(n.type === 'bill_payment') {
+  const {billType, amount, monthKey:mk, monthName, year} = n.data;
+  const month = MONTHS.indexOf(monthName);
+
+  if(billType === 'rent') {
+    // Credit toward rent payment
+    const {data:rentRec} = await sb.from('rent').select('*')
+      .eq('mess_id', messId()).eq('month_key', mk).maybeSingle();
+
+    if(rentRec) {
+      const entries = rentRec.entries.map(e => {
+        if(e.name === n.from_name) {
+          const newPaid = round2(Number(e.paid||0) + amount);
+          const newStatus = newPaid >= Number(e.rent||0) ? 'paid' : 'partial';
+          return {...e, paid: newPaid, status: newStatus};
+        }
+        return e;
+      });
+      await dbUpsertRent(month, year, mk, entries);
+    } else {
+      // No rent record yet — create one
+      const entries = members.map(m => ({
+        name: m.name,
+        rent: m.rent || 0,
+        paid: m.name === n.from_name ? amount : 0,
+        status: m.name === n.from_name ? (amount >= (m.rent||0) ? 'paid' : 'partial') : 'unpaid',
+        notes: m.name === n.from_name ? `Paid by member` : ''
+      }));
+      await dbUpsertRent(month, year, mk, entries);
+    }
+
+  } else {
+    // Credit toward utility payment
+    const {data:utilRec} = await sb.from('utility_payments').select('*')
+      .eq('mess_id', messId()).eq('month_key', mk).maybeSingle();
+
+    const existingPayments = utilRec?.payments || {};
+    const myPayment = existingPayments[n.from_name] || {paid:0, status:'unpaid'};
+    const bills = utilRec?.bills || {};
+    const totalBill = ['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(bills[k]||0),0);
+    const myShare = members.length > 0 ? round2(totalBill / members.length) : 0;
+    const newPaid = round2(Number(myPayment.paid||0) + amount);
+    const newStatus = newPaid >= myShare ? 'paid' : 'partial';
+
+    const updatedPayments = {
+      ...existingPayments,
+      [n.from_name]: { paid: newPaid, status: newStatus, notes: `Paid ${fmtTk(amount)} for ${billTypeLabel[billType]||billType}` }
+    };
+
+    // Also update the bill amount if this is a full bill payment
+    const existingBills = utilRec?.bills || {};
+    await dbUpsertUtility(month, year, mk, existingBills, updatedPayments);
+  }
+}
+
+    await dbUpdateNotifStatus(id, "approved");
+    toast("Request approved ✓", "success");
+    refreshNotifBadge();
+    navigate("notifications");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+async function rejectRequest(id) {
+  if (!confirm("Reject this request?")) return;
+  try {
+    await dbUpdateNotifStatus(id, "rejected");
+    toast("Request rejected");
+    refreshNotifBadge();
+    navigate("notifications");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+async function renderTransferRole(el) {
+  const others = members.filter((m) => m.id !== currentUser.memberId);
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div>
+      <div class="page-title">Transfer Manager Role</div>
+      <div class="page-sub">Hand over management to another member. You will become a regular member.</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="card" style="max-width:520px;margin:0 auto">
+      <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--accent)">
+        ⚠️ Once you transfer the role, you will lose manager access immediately and become a regular member.
+      </div>
+      <div class="card-title">Current manager</div>
+      <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);margin-bottom:20px">
+        <div class="avatar" style="background:#2a2218;color:#d4a853">${initials(currentUser.name)}</div>
+        <div>
+          <div style="font-weight:600">${currentUser.name}</div>
+          <div style="font-size:12px;color:var(--text3)">@${currentUser.username} · 👑 Manager</div>
+        </div>
+      </div>
+      <div class="card-title">Transfer to</div>
+      ${
+        others.length === 0
+          ? `<div class="empty">No other members to transfer to. Add members first.</div>`
+          : `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px" id="transfer-list">
+          ${others
+            .map((m, i) => {
+              const col = avatarCol(members.indexOf(m));
+              return `<label style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s" class="transfer-option">
+              <input type="radio" name="transfer-target" value="${m.id}" style="accent-color:var(--accent)"/>
+              <div class="avatar" style="background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
+              <div>
+                <div style="font-weight:600">${m.name}</div>
+                <div style="font-size:12px;color:var(--text3)">@${m.username} · ${m.room || "No room"}</div>
+              </div>
+            </label>`;
+            })
+            .join("")}
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doTransferRole()">
+          👑 Transfer manager role
+        </button>`
+      }
+    </div>
+  </div>`;
+
+  // Highlight selected radio
+  el.querySelectorAll(".transfer-option").forEach((label) => {
+    label.querySelector("input").addEventListener("change", () => {
+      el.querySelectorAll(".transfer-option").forEach(
+        (l) => (l.style.borderColor = "var(--border)"),
+      );
+      label.style.borderColor = "var(--accent)";
+    });
+  });
+}
+
+async function doTransferRole() {
+  const selected = document.querySelector(
+    'input[name="transfer-target"]:checked',
+  );
+  if (!selected) {
+    toast("Select a member to transfer to");
+    return;
+  }
+
+  const targetId = selected.value;
+  const target = members.find((m) => m.id === targetId);
+  if (!target) return;
+
+  if (
+    !confirm(
+      `Transfer manager role to ${target.name}? You will become a regular member immediately.`,
+    )
+  )
+    return;
+
+  try {
+    // 1. Demote current manager → member
+    const { error: e1 } = await sb
+      .from("members")
+      .update({ role: "member" })
+      .eq("id", currentUser.memberId);
+    if (e1) throw e1;
+
+    // 2. Promote selected member → manager
+    const { error: e2 } = await sb
+      .from("members")
+      .update({ role: "manager" })
+      .eq("id", targetId);
+    if (e2) throw e2;
+
+    toast(`${target.name} is now the manager!`, "success");
+
+    // 3. Update current session role → member, reload nav
+    currentUser.role = "member";
+    saveSession(currentUser, currentMess);
+    members = await dbGetMembers();
+    buildNav();
+    updateSidebarUser();
+    navigate("my-dashboard");
+  } catch (e) {
+    toast("Transfer failed: " + e.message, "error");
+  }
+}
+
+async function loadChores(isAdmin) {
+  const items = await dbGetChores();
+  const list = document.getElementById("chores-list");
+  if (!list) return;
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">No chores assigned yet.</div>';
+    return;
+  }
+  list.innerHTML = items
+    .map((c) => {
+      const sc =
+        c.status === "done"
+          ? "badge-green"
+          : c.status === "inprogress"
+            ? "badge-amber"
+            : "badge-red";
+      return `<div class="chore-row">
+      <div class="chore-task">${c.task}</div>
+      <div class="chore-assignee">${c.assignee || "—"}</div>
+      <span class="badge ${sc}" style="font-size:10px">${{ done: "Done", inprogress: "In progress", pending: "Pending" }[c.status] || c.status}</span>
+      <span class="badge badge-blue" style="font-size:10px">${c.frequency || "daily"}</span>
+      ${isAdmin ? `<div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm btn-icon" onclick="openEditChoreModal('${c.id}')">✏️</button><button class="btn btn-ghost btn-sm btn-icon" onclick="deleteChore('${c.id}')">✕</button></div>` : ""}
     </div>`;
+    })
+    .join("");
+}
+
+function openChoreModal(id, existing) {
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">${existing ? "Edit chore" : "Add chore"}</div>
+    <div class="modal-sub">Assign a cleaning task to a member</div>
+    <div class="field"><label>Task *</label><input type="text" class="input" id="ch-task" placeholder="e.g. Clean kitchen" value="${existing?.task || ""}"/></div>
+    <div class="field"><label>Assign to</label><select class="input" id="ch-assignee"><option value="">— Unassigned —</option>${members.map((m) => `<option value="${m.name}"${existing?.assignee === m.name ? " selected" : ""}>${m.name}</option>`).join("")}</select></div>
+    <div class="field"><label>Frequency</label><select class="input" id="ch-freq"><option value="daily"${existing?.frequency === "daily" ? " selected" : ""}>Daily</option><option value="weekly"${existing?.frequency === "weekly" ? " selected" : ""}>Weekly</option><option value="monthly"${existing?.frequency === "monthly" ? " selected" : ""}>Monthly</option></select></div>
+    <div class="field"><label>Status</label><select class="input" id="ch-status"><option value="pending"${existing?.status === "pending" ? " selected" : ""}>Pending</option><option value="inprogress"${existing?.status === "inprogress" ? " selected" : ""}>In progress</option><option value="done"${existing?.status === "done" ? " selected" : ""}>Done</option></select></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveChore('${id || ""}')">${existing ? "Save" : "Add chore"}</button></div>`;
+  openModal();
+}
+
+function openEditChoreModal(id) {
+  dbGetChores().then((items) => {
+    const c = items.find((x) => x.id === id);
+    if (c) openChoreModal(id, c);
+  });
+}
+
+async function saveChore(id) {
+  const task = cleanText(document.getElementById("ch-task")?.value);
+  if (!task) {
+    toast("Task is required");
+    return;
+  }
+  const row = {
+    id: id || undefined,
+    task,
+    assignee: document.getElementById("ch-assignee")?.value || "",
+    frequency: document.getElementById("ch-freq")?.value || "daily",
+    status: document.getElementById("ch-status")?.value || "pending",
+  };
+  try {
+    await dbSaveChore(row);
+    closeModal();
+    toast("Saved", "success");
+    navigate("chores");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+async function deleteChore(id) {
+  if (!confirm("Delete?")) return;
+  try {
+    await dbDeleteChore(id);
+    toast("Deleted");
+    navigate("chores");
+  } catch (e) {
+    toast("Error", "error");
+  }
+}
+
+/* --- MEMBERS MANAGEMENT --- */
+function renderMembers(el) {
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Members</div><div class="page-sub">Manage accounts & credentials</div></div><div class="topbar-actions"><button class="btn btn-primary" onclick="openAddMemberModal()">+ Add member</button></div></div>
+  <div class="content">
+    <div class="info-banner"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Members sign in using their username & password. The 👑 crown marks the current manager.</div>
+    <div class="card"><div class="card-title">Members (${members.length})</div><div class="tbl-wrap" id="mem-table"></div></div>
+  </div>`;
   renderMembersTable();
 }
 
 function renderMembersTable() {
-  const wrap = document.getElementById('members-table');
+  const wrap = document.getElementById("mem-table");
   if (!wrap) return;
-  if (!members.length) { wrap.innerHTML='<div class="empty"><div class="empty-text">No members yet. Click + Add member to get started.</div></div>'; return; }
-  wrap.innerHTML=`<table>
-    <thead><tr><th>#</th><th>Name</th><th>Room</th><th>Default rent (৳)</th><th>Phone</th><th>Joined</th><th></th></tr></thead>
-    <tbody>${members.map((m,i)=>{
-      const col=avatarColor(i);
+  if (!members.length) {
+    wrap.innerHTML =
+      '<div class="empty">No members yet. Click + Add member.</div>';
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th>Room</th><th>Default rent</th><th>Phone</th><th></th></tr></thead>
+  <tbody>${members
+    .map((m, i) => {
+      const col = avatarCol(i);
+      const isManager = m.role === "manager";
       return `<tr>
-        <td><div class="avatar" style="background:${col.bg};color:${col.fg};width:28px;height:28px;font-size:11px">${initials(m.name)}</div></td>
-        <td><b>${m.name}</b></td>
-        <td style="color:var(--text2)">${m.room||'—'}</td>
-        <td>${fmtTk(m.rent||0)}</td>
-        <td style="color:var(--text2)">${m.phone||'—'}</td>
-        <td style="color:var(--text3)">${m.joined||'—'}</td>
-        <td>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-ghost btn-sm" onclick="openEditMemberModal('${m.id}')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">Remove</button>
-          </div>
-        </td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`;
+      <td><div class="avatar" style="background:${col.bg};color:${col.fg};width:26px;height:26px;font-size:10px">${initials(m.name)}</div></td>
+      <td><b>${m.name}</b></td>
+      <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
+      <td>${
+        isManager
+          ? `<span class="badge badge-amber">👑 Manager</span>`
+          : `<span class="badge badge-blue">Member</span>`
+      }
+      </td>
+      <td>${m.room || "—"}</td>
+      <td>${fmtTk(m.rent || 0)}</td>
+      <td style="color:var(--text2)">${m.phone || "—"}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick="openEditMemberModal('${m.id}')">Edit</button>
+        ${
+          isManager
+            ? `<button class="btn btn-ghost btn-sm" disabled title="Cannot remove the manager" style="opacity:.4">Remove</button>`
+            : `<button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">Remove</button>`
+        }
+      </div></td>
+    </tr>`;
+    })
+    .join("")}</tbody></table>`;
+}
+
+// function renderMembersTable(){
+//   const wrap=document.getElementById('mem-table');if(!wrap)return;
+//   if(!members.length){wrap.innerHTML='<div class="empty">No members yet. Click + Add member.</div>';return;}
+//   wrap.innerHTML=`<table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Room</th><th>Default rent</th><th>Phone</th><th></th></tr></thead>
+//   <tbody>${members.map((m,i)=>{const col=avatarCol(i);return`<tr><td><div class="avatar" style="background:${col.bg};color:${col.fg};width:26px;height:26px;font-size:10px">${initials(m.name)}</div></td><td><b>${m.name}</b></td><td style="font-family:monospace;color:var(--text3)">${m.username||'—'}</td><td>${m.room||'—'}</td><td>${fmtTk(m.rent||0)}</td><td style="color:var(--text2)">${m.phone||'—'}</td><td><div style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditMemberModal('${m.id}')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">Remove</button></div></td></tr>`;}).join('')}</tbody></table>`;
+// }
+
+function memberModalHTML(m) {
+  return `
+  <div class="field"><label>Full name *</label><input type="text" class="input" id="mm-name" value="${m?.name || ""}" placeholder="e.g. Rakib Hasan"/></div>
+  <div class="grid-2">
+    <div class="field"><label>Username *</label><input type="text" class="input" id="mm-user" value="${m?.username || ""}" placeholder="e.g. rakib"/></div>
+    <div class="field"><label>Password *</label><input type="text" class="input" id="mm-pass" value="${m?.password || ""}" placeholder="min 4 chars"/></div>
+  </div>
+  <div class="grid-2">
+    <div class="field"><label>Room</label><input type="text" class="input" id="mm-room" value="${m?.room || ""}" placeholder="Room 3A"/></div>
+    <div class="field"><label>Default rent (৳)</label><input type="number" class="input" id="mm-rent" value="${m?.rent || 0}"/></div>
+  </div>
+  <div class="grid-2">
+    <div class="field"><label>Phone</label><input type="text" class="input" id="mm-phone" value="${m?.phone || ""}" placeholder="017xxxxxxxx"/></div>
+    <div class="field"><label>Joined date</label><input type="date" class="input" id="mm-joined" value="${m?.joined || ""}"/></div>
+  </div>`;
 }
 
 function openAddMemberModal() {
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">Add member</div>
-    <div class="modal-sub">New mess member details</div>
-    <div class="field"><label>Full name *</label><input type="text" class="input" id="nm-name" placeholder="e.g. Shahriyar"/></div>
-    <div class="grid-2">
-      <div class="field"><label>Room / flat</label><input type="text" class="input" id="nm-room" placeholder="Room 3A"/></div>
-      <div class="field"><label>Default rent (৳) *</label><input type="number" class="input" id="nm-rent" placeholder="4400"/></div>
-    </div>
-    <div class="grid-2">
-      <div class="field"><label>Phone</label><input type="text" class="input" id="nm-phone" placeholder="017xxxxxxxx"/></div>
-      <div class="field"><label>Joined date</label><input type="date" class="input" id="nm-joined"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="addMember()">Add member</button>
-    </div>`;
+  document.getElementById("modal-content").innerHTML =
+    `<div class="modal-title">Add member</div><div class="modal-sub">Create account for a new roommate</div>${memberModalHTML(null)}<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="addMember()">Add member</button></div>`;
   openModal();
 }
 
 function openEditMemberModal(id) {
-  const m = members.find(x=>x.id===id);
+  const m = members.find((x) => x.id === id);
   if (!m) return;
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">Edit member</div>
-    <div class="modal-sub">Update ${m.name}'s details</div>
-    <div class="field"><label>Full name *</label><input type="text" class="input" id="em-name" value="${m.name}"/></div>
-    <div class="grid-2">
-      <div class="field"><label>Room / flat</label><input type="text" class="input" id="em-room" value="${m.room||''}"/></div>
-      <div class="field"><label>Default rent (৳)</label><input type="number" class="input" id="em-rent" value="${m.rent||0}"/></div>
-    </div>
-    <div class="grid-2">
-      <div class="field"><label>Phone</label><input type="text" class="input" id="em-phone" value="${m.phone||''}"/></div>
-      <div class="field"><label>Joined date</label><input type="date" class="input" id="em-joined" value="${m.joined||''}"/></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="updateMember('${id}')">Save changes</button>
-    </div>`;
+  document.getElementById("modal-content").innerHTML =
+    `<div class="modal-title">Edit ${m.name}</div><div class="modal-sub">Update account details</div>${memberModalHTML(m)}<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="updateMember('${id}')">Save changes</button></div>`;
   openModal();
 }
 
+function getMemberFormData(existingRole) {
+  return {
+    name: cleanText(document.getElementById("mm-name")?.value),
+    username: cleanText(document.getElementById("mm-user")?.value),
+    password: document.getElementById("mm-pass")?.value || "",
+    role: existingRole || "member", // preserve existing role, default new members to 'member'
+    room: cleanText(document.getElementById("mm-room")?.value),
+    rent: parseFloat(document.getElementById("mm-rent")?.value || 0),
+    phone: cleanText(document.getElementById("mm-phone")?.value),
+    joined: document.getElementById("mm-joined")?.value || null,
+  };
+}
+
 async function addMember() {
-  const name = document.getElementById('nm-name')?.value.trim();
-  if (!name) { toast('Name is required'); return; }
+  const d = getMemberFormData("member"); // new members always start as 'member'
+  if (!d.name) {
+    toast("Name required");
+    return;
+  }
+  if (!d.username) {
+    toast("Username required");
+    return;
+  }
+  if (!d.password) {
+    toast("Password required");
+    return;
+  }
+  if (members.find((m) => m.username === d.username)) {
+    toast("Username taken");
+    return;
+  }
   try {
-    await txPut('members', {
-      name: cleanInputText(name), room: cleanInputText(document.getElementById('nm-room').value),
-      rent: parseFloat(document.getElementById('nm-rent').value||0),
-      phone: cleanInputText(document.getElementById('nm-phone').value),
-      joined: document.getElementById('nm-joined').value || null
-    });
-    members = await txGetAll('members');
+    await dbSaveMember(d);
+    members = await dbGetMembers();
     closeModal();
-    toast(name+' added');
+    toast(d.name + " added", "success");
     renderMembersTable();
-  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
 }
 
 async function updateMember(id) {
-  const m = members.find(x=>x.id===id);
-  if (!m) return;
+  const existing = members.find((m) => m.id === id);
+  const d = { ...getMemberFormData(existing?.role || "member"), id };
+  if (members.find((m) => m.username === d.username && m.id !== id)) {
+    toast("Username taken");
+    return;
+  }
   try {
-    await txPut('members', {
-      ...m,
-      name: cleanInputText(document.getElementById('em-name').value),
-      room: cleanInputText(document.getElementById('em-room').value),
-      rent: parseFloat(document.getElementById('em-rent').value||0),
-      phone: cleanInputText(document.getElementById('em-phone').value),
-      joined: document.getElementById('em-joined').value || null
-    });
-    members = await txGetAll('members');
+    await dbSaveMember(d);
+    members = await dbGetMembers();
     closeModal();
-    toast('Member updated');
+    toast("Updated", "success");
     renderMembersTable();
-  } catch(e) { toast('Save failed: '+e.message, 'error'); console.error(e); }
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
 }
 
 async function deleteMember(id) {
-  const m = members.find(x=>x.id===id);
+  const m = members.find((x) => x.id === id);
   if (!m) return;
-  if (!confirm(`Remove ${m.name}? This won't delete their historical data.`)) return;
+  if (!confirm(`Remove ${m.name}?`)) return;
   try {
-    await txDelete('members', id);
-    members = await txGetAll('members');
-    toast(m.name+' removed');
+    await dbDeleteMember(id);
+    members = await dbGetMembers();
+    toast(m.name + " removed");
     renderMembersTable();
-  } catch(e) { toast('Delete failed: '+e.message, 'error'); console.error(e); }
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
 }
 
-/* ============================================================
-   MODAL
-   ============================================================ */
-function openModal() { document.getElementById('modal-bg').classList.add('open'); }
-function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+/* ═══════════════════════════════════════════
+   ── MEMBER PAGES ──
+═══════════════════════════════════════════ */
+async function getMe() {
+  return members.find((m) => m.id === currentUser.memberId) || null;
+}
 
-/* ============================================================
-   TOAST
-   ============================================================ */
+async function renderMyDashboard(el) {
+  const member = await getMe();
+  if(!member) { el.innerHTML='<div class="content"><div class="empty">Profile not found. Contact manager.</div></div>'; return; }
+
+  const {month, year} = thisMonth(); const key = monthKey(year, month);
+  const [allMeals, allBazar, rentRec, utilRes] = await Promise.all([
+    dbGetAll('meals'), dbGetAll('bazar'), dbGetMonth('rent', key),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', key).maybeSingle()
+  ]);
+  const utilRec = utilRes.data;
+
+  const mM = allMeals.filter(r => r.date.startsWith(key));
+  const mB = allBazar.filter(r => r.date.startsWith(key));
+
+  let myMeals = 0, myBazar = 0;
+  mM.forEach(r => {
+    const d = Number(r.meals[member.name+'_day'] ?? 0);
+    const n = Number(r.meals[member.name+'_night'] ?? 0);
+    myMeals += round2(d+n) || Number(r.meals[member.name]||0);
+  });
+  mB.forEach(r => { myBazar += Number(r.bazar[member.name]||0); });
+
+  const allMealsTotal = mM.reduce((s,r) => s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0), 0);
+  const allBazarTotal = mB.reduce((s,r) => s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0), 0);
+  const mealRate = allMealsTotal > 0 ? round2(allBazarTotal / allMealsTotal) : 0;
+  const mealCost = round2(myMeals * mealRate);
+
+  const bills        = utilRec?.bills || {};
+  const prepaidKeys  = ['elec','wifi','gas','other'];
+  const totalPrepaid = prepaidKeys.reduce((s,k) => s+(Number(bills[k])||0), 0);
+  const khalaTotal   = Number(bills.khala||0);
+  const prepaidShare = members.length > 0 ? round2(totalPrepaid / members.length) : 0;
+  const khalaShare   = members.length > 0 ? round2(khalaTotal   / members.length) : 0;
+
+  const myRe       = rentRec?.entries?.find(e => e.name===member.name) || {};
+  const myRentDue  = Number(myRe.rent || member.rent || 0);
+  const myRentPaid = Number(myRe.paid || 0);
+  const myUtilPay  = (utilRec?.payments||{})[member.name] || {};
+
+  const mealNet = round2(myBazar - mealCost);
+  const rentNet = round2(myRentPaid - myRentDue);
+  const utilNet = round2(Number(myUtilPay.paid||0) - (prepaidShare + khalaShare));
+
+  const todayStr = today();
+  const todayRec = allMeals.find(r => r.date === todayStr);
+  let todayDayTotal=0, todayNightTotal=0;
+  if(todayRec) {
+    members.forEach(m => {
+      todayDayTotal   += Number(todayRec.meals[m.name+'_day']   ?? todayRec.meals[m.name] ?? 0);
+      todayNightTotal += Number(todayRec.meals[m.name+'_night'] ?? 0);
+    });
+    todayDayTotal = round2(todayDayTotal);
+    todayNightTotal = round2(todayNightTotal);
+  }
+
+  const idx = members.findIndex(m => m.id === member.id);
+  const col = avatarCol(Math.max(idx, 0));
+  const rc  = myRe.status==='paid'?'badge-green':myRe.status==='partial'?'badge-amber':'badge-red';
+  const uc  = myUtilPay.status==='paid'?'badge-green':myUtilPay.status==='partial'?'badge-amber':'badge-red';
+
+  const netTotal = round2(mealCost + khalaShare + myRentDue + prepaidShare - myBazar);
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div><div class="page-title">My Dashboard</div><div class="page-sub">${MONTHS[month]} ${year}</div></div>
+  </div>
+  <div class="content">
+
+    <!-- PROFILE HEADER -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div class="avatar" style="width:48px;height:48px;font-size:16px;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${initials(member.name)}</div>
+          <div>
+            <div style="font-family:var(--font-serif);font-size:20px">${member.name}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">Room ${member.room||'—'} · @${member.username}</div>
+            <div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap">
+              <span class="badge ${rc}">Rent ${myRe.status==='paid'?'✓ paid':'due'}</span>
+              <span class="badge ${uc}">Utility ${myUtilPay.status==='paid'?'✓ paid':'due'}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Meal pay/get</div>
+            <div style="font-size:16px;font-weight:700;color:${mealNet>=0?'var(--green)':'var(--red)'}">${mealNet>=0?'Get ':'Pay '}${fmtTk(Math.abs(mealNet))}</div>
+          </div>
+          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Rent balance</div>
+            <div style="font-size:16px;font-weight:700;color:${rentNet>=0?'var(--green)':'var(--red)'}">${rentNet>=0?'+':''}${fmtTk(rentNet)}</div>
+          </div>
+          <div style="text-align:right;padding-left:16px;border-left:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Utility balance</div>
+            <div style="font-size:16px;font-weight:700;color:${utilNet>=0?'var(--green)':'var(--red)'}">${utilNet>=0?'+':''}${fmtTk(utilNet)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUICK STATS + TODAY SIDE BY SIDE -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+
+      <!-- QUICK STATS -->
+      <div class="card">
+        <div class="card-title">This month</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="stat-card" style="padding:10px">
+            <div class="stat-label">My meals</div>
+            <div class="stat-value">${round2(myMeals)}</div>
+            <div class="stat-sub">${MONTHS[month]}</div>
+          </div>
+          <div class="stat-card" style="padding:10px">
+            <div class="stat-label">Meal rate</div>
+            <div class="stat-value" style="font-size:16px">${fmtTk(mealRate)}</div>
+            <div class="stat-sub">per meal</div>
+          </div>
+          <div class="stat-card" style="padding:10px">
+            <div class="stat-label">My bazar</div>
+            <div class="stat-value" style="font-size:16px">${fmtTk(myBazar)}</div>
+          </div>
+          <div class="stat-card" style="padding:10px">
+            <div class="stat-label">Meal cost</div>
+            <div class="stat-value" style="font-size:16px">${fmtTk(mealCost)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TODAY'S MEALS -->
+      ${todayRec ? `
+      <div class="card">
+        <div class="card-title">Today — ${todayStr}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px">
+          <div class="stat-card badge-blue" style="padding:8px;text-align:center">
+            <div class="stat-label" style="color:var(--blue);font-size:10px">Day</div>
+            <div style="font-size:18px;font-weight:700;color:var(--blue)">${todayDayTotal}</div>
+          </div>
+          <div class="stat-card badge-amber" style="padding:8px;text-align:center">
+            <div class="stat-label" style="color:var(--amber);font-size:10px">Night</div>
+            <div style="font-size:18px;font-weight:700;color:var(--amber)">${todayNightTotal}</div>
+          </div>
+          <div class="stat-card" style="padding:8px;text-align:center">
+            <div class="stat-label" style="font-size:10px">Total</div>
+            <div style="font-size:18px;font-weight:700">${round2(todayDayTotal+todayNightTotal)}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${members.map(m => {
+            const d = Number(todayRec.meals[m.name+'_day'] ?? todayRec.meals[m.name] ?? 0);
+            const n = Number(todayRec.meals[m.name+'_night'] ?? 0);
+            const t = round2(d+n) || Number(todayRec.meals[m.name]||0);
+            return `<div style="display:flex;align-items:center;gap:5px;background:var(--bg3);padding:5px 9px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+              <span style="font-size:12px;font-weight:500;color:${t>0?'var(--text)':'var(--text3)'}">${m.name}</span>
+              ${d>0?`<span class="badge badge-blue" style="font-size:9px">D${d}</span>`:''}
+              ${n>0?`<span class="badge badge-amber" style="font-size:9px">N${n}</span>`:''}
+              ${t===0?`<span class="badge badge-red" style="font-size:9px">—</span>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : `
+      <div class="card" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;min-height:140px">
+        <div style="font-size:28px">🍽️</div>
+        <div style="color:var(--text3);font-size:13px">No meal entry today</div>
+      </div>`}
+
+    </div>
+
+    <!-- WHAT I OWE THIS MONTH -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">What I owe — ${MONTHS[month]} ${year}</div>
+
+      <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">🔴 Postpaid (settle at month end)</div>
+      <div class="my-stat-row">
+        <span class="my-stat-key">🍽️ Meal cost <span style="font-size:10px;color:var(--text3)">${myMeals} meals × ${fmtTk(mealRate)}</span></span>
+        <span class="my-stat-val">${fmtTk(mealCost)}</span>
+      </div>
+      <div class="my-stat-row">
+        <span class="my-stat-key">👩 Khala <span style="font-size:10px;color:var(--text3)">my share</span></span>
+        <span class="my-stat-val">${fmtTk(khalaShare)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:var(--text3)">
+        <span>Postpaid subtotal</span><span>${fmtTk(round2(mealCost+khalaShare))}</span>
+      </div>
+
+      <div style="font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;font-weight:600;border-top:1px solid var(--border);padding-top:12px">🔵 Prepaid (pay at month start)</div>
+      <div class="my-stat-row">
+        <span class="my-stat-key">🏠 Room rent</span>
+        <span class="my-stat-val" style="color:${myRe.status==='paid'?'var(--green)':'var(--text)'}">${fmtTk(myRentDue)} ${myRe.status==='paid'?'✓':''}</span>
+      </div>
+      <div class="my-stat-row">
+        <span class="my-stat-key">⚡ Utility bills <span style="font-size:10px;color:var(--text3)">my share</span></span>
+        <span class="my-stat-val" style="color:${myUtilPay.status==='paid'?'var(--green)':'var(--text)'}">${fmtTk(prepaidShare)} ${myUtilPay.status==='paid'?'✓':''}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:var(--text3)">
+        <span>Prepaid subtotal</span><span>${fmtTk(round2(myRentDue+prepaidShare))}</span>
+      </div>
+
+      <div style="border-top:2px solid var(--border2);margin-top:4px;padding-top:12px">
+        <div class="my-stat-row" style="font-size:15px">
+          <span style="font-weight:600">Total this month</span>
+          <span style="font-weight:700">${fmtTk(round2(mealCost+khalaShare+myRentDue+prepaidShare))}</span>
+        </div>
+        <div class="my-stat-row">
+          <span class="my-stat-key" style="color:var(--green)">− Bazar credit</span>
+          <span class="my-stat-val" style="color:var(--green)">${fmtTk(myBazar)}</span>
+        </div>
+        <div class="my-stat-row" style="font-size:16px;border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
+          <span style="font-weight:700">Net</span>
+          <span style="font-weight:700;font-size:18px;color:${netTotal>0?'var(--red)':'var(--green)'}">
+            ${netTotal>0 ? 'Pay '+fmtTk(netTotal) : 'Get '+fmtTk(-netTotal)}
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div>`;
+}
+async function renderMyProfile(el) {
+  const member = await getMe();
+  if(!member) { el.innerHTML='<div class="content"><div class="empty">Profile not found</div></div>'; return; }
+
+  el.innerHTML=`
+  <div class="topbar">
+    <div><div class="page-title">My Profile</div><div class="page-sub">Personal stats</div></div>
+    <div class="topbar-actions">
+      <select class="input" id="my-prof-period" onchange="refreshMyProfile()" style="width:180px">
+        <option value="1" selected>This month</option>
+        <option value="last">Last month</option>
+        <option value="3">Last 3 months</option>
+        <option value="6">Last 6 months</option>
+        <option value="all">All time</option>
+      </select>
+    </div>
+  </div>
+  <div class="content" id="my-profile-content">
+    <div class="loading"><div class="spinner"></div>Loading…</div>
+  </div>`;
+
+  await loadMyProfile(member);
+}
+
+async function refreshMyProfile() {
+  const member = await getMe(); if(!member) return;
+  await loadMyProfile(member);
+}
+
+async function loadMyProfile(member) {
+  const content = document.getElementById('my-profile-content');
+  if(!content) return;
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
+
+  const [allM, allB, allR, {data:allU}] = await Promise.all([
+    dbGetAll('meals'), dbGetAll('bazar'), dbGetAll('rent'),
+    sb.from('utility_payments').select('*').eq('mess_id', messId())
+  ]);
+
+  const period = document.getElementById('my-prof-period')?.value || '1';
+  const {meals, bazar, rent, utility} = getFilteredData(allM, allB, allR, period, allU||[]);
+  const s = getMemberStats(member, meals, bazar, rent, utility);
+
+  const idx = members.findIndex(m => m.id === member.id);
+  const col = avatarCol(Math.max(idx, 0));
+
+  const allMK = Object.keys(s.byMonth).sort(), r8 = allMK.slice(-8);
+  const maxM = Math.max(...r8.map(k => s.byMonth[k]?.meals || 0), 1);
+
+  // Share calculated from filtered data
+  const allMealsTotal = meals.reduce((s,r) => s + Object.values(r.meals||{}).reduce((a,v) => a + Number(v), 0), 0);
+  const allBazarTotal = bazar.reduce((s,r) => s + Object.values(r.bazar||{}).reduce((a,v) => a + Number(v), 0), 0);
+  const mealShare  = allMealsTotal > 0 ? Math.round((s.totalMeals / allMealsTotal) * 100) : 0;
+  const bazarShare = allBazarTotal > 0 ? Math.round((s.totalBazar  / allBazarTotal) * 100) : 0;
+
+  const mealNet = s.mealBalance;
+  const rentNet = round2(s.rentPaid - s.rentDue);
+  const utilNet = round2(s.utilityPaid - s.utilityDue);
+
+  const periodLabel = {
+    '1':'This month', 'last':'Last month',
+    '3':'Last 3 months', '6':'Last 6 months', 'all':'All time'
+  }[period] || '';
+
+  content.innerHTML = `
+    <div class="card">
+
+      <!-- HEADER -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div class="avatar" style="width:52px;height:52px;font-size:17px;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${initials(member.name)}</div>
+          <div>
+            <div style="font-family:var(--font-serif);font-size:22px">${member.name}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">Room ${member.room||'—'} · Default rent: ${fmtTk(member.rent||0)}/mo</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">@${member.username||'—'} · Joined: ${member.joined||'—'}</div>
+          </div>
+        </div>
+
+        <!-- Balances top right -->
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Meal pay / get</div>
+            <div style="font-size:18px;font-weight:700;color:${mealNet >= 0 ? 'var(--green)' : 'var(--red)'}">${mealNet >= 0 ? 'Get ' : 'Pay '}${fmtTk(Math.abs(mealNet))}</div>
+          </div>
+          <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Rent balance</div>
+            <div style="font-size:18px;font-weight:700;color:${rentNet >= 0 ? 'var(--green)' : 'var(--red)'}">${rentNet >= 0 ? '+' : ''}${fmtTk(rentNet)}</div>
+          </div>
+          <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Utility balance</div>
+            <div style="font-size:18px;font-weight:700;color:${utilNet >= 0 ? 'var(--green)' : 'var(--red)'}">${utilNet >= 0 ? '+' : ''}${fmtTk(utilNet)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px;margin-bottom:18px">
+        ${[
+          ['Total meals',  s.totalMeals,                 null],
+          ['Active days',  s.activeDays,                 null],
+          ['Avg/day',      s.avgMeals,                   null],
+          ['Bazar spent',  fmtTk(s.totalBazar),          null],
+          ['Meal cost',    fmtTk(s.mealCost),            null],
+          ['Rent paid',    fmtTk(s.rentPaid),            'var(--green)'],
+          ['Util paid',    fmtTk(round2(s.utilityPaid)), 'var(--green)'],
+        ].map(([l, v, c]) => `
+          <div class="stat-card" style="padding:9px">
+            <div class="stat-label">${l}</div>
+            <div style="font-size:15px;font-weight:600;margin-top:4px${c?';color:'+c:''}">${v}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- MESS SHARE -->
+      <div class="detail-section">
+        <div class="detail-section-title">Mess share — ${periodLabel}</div>
+        <div class="mini-bar">
+          <div class="mini-bar-label">Meal share</div>
+          <div class="mini-bar-track" style="height:8px"><div class="mini-bar-fill" style="width:${mealShare}%"></div></div>
+          <div class="mini-bar-val">${mealShare}%</div>
+        </div>
+        <div class="mini-bar">
+          <div class="mini-bar-label">Bazar share</div>
+          <div class="mini-bar-track" style="height:8px"><div class="mini-bar-fill" style="width:${bazarShare}%"></div></div>
+          <div class="mini-bar-val">${bazarShare}%</div>
+        </div>
+      </div>
+
+      <!-- MONTHLY MEAL HISTORY -->
+      <div class="detail-section">
+        <div class="detail-section-title">Monthly meal history</div>
+        ${r8.length ? `
+          <div class="hist-labels">${r8.map(k=>`<span>${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}</span>`).join('')}</div>
+          <div class="hist-wrap">${r8.map(k=>{
+            const v=s.byMonth[k]?.meals||0;
+            const h=Math.max(Math.round((v/maxM)*44),3);
+            return `<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}: ${v}</div></div>`;
+          }).join('')}</div>`
+        :'<div style="color:var(--text3);font-size:13px">No history</div>'}
+      </div>
+
+      <!-- RECENT MONTHS -->
+      <div class="detail-section">
+        <div class="detail-section-title">Recent months</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Util paid</th></tr></thead>
+          <tbody>${allMK.slice(-6).reverse().map(k=>{
+            const d=s.byMonth[k]||{};
+            return `<tr>
+              <td>${MONTHS[parseInt(k.slice(5))-1]} ${k.slice(0,4)}</td>
+              <td>${d.meals||0}</td>
+              <td>${fmtTk(d.bazar||0)}</td>
+              <td style="color:var(--green)">${fmtTk(d.rentPaid||0)}</td>
+              <td style="color:var(--green)">${fmtTk(d.utilityPaid||0)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>
+
+    </div>`;
+}
+
+async function renderMyMeals(el) {
+  const member = await getMe();
+  if (!member) return;
+  const myNotifs = await sb
+    .from("notifications")
+    .select("*")
+    .eq("mess_id", messId())
+    .eq("from_id", currentUser.memberId)
+    .eq("type", "meal_request")
+    .order("created_at", { ascending: false });
+  const history = sanitize(myNotifs.data || []);
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div><div class="page-title">Meal Entry</div>
+    <div class="page-sub">Submit your meal count — manager will approve</div></div>
+  </div>
+  <div class="content">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Submit meal request</div>
+      <div class="date-row">
+        <label>Date</label>
+        <input type="date" class="input" id="my-meal-date" value="${today()}" style="width:170px"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="field">
+          <label>Day meals</label>
+          <input type="number" class="input" id="my-meal-day" min="0" max="4" step="0.5" value="1" placeholder="0"/>
+        </div>
+        <div class="field">
+          <label>Night meals</label>
+          <input type="number" class="input" id="my-meal-night" min="0" max="4" step="0.5" value="1" placeholder="0"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" class="input" id="my-meal-note" placeholder="e.g. I was absent at lunch"/>
+      </div>
+      <button class="btn btn-primary" onclick="submitMealRequest()">
+        📨 Submit to manager
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">My requests</div>
+      ${
+        history.length === 0
+          ? '<div class="empty">No requests yet</div>'
+          : `<div class="tbl-wrap"><table>
+            <thead><tr><th>Date</th><th>Day</th><th>Night</th><th>Note</th><th>Status</th><th>Submitted</th></tr></thead>
+            <tbody>${history
+              .map((n) => {
+                const sc =
+                  n.status === "approved"
+                    ? "badge-green"
+                    : n.status === "rejected"
+                      ? "badge-red"
+                      : "badge-amber";
+                const sl =
+                  n.status === "approved"
+                    ? "Approved"
+                    : n.status === "rejected"
+                      ? "Rejected"
+                      : "Pending";
+
+                // data keys are stored as MemberName_day / MemberName_night
+                const dayKey = Object.keys(n.data).find((k) =>
+                  k.endsWith("_day"),
+                );
+                const nightKey = Object.keys(n.data).find((k) =>
+                  k.endsWith("_night"),
+                );
+                const dayVal = dayKey ? n.data[dayKey] : 0;
+                const nightVal = nightKey ? n.data[nightKey] : 0;
+
+                return `<tr>
+    <td>${n.date}</td>
+    <td>${dayVal > 0 ? `<span class="badge badge-blue">${dayVal}</span>` : "—"}</td>
+    <td>${nightVal > 0 ? `<span class="badge badge-amber">${nightVal}</span>` : "—"}</td>
+    <td style="color:var(--text3)">${n.note || "—"}</td>
+    <td><span class="badge ${sc}">${sl}</span></td>
+    <td style="color:var(--text3);font-size:12px">${new Date(n.created_at).toLocaleDateString()}</td>
+  </tr>`;
+              })
+              .join("")}</tbody>
+          </table></div>`
+      }
+    </div>
+  </div>`;
+}
+
+async function submitMealRequest() {
+  const date = document.getElementById("my-meal-date")?.value;
+  const day = parseFloat(document.getElementById("my-meal-day")?.value || 0);
+  const night = parseFloat(
+    document.getElementById("my-meal-night")?.value || 0,
+  );
+  const note = cleanText(document.getElementById("my-meal-note")?.value || "");
+
+  if (!date) {
+    toast("Select a date");
+    return;
+  }
+  if (day === 0 && night === 0) {
+    toast("Enter at least one meal");
+    return;
+  }
+
+  const member = await getMe();
+
+  // Store both named keys (for approval merge) and plain day/night (for display)
+  const data = {
+    [member.name + "_day"]: day,
+    [member.name + "_night"]: night,
+    [member.name]: round2(day + night),
+    day, // plain keys for easy reading in history table
+    night,
+  };
+
+  try {
+    await dbSaveNotification({ type: "meal_request", date, data, note });
+    toast("Request sent to manager 📨", "success");
+    navigate("my-meals");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+async function renderMyBazar(el) {
+  const member = await getMe();
+  if (!member) return;
+  const myNotifs = await sb
+    .from("notifications")
+    .select("*")
+    .eq("mess_id", messId())
+    .eq("from_id", currentUser.memberId)
+    .eq("type", "bazar_request")
+    .order("created_at", { ascending: false });
+  const history = sanitize(myNotifs.data || []);
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div><div class="page-title">Bazar Entry</div>
+    <div class="page-sub">Submit your grocery spending — manager will approve</div></div>
+  </div>
+  <div class="content">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Submit bazar request</div>
+      <div class="date-row">
+        <label>Date</label>
+        <input type="date" class="input" id="my-bazar-date" value="${today()}" style="width:170px"/>
+      </div>
+      <div class="field">
+        <label>Amount (৳) *</label>
+        <input type="number" class="input" id="my-bazar-amount" min="0" placeholder="e.g. 850"/>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" class="input" id="my-bazar-note" placeholder="e.g. Bought vegetables from market"/>
+      </div>
+      <button class="btn btn-primary" onclick="submitBazarRequest()">
+        📨 Submit to manager
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">My requests</div>
+      ${
+        history.length === 0
+          ? '<div class="empty">No requests yet</div>'
+          : `<div class="tbl-wrap"><table>
+            <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th>Status</th><th>Submitted</th></tr></thead>
+            <tbody>${history
+              .map((n) => {
+                const sc =
+                  n.status === "approved"
+                    ? "badge-green"
+                    : n.status === "rejected"
+                      ? "badge-red"
+                      : "badge-amber";
+                const sl =
+                  n.status === "approved"
+                    ? "Approved"
+                    : n.status === "rejected"
+                      ? "Rejected"
+                      : "Pending";
+
+                // Amount is stored under the member's name key
+                const amount = Object.values(n.data)[0] || 0;
+
+                return `<tr>
+    <td>${n.date}</td>
+    <td style="color:var(--green);font-weight:600">${fmtTk(amount)}</td>
+    <td style="color:var(--text3)">${n.note || "—"}</td>
+    <td><span class="badge ${sc}">${sl}</span></td>
+    <td style="color:var(--text3);font-size:12px">${new Date(n.created_at).toLocaleDateString()}</td>
+  </tr>`;
+              })
+              .join("")}</tbody>
+          </table></div>`
+      }
+    </div>
+  </div>`;
+}
+
+async function submitBazarRequest() {
+  const date = document.getElementById("my-bazar-date")?.value;
+  const amount = parseFloat(
+    document.getElementById("my-bazar-amount")?.value || 0,
+  );
+  const note = cleanText(document.getElementById("my-bazar-note")?.value || "");
+
+  if (!date) {
+    toast("Select a date");
+    return;
+  }
+  if (amount <= 0) {
+    toast("Enter a valid amount");
+    return;
+  }
+
+  const member = await getMe();
+
+  // Only store under member's name — no extra 'amount' key
+  const data = { [member.name]: amount };
+
+  try {
+    await dbSaveNotification({ type: "bazar_request", date, data, note });
+    toast("Request sent to manager 📨", "success");
+    navigate("my-bazar");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+async function renderMyPayments(el) {
+  const member = await getMe();
+  if(!member) { el.innerHTML='<div class="content"><div class="empty">Profile not found</div></div>'; return; }
+
+  const [allRent, {data:allUtil}, billNotifs] = await Promise.all([
+    dbGetAll('rent'),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).order('month_key', {ascending:false}),
+    sb.from('notifications').select('*').eq('mess_id', messId()).eq('from_id', currentUser.memberId).eq('type','bill_payment').order('created_at',{ascending:false})
+  ]);
+  const billHistory = sanitize(billNotifs.data || []);
+  const n = new Date();
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div><div class="page-title">My Payments</div><div class="page-sub">Rent & utility history</div></div>
+  </div>
+  <div class="content">
+
+    <!-- SUBMIT BILL PAYMENT -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Submit a bill payment</div>
+      <div class="auth-sub" style="margin-bottom:14px;font-size:13px;color:var(--text2)">If you paid a bill directly (electricity, khala, etc.) submit it here. Manager will approve and credit your account.</div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Month</label>
+          <select class="input" id="bp-month">
+            ${MONTHS.map((m,i) => `<option value="${i}"${i===n.getMonth()?' selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Year</label>
+          <select class="input" id="bp-year">
+            ${Array.from({length:3},(_,i)=>2024+i).map(y=>`<option${y===n.getFullYear()?' selected':''}>${y}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Bill type *</label>
+        <select class="input" id="bp-type">
+          <option value="">— Select bill —</option>
+          <option value="elec">⚡ Electricity</option>
+          <option value="wifi">📶 WiFi</option>
+          <option value="gas">🔥 Gas</option>
+          <option value="khala">👩 Khala</option>
+          <option value="other">📦 Other</option>
+          <option value="rent">🏠 Room Rent</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Amount paid (৳) *</label>
+        <input type="number" class="input" id="bp-amount" min="0" placeholder="e.g. 1200"/>
+      </div>
+
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" class="input" id="bp-note" placeholder="e.g. Paid full electricity bill for April"/>
+      </div>
+
+      <button class="btn btn-primary" onclick="submitBillPayment()">
+        📨 Submit to manager
+      </button>
+    </div>
+
+    <!-- BILL PAYMENT HISTORY -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">My bill payment requests</div>
+      ${billHistory.length === 0
+        ? '<div class="empty">No bill payment requests yet</div>'
+        : `<div class="tbl-wrap"><table>
+            <thead><tr><th>Month</th><th>Bill</th><th>Amount</th><th>Note</th><th>Status</th><th>Submitted</th></tr></thead>
+            <tbody>${billHistory.map(n => {
+              const sc = n.status==='approved'?'badge-green':n.status==='rejected'?'badge-red':'badge-amber';
+              const sl = n.status==='approved'?'Approved':n.status==='rejected'?'Rejected':'Pending';
+              const billLabel = {elec:'⚡ Electricity',wifi:'📶 WiFi',gas:'🔥 Gas',khala:'👩 Khala',other:'📦 Other',rent:'🏠 Rent'}[n.data.billType]||n.data.billType;
+              return `<tr>
+                <td>${n.data.monthName} ${n.data.year}</td>
+                <td>${billLabel}</td>
+                <td style="color:var(--green);font-weight:600">${fmtTk(n.data.amount)}</td>
+                <td style="color:var(--text3)">${n.note||'—'}</td>
+                <td><span class="badge ${sc}">${sl}</span></td>
+                <td style="color:var(--text3);font-size:12px">${new Date(n.created_at).toLocaleDateString()}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table></div>`
+      }
+    </div>
+
+    <!-- RENT HISTORY -->
+    <div class="grid-2" style="gap:12px">
+      <div class="card">
+        <div class="card-title">Rent history</div>
+        ${allRent.length ? `<div class="tbl-wrap"><table>
+          <thead><tr><th>Month</th><th>Due</th><th>Paid</th><th>Status</th></tr></thead>
+          <tbody>${[...allRent].sort((a,b)=>b.month_key.localeCompare(a.month_key)).map(r=>{
+            const e=r.entries?.find(x=>x.name===member.name)||{};
+            if(!e.rent&&!e.paid) return '';
+            const cls=e.status==='paid'?'badge-green':e.status==='partial'?'badge-amber':'badge-red';
+            return `<tr>
+              <td>${r.month_name} ${r.year}</td>
+              <td>${fmtTk(e.rent||0)}</td>
+              <td style="color:var(--green)">${fmtTk(e.paid||0)}</td>
+              <td><span class="badge ${cls}">${e.status==='paid'?'Paid':e.status==='partial'?'Part':'Due'}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>` : '<div class="empty">No rent records</div>'}
+      </div>
+
+      <div class="card">
+        <div class="card-title">Utility history</div>
+        ${allUtil?.length ? `<div class="tbl-wrap"><table>
+          <thead><tr><th>Month</th><th>My share</th><th>Paid</th><th>Status</th></tr></thead>
+          <tbody>${allUtil.map(r=>{
+            const bills=r.bills||{};
+            const total=['elec','wifi','gas','khala','other'].reduce((s,k)=>s+(bills[k]||0),0);
+            const perHead=members.length>0?round2(total/members.length):0;
+            const p=(r.payments||{})[member.name]||{};
+            const cls=p.status==='paid'?'badge-green':p.status==='partial'?'badge-amber':'badge-red';
+            return `<tr>
+              <td>${r.month_name} ${r.year}</td>
+              <td>${fmtTk(perHead)}</td>
+              <td style="color:var(--green)">${fmtTk(p.paid||0)}</td>
+              <td><span class="badge ${cls}">${p.status==='paid'?'Paid':p.status==='partial'?'Part':'Due'}</span></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>` : '<div class="empty">No utility records</div>'}
+      </div>
+    </div>
+
+  </div>`;
+}
+
+async function submitBillPayment() {
+  const month    = parseInt(document.getElementById('bp-month')?.value);
+  const year     = parseInt(document.getElementById('bp-year')?.value);
+  const billType = document.getElementById('bp-type')?.value;
+  const amount   = parseFloat(document.getElementById('bp-amount')?.value || 0);
+  const note     = cleanText(document.getElementById('bp-note')?.value || '');
+
+  if(!billType)    { toast('Select a bill type'); return; }
+  if(amount <= 0)  { toast('Enter a valid amount'); return; }
+
+  const key = monthKey(year, month);
+  const data = {
+    billType,
+    amount,
+    monthKey: key,
+    monthName: MONTHS[month],
+    year,
+  };
+
+  try {
+    await dbSaveNotification({ type:'bill_payment', date: today(), data, note });
+    toast('Bill payment submitted 📨', 'success');
+    navigate('my-payments');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function renderMessOverview(el) {
+  const { month, year } = thisMonth();
+  const key = monthKey(year, month);
+  const [allM, allB] = await Promise.all([
+    dbGetAll("meals"),
+    dbGetAll("bazar"),
+  ]);
+  const mM = allM.filter((r) => r.date.startsWith(key)),
+    mB = allB.filter((r) => r.date.startsWith(key));
+  let totalM = 0,
+    totalB = 0;
+  mM.forEach((r) =>
+    Object.values(r.meals || {}).forEach((v) => (totalM += Number(v))),
+  );
+  mB.forEach((r) =>
+    Object.values(r.bazar || {}).forEach((v) => (totalB += Number(v))),
+  );
+  const mealRate = totalM > 0 ? round2(totalB / totalM) : 0;
+  let memBazar = {};
+  mB.forEach((r) =>
+    Object.entries(r.bazar || {}).forEach(([k, v]) => {
+      memBazar[k] = (memBazar[k] || 0) + Number(v);
+    }),
+  );
+  const topB = Object.entries(memBazar)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6),
+    maxB = topB[0]?.[1] || 1;
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Mess Overview</div><div class="page-sub">${MONTHS[month]} ${year}</div></div></div><div class="content"><div class="stat-grid"><div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalM)}</div></div><div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div><div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalB)}</div></div><div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div></div><div class="card" style="margin-bottom:12px"><div class="card-title">Bazar contributors</div>${topB.length ? topB.map(([name, amt]) => `<div class="mini-bar"><div class="mini-bar-label">${name}</div><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt / maxB) * 100)}%"></div></div><div class="mini-bar-val">${fmtTk(amt)}</div></div>`).join("") : '<div class="empty">No bazar data</div>'}</div><div class="card"><div class="card-title">Member meal totals</div>${
+    members.length
+      ? `<div class="tbl-wrap"><table><thead><tr><th>Member</th><th>Meals</th><th>Bazar</th><th>Meal cost</th><th>Balance</th></tr></thead><tbody>${members
+          .map((m) => {
+            let myM = 0,
+              myB = 0;
+            mM.forEach((r) => {
+              myM +=
+                round2(
+                  Number(r.meals[m.name + "_day"] ?? 0) +
+                    Number(r.meals[m.name + "_night"] ?? 0),
+                ) || Number(r.meals[m.name] || 0);
+            });
+            mB.forEach((r) => {
+              myB += Number(r.bazar[m.name] || 0);
+            });
+            const mc = round2(myM * mealRate),
+              bal = round2(myB - mc);
+            return `<tr><td><b>${m.name}</b></td><td>${round2(myM)}</td><td style="color:var(--green)">${fmtTk(myB)}</td><td>${fmtTk(mc)}</td><td class="${bal >= 0 ? "net-pos" : "net-neg"}">${bal >= 0 ? "Get " + fmtTk(bal) : "Pay " + fmtTk(-bal)}</td></tr>`;
+          })
+          .join("")}</tbody></table></div>`
+      : '<div class="empty">No members</div>'
+  }</div></div>`;
+}
+
+/* ═══════════════════════════════════════════
+   MODAL & TOAST
+═══════════════════════════════════════════ */
+function openModal() {
+  document.getElementById("modal-bg").classList.add("open");
+}
+function closeModal() {
+  document.getElementById("modal-bg").classList.remove("open");
+  const m = document.querySelector(".modal");
+  if (m) m.classList.remove("modal-wide");
+}
+
 let toastTimer;
 function toast(msg, type) {
-  const el = document.getElementById('toast');
+  const el = document.getElementById("toast");
   el.textContent = msg;
-  el.className = 'show' + (type === 'error' ? ' error' : '');
+  el.className = "show" + (type ? " " + type : "");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.className = '', 3500);
+  toastTimer = setTimeout(() => (el.className = ""), 3200);
 }
 
-/* ============================================================
-   SEED DEFAULT MEMBERS (first run)
-   ============================================================ */
-async function seedIfEmpty() {
-  const existing = await txGetAll('members');
-  if (existing.length > 0) return;
-  const defaults = [
-    {name:'Sourov',rent:4600,room:'Room 1'},{name:'Shahriyar',rent:4400,room:'Room 2'},
-    {name:'Nafis',rent:4600,room:'Room 3'},{name:'Rafi',rent:4000,room:'Room 4'},
-    {name:'Shanto',rent:4000,room:'Room 5'},{name:'Kanak',rent:4400,room:'Room 6'}
-  ];
-  for (const d of defaults) {
-    await txPut('members', { name: d.name, room: d.room, rent: d.rent,
-      phone: '', joined: '2025-07-01' });
-  }
-}
-
-/* ============================================================
+/* ═══════════════════════════════════════════
    INIT
-   ============================================================ */
+═══════════════════════════════════════════ */
 async function init() {
-  document.getElementById('db-dot').style.background = 'var(--accent)';
-  document.getElementById('db-label').textContent = 'Connecting…';
-  try {
-    // Verify connection
-    const { error } = await sb.from('members').select('id', { count: 'exact', head: true });
-    if (error) throw error;
-    const dbDot = document.getElementById('db-dot');
-    dbDot.style.background = 'var(--green)';
-    dbDot.classList.add('live');
-    document.getElementById('db-label').textContent = 'Supabase connected';
-    await ensureUtilityTable();
-    await seedIfEmpty();
-    members = await txGetAll('members');
-    navigate('dashboard');
-  } catch(e) {
-    document.getElementById('db-dot').style.background = 'var(--red)';
-    document.getElementById('db-label').textContent = 'DB error';
-    console.error('Supabase error:', e.message || e);
-    toast('Database connection failed. Check console.', 'error');
-  }
-}
+  loadTheme();
+  loadSession();
 
-async function ensureUtilityTable() {
-  const { error } = await sb.from('utility_payments').select('month_key', { count: 'exact', head: true });
-  if (error) {
-    console.warn('utility_payments table missing. Run in Supabase SQL Editor:\ncreate table if not exists utility_payments (\n  id uuid primary key default gen_random_uuid(),\n  month_key text not null unique,\n  month int, year int, month_name text,\n  bills jsonb default \'{}\',\n  payments jsonb default \'{}\',\n  created_at timestamptz default now()\n);\nalter table utility_payments enable row level security;\ncreate policy \"open\" on utility_payments for all using (true) with check (true);');
+  if(currentUser) {
+    if(currentUser.role === 'superadmin') { bootSuperAdmin(); return; }
+
+    // Re-fetch member's current role from DB on every page load
+    // This ensures role changes (manager transfer) are reflected immediately
+    if(currentUser.memberId) {
+      try {
+        const {data:fresh} = await sb.from('members')
+          .select('role, name, username')
+          .eq('id', currentUser.memberId)
+          .maybeSingle();
+
+        if(fresh) {
+          // Update session with latest role from DB
+          currentUser.role = fresh.role;
+          saveSession(currentUser, currentMess);
+        } else {
+          // Member no longer exists, log out
+          clearSession();
+          showLanding();
+          return;
+        }
+      } catch(e) {
+        console.error('Role refresh failed:', e);
+      }
+    }
+
+    await bootApp();
+    return;
   }
+
+  showLanding();
 }
 
 init();
