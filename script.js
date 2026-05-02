@@ -2,8 +2,8 @@
 /* ═══════════════════════════════════════════
    SUPABASE
 ═══════════════════════════════════════════ */
-const SUPABASE_URL = '__SUPABASE_URL__';
-const SUPABASE_KEY = '__SUPABASE_KEY__';
+const SUPABASE_URL = "https://lrzotklutnyzcadutgwf.supabase.co";
+const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ═══════════════════════════════════════════
