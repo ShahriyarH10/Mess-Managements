@@ -261,11 +261,15 @@ select.input option{background:var(--bg3);color:var(--text);}
 /* Table */
 .tbl-wrap{overflow-x:auto;margin-top:4px;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
+tbody tr:hover {
+  background: var(--bg4);
+}
 th{color:var(--text3);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;background:var(--bg3);}
 td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;transition:background .12s;}
 tr:last-child td{border-bottom:none;}
 tr:hover td{background:var(--bg3);}
 tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px solid var(--border2);}
+
 
 /* Badge */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;}
