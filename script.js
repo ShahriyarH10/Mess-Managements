@@ -792,46 +792,133 @@ const MEMBER_NAV = [
 ];
 
 function buildNav() {
-  const isManager = currentUser.role === "manager";
+  const isManager = currentUser.role === 'manager';
   const nav = isManager ? MANAGER_NAV : MEMBER_NAV;
 
-  document.getElementById("sidebar-nav").innerHTML = nav
-    .map((i) =>
-      i.section
-        ? `<div class="nav-section">${i.section}</div>`
-        : `<button class="nav-item" onclick="navigate('${i.page}')" data-page="${i.page}">
+  // Sidebar nav (desktop)
+  document.getElementById('sidebar-nav').innerHTML = nav.map(i =>
+    i.section ? `<div class="nav-section">${i.section}</div>` :
+    `<button class="nav-item" onclick="navigate('${i.page}')" data-page="${i.page}">
       ${i.icon}${i.label}
-      ${i.page === "notifications" ? `<span class="notif-badge" id="notif-badge" style="display:none">0</span>` : ""}
-    </button>`,
-    )
-    .join("");
+      ${i.page==='notifications'?`<span class="notif-badge" id="notif-badge" style="display:none">0</span>`:''}
+    </button>`
+  ).join('');
 
-  const mobileItems = isManager
-    ? [
-        { page: "dashboard", label: "Home", icon: IC.dash },
-        { page: "meals", label: "Meals", icon: IC.meal },
-        { page: "bazar", label: "Bazar", icon: IC.bazar },
-        { page: "notifications", label: "Requests", icon: IC.bell },
-        { page: "log", label: "Log", icon: IC.log },
-      ]
-    : [
-        { page: "my-dashboard", label: "Home", icon: IC.dash },
-        { page: "my-meals", label: "Meals", icon: IC.meal },
-        { page: "my-bazar", label: "Bazar", icon: IC.bazar },
-        { page: "my-payments", label: "Pay", icon: IC.rent },
-        { page: "my-profile", label: "Me", icon: IC.profile },
-      ];
+  // Mobile bottom nav — 4 main items + "More" button
+  const managerMain = [
+    {page:'dashboard',    label:'Home',     icon:IC.dash},
+    {page:'meals',        label:'Meals',    icon:IC.meal},
+    {page:'bazar',        label:'Bazar',    icon:IC.bazar},
+    {page:'notifications',label:'Requests', icon:IC.bell},
+  ];
+  const memberMain = [
+    {page:'my-dashboard', label:'Home',     icon:IC.dash},
+    {page:'my-meals',     label:'Meals',    icon:IC.meal},
+    {page:'my-bazar',     label:'Bazar',    icon:IC.bazar},
+    {page:'my-payments',  label:'Pay',      icon:IC.rent},
+  ];
 
-  document.getElementById("mobile-nav").innerHTML = mobileItems
-    .map(
-      (i) =>
-        `<button class="mob-nav-btn" onclick="navigate('${i.page}')" data-page="${i.page}">
-      ${i.icon}<span>${i.label}</span>
-    </button>`,
-    )
-    .join("");
+  const mainItems = isManager ? managerMain : memberMain;
 
-  if (isManager) refreshNotifBadge();
+  document.getElementById('mobile-nav').innerHTML = `
+    ${mainItems.map(i => `
+      <button class="mob-nav-btn" onclick="navigate('${i.page}')" data-page="${i.page}">
+        ${i.icon}<span>${i.label}</span>
+      </button>`).join('')}
+    <button class="mob-nav-btn" onclick="toggleMobileMore()" id="mob-more-btn">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="3" cy="8" r="1.2" fill="currentColor"/>
+        <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+        <circle cx="13" cy="8" r="1.2" fill="currentColor"/>
+      </svg>
+      <span>More</span>
+    </button>`;
+
+  // Build the more drawer items
+  const managerMore = [
+    {page:'rent',      label:'Room Rent',     icon:IC.rent},
+    {page:'utility',   label:'Utility Entry', icon:IC.util},
+    {page:'log',       label:'Monthly Log',   icon:IC.log},
+    {page:'profiles',  label:'Profiles',      icon:IC.profile},
+    {page:'announce',  label:'Announcements', icon:IC.announce},
+    {page:'chores',    label:'Chore Roster',  icon:IC.chores},
+    {page:'members',   label:'Members',       icon:IC.members},
+    {page:'transfer',  label:'Transfer Role', icon:`<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 3l3 3-3 3M2 6h12M5 13l-3-3 3-3M14 10H2"/></svg>`},
+  ];
+  const memberMore = [
+    {page:'mess-overview', label:'Mess Overview',  icon:IC.log},
+    {page:'my-profile',    label:'My Profile',     icon:IC.profile},
+    {page:'my-announce',   label:'Announcements',  icon:IC.announce},
+    {page:'my-chores',     label:'Chore Roster',   icon:IC.chores},
+  ];
+
+  const moreItems = isManager ? managerMore : memberMore;
+
+  // Remove existing drawer if any
+  const existing = document.getElementById('mobile-more-drawer');
+  if(existing) existing.remove();
+  const existingBg = document.getElementById('mobile-more-bg');
+  if(existingBg) existingBg.remove();
+
+  // Create backdrop
+  const backdrop = document.createElement('div');
+  backdrop.id = 'mobile-more-bg';
+  backdrop.onclick = closeMobileMore;
+  document.body.appendChild(backdrop);
+
+  // Create drawer
+  const drawer = document.createElement('div');
+  drawer.id = 'mobile-more-drawer';
+  drawer.innerHTML = `
+    <div class="mob-drawer-handle"></div>
+    <div class="mob-drawer-header">
+      <div class="mob-drawer-title">More options</div>
+      <button onclick="closeMobileMore()" class="mob-drawer-close">✕</button>
+    </div>
+    <div class="mob-drawer-user">
+      <div class="avatar" style="background:${currentUser._col?.bg||'#2a2218'};color:${currentUser._col?.fg||'#d4a853'};width:36px;height:36px;font-size:13px">${initials(currentUser.name)}</div>
+      <div>
+        <div style="font-weight:600;font-size:14px">${currentUser.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${isManager?'👑 Manager':'Member'} · @${currentUser.username}</div>
+      </div>
+    </div>
+    <div class="mob-drawer-grid">
+      ${moreItems.map(i => `
+        <button class="mob-drawer-item" onclick="closeMobileMore();navigate('${i.page}')" data-page="${i.page}">
+          ${i.icon}
+          <span>${i.label}</span>
+        </button>`).join('')}
+    </div>
+    <div class="mob-drawer-footer">
+      <button class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px" onclick="doLogout()">
+        Sign out
+      </button>
+    </div>`;
+  document.body.appendChild(drawer);
+
+  if(isManager) refreshNotifBadge();
+}
+
+function toggleMobileMore() {
+  const drawer = document.getElementById('mobile-more-drawer');
+  const bg     = document.getElementById('mobile-more-bg');
+  if(!drawer) return;
+  const isOpen = drawer.classList.contains('open');
+  if(isOpen) {
+    closeMobileMore();
+  } else {
+    drawer.classList.add('open');
+    bg.classList.add('open');
+    document.getElementById('mob-more-btn')?.classList.add('active');
+  }
+}
+
+function closeMobileMore() {
+  const drawer = document.getElementById('mobile-more-drawer');
+  const bg     = document.getElementById('mobile-more-bg');
+  if(drawer) drawer.classList.remove('open');
+  if(bg)     bg.classList.remove('open');
+  document.getElementById('mob-more-btn')?.classList.remove('active');
 }
 
 async function refreshNotifBadge() {
@@ -872,15 +959,21 @@ function updateSidebarUser() {
 ═══════════════════════════════════════════ */
 function navigate(page) {
   currentPage = page;
-  document
-    .querySelectorAll(".nav-item")
-    .forEach((n) => n.classList.toggle("active", n.dataset.page === page));
-  document
-    .querySelectorAll(".mob-nav-btn")
-    .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
-  const main = document.getElementById("main-content");
-  main.innerHTML =
-    '<div class="loading" style="min-height:200px"><div class="spinner"></div>Loading…</div>';
+  closeMobileMore();
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page===page));
+  document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page===page));
+  document.querySelectorAll('.mob-drawer-item').forEach(b => b.classList.toggle('active', b.dataset.page===page));
+
+  // Highlight "More" button if active page is in the drawer
+  const mainPages = currentUser.role==='manager'
+    ? ['dashboard','meals','bazar','notifications']
+    : ['my-dashboard','my-meals','my-bazar','my-payments'];
+  const moreBtn = document.getElementById('mob-more-btn');
+  if(moreBtn) moreBtn.classList.toggle('mob-more-active', !mainPages.includes(page));
+
+  const main = document.getElementById('main-content');
+  main.innerHTML = '<div class="loading" style="min-height:200px"><div class="spinner"></div>Loading…</div>';
   renderPage(page);
 }
 
@@ -2190,9 +2283,10 @@ async function saveRent() {
   const year  = parseInt(document.getElementById('rent-year')?.value  || new Date().getFullYear());
   const key   = monthKey(year, month);
 
+  // Always save current m.rent as the due amount
   const entries = members.map(m => ({
     name:   m.name,
-    rent:   parseFloat(document.getElementById('rp-'+m.id)?.dataset.due || m.rent || 0),
+    rent:   m.rent || 0,   // always from current member default
     paid:   parseFloat(document.getElementById('rp-'+m.id)?.value || 0),
     status: document.getElementById('rs-'+m.id)?.value || 'unpaid',
     notes:  cleanText(document.getElementById('rn-'+m.id)?.value || '')
@@ -2292,19 +2386,39 @@ async function loadLog() {
 
   // Per-member settlement
   const payData = members.map(m => {
-    const re       = rentRec?.entries?.find(e => e.name === m.name) || {};
-    const meals    = memMeals[m.name] || 0;
-    const bazar    = memBazar[m.name] || 0;
-    const mealCost = round2(meals * mealRate);
-    const rent     = Number(re.rent || m.rent || 0);
-    // Postpaid: meal cost + khala
-    const postpaid = round2(mealCost + khalaPerHead);
-    // Prepaid: utility + rent
-    const prepaid  = round2(prepaidPerHead + rent);
-    const totalOwed = round2(postpaid + prepaid);
-    const net       = round2(totalOwed - bazar);
-    return { name:m.name, meals, bazar, mealCost, khala:khalaPerHead, utility:prepaidPerHead, rent, postpaid, prepaid, totalOwed, net };
-  });
+  const re = rentRec?.entries?.find(e => e.name === m.name) || {};
+
+  const meals    = memMeals[m.name] || 0;
+  const bazar    = memBazar[m.name] || 0;
+  const mealCost = round2(meals * mealRate);
+
+  // Always use current default rent from members table
+  // so monthly log reflects latest rent setting
+  const rent = Number(m.rent || 0);
+
+  // How much was actually collected (from rent record)
+  const rentPaid = Number(re.paid || 0);
+
+  const postpaid  = round2(mealCost + khalaPerHead);
+  const prepaid   = round2(prepaidPerHead + rent);
+  const totalOwed = round2(postpaid + prepaid);
+  const net       = round2(totalOwed - bazar);
+
+  return {
+    name: m.name,
+    meals,
+    bazar,
+    mealCost,
+    khala:      khalaPerHead,
+    utility:    prepaidPerHead,
+    rent,
+    rentPaid,
+    postpaid,
+    prepaid,
+    totalOwed,
+    net
+  };
+});
 
   document.getElementById('log-content').innerHTML = `
 
