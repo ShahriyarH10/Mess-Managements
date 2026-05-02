@@ -5,108 +5,202 @@
 
 ## 🚀 Quick Setup
 
-### 1. Database Setup (Supabase)
+### Step 1 — Database (Supabase)
 1. Go to [supabase.com](https://supabase.com) and create a new project
-2. Open the **SQL Editor**
-3. Copy the contents of `database.sql` and run it
-4. Go to **Project Settings → API** and copy your:
+2. Open **SQL Editor**
+3. Then paste and run the full `database.sql` file
+5. Go to **Project Settings → API** and copy your:
    - **Project URL**
    - **Anon/Public key**
 
-### 2. Configure the App
+### Step 2 — Configure
 Open `script.js` and update lines 5–6:
 ```js
 const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
 const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
 ```
 
-### 3. Deploy
-Upload the 3 files (`index.html`, `style.css`, `script.js`) to any static host:
-- **Netlify** — drag & drop folder at netlify.com/drop
+### Step 3 — Deploy
+Upload `index.html`, `style.css`, `script.js` to any static host:
+- **Netlify** — drag & drop at netlify.com/drop
 - **Vercel** — `vercel deploy`
-- **GitHub Pages** — push to a repo and enable Pages
+- **GitHub Pages** — push to repo, enable Pages
 - **Any web host** — upload via FTP
 
 ---
 
 ## 👤 User Roles
 
-### Super Admin
-- **Username:** `superadmin`
-- **Password:** `super@admin2025`
-- Can view all messes, delete messes, see platform metrics
-- ⚠️ Change this password in `script.js` before deploying
+### 👑 Manager
+- The person who **creates the mess** becomes the first manager
+- Manager is a **member with a role** — not a separate account
+- Full access: all entry pages, reports, member management
+- Can **transfer the manager role** to any other member at any time
+- After transfer, becomes a regular member instantly
 
-### Mess Admin
-- Created when a new mess is registered via "Create Mess"
-- Full access to all mess management features
-- Can manage members, entry data, reports, announcements, chores
-
-### Member
-- Each member gets credentials set by the mess admin
-- Personal dashboard: meals, bazar, payments, profile
-- Can view mess-wide overview and announcements
+### 👤 Member
+- Added by the manager with a username & password
+- Personal dashboard: own meals, bazar, payments, profile
+- Can **submit requests** to the manager for meal entries, bazar entries, and bill payments
+- Can view mess-wide announcements, chore roster, and mess overview
 
 ---
 
 ## 🗂️ Features
 
-| Feature           | Admin | Member |
-|-------------------|-------|--------|
-| Dashboard         | ✅    | ✅ (personal) |
-| Member Profiles   | ✅    | ❌ |
-| Meal Entry        | ✅    | ❌ |
-| Bazar Entry       | ✅    | ❌ |
-| Utility Entry     | ✅    | ❌ |
-| Rent Collection   | ✅    | ❌ |
-| Monthly Log       | ✅    | ❌ |
-| Announcements     | ✅    | 👁️ (read) |
-| Chore Roster      | ✅    | 👁️ (read) |
-| My Meal Log       | ❌    | ✅ |
-| My Bazar Log      | ❌    | ✅ |
-| My Payments       | ❌    | ✅ |
-| Mess Overview     | ❌    | ✅ |
+| Feature | Manager | Member |
+|---|---|---|
+| Dashboard | ✅ Full mess overview | ✅ Personal dashboard |
+| Member Profiles | ✅ All members with stats | ❌ |
+| Meal Entry | ✅ Direct entry | ✅ Submit request |
+| Bazar Entry | ✅ Direct entry | ✅ Submit request |
+| Utility Entry | ✅ Full bill management | ❌ |
+| Room Rent | ✅ Collection tracking | ❌ |
+| Monthly Log | ✅ Full settlement report | ❌ |
+| Announcements | ✅ Post & pin | 👁️ Read only |
+| Chore Roster | ✅ Assign & manage | 👁️ Read only |
+| Members | ✅ Add/edit/remove | ❌ |
+| Transfer Role | ✅ Hand off to any member | ❌ |
+| Requests | ✅ Approve/reject | ✅ Submit |
+| My Profile | ❌ | ✅ With period filter |
+| My Payments | ❌ | ✅ Submit bill payments |
+| Mess Overview | ❌ | ✅ |
+
+---
+
+## 💰 Payment Model
+
+MessManager separates costs into two types:
+
+### 🔴 Postpaid (settle at month end)
+| Cost | How it works |
+|---|---|
+| **Meal cost** | meals eaten × meal rate (total bazar ÷ total meals) |
+| **Khala salary** | khala bill ÷ number of members |
+
+### 🔵 Prepaid (pay at month start)
+| Cost | How it works |
+|---|---|
+| **Room rent** | fixed amount per member per month |
+| **Utility bills** | electricity + WiFi + gas + other ÷ members |
+
+The **Monthly Log** shows both columns separately so the manager knows what to collect upfront vs what to settle at month end.
+
+---
+
+## 📨 Request & Approval Flow
+
+Members can submit three types of requests — all go through manager approval:
+
+```
+Member submits request
+       ↓
+notifications table (status: pending)
+       ↓
+Manager sees 🔴 badge on "Requests" in sidebar
+       ↓
+Manager opens Requests page → reviews details
+       ↓
+Approve → auto-writes to meals/bazar/utility/rent tables
+Reject  → marked rejected, member sees status in their history
+```
+
+### Request types
+- **🍽️ Meal request** — member submits day/night meal count for a date
+- **🛒 Bazar request** — member submits grocery amount for a date
+- **💡 Bill payment** — member submits a bill they paid directly (electricity, khala, rent, etc.)
+
+---
+
+## 👑 Manager Role Transfer
+
+1. Manager goes to **Transfer Role** in the sidebar
+2. Selects any other member
+3. Confirms the transfer
+4. The selected member immediately becomes the new manager
+5. The previous manager becomes a regular member
+6. The new manager's dashboard updates on next page load or refresh — no re-login needed
+
+---
+
+## 📊 Monthly Log — Settlement Report
+
+The settlement table shows each member's full breakdown:
+
+| Column | Type | Description |
+|---|---|---|
+| Meal cost | 🔴 Postpaid | meals × meal rate |
+| Khala | 🔴 Postpaid | khala ÷ members |
+| Utility | 🔵 Prepaid | elec+wifi+gas+other ÷ members |
+| Rent | 🔵 Prepaid | fixed per member |
+| Bazar credit | Credit | what the member bought |
+| **Net** | | positive = member owes, negative = member is owed |
 
 ---
 
 ## 🌙 Theme
-- Light/Dark mode toggle available on login screen, landing page, and sidebar
-- Theme preference is saved in browser localStorage
-
----
-
-## 🛡️ Security Notes
-- Change the superadmin password before going live
-- Passwords are stored as plaintext in this version — add bcrypt hashing for production
-- Enable Supabase Row Level Security (already in `database.sql`)
-- Use HTTPS for all deployments
+- Light/Dark mode toggle on landing page, login screen, and sidebar
+- Saved in `localStorage` — persists across sessions
 
 ---
 
 ## 📁 File Structure
 ```
 MessManager/
-├── index.html      # Main app HTML (landing + all screens)
-├── style.css       # All styles (themes, responsive)
-├── script.js       # All app logic (auth, DB, pages)
-├── database.sql    # Supabase schema (run once)
-└── README.md       # This file
+├── index.html       # Full app — landing, auth, all screens
+├── style.css        # All styles — themes, layout, responsive
+├── script.js        # All logic — auth, DB, pages, requests
+├── database.sql     # Supabase schema — run once to set up
+└── README.md        # This file
 ```
+
+---
+
+## 🗄️ Database Tables
+
+| Table | Purpose |
+|---|---|
+| `messes` | One row per mess — name, location |
+| `members` | All members including manager — has `role` column |
+| `meals` | Daily meal log per member (day + night) |
+| `bazar` | Daily grocery spending per member |
+| `rent` | Monthly rent entries per member |
+| `utility_payments` | Monthly utility bills + who paid |
+| `announcements` | Mess-wide notices |
+| `chores` | Cleaning duty assignments |
+| `notifications` | Member requests — meal, bazar, bill payment |
+
+---
+
+## 🛡️ Security Notes
+- Change the superadmin password in `script.js` before going live
+- Passwords are stored as plaintext — add bcrypt hashing for production
+- Supabase RLS is enabled with anon-allow policies — tighten for production
+- Always use HTTPS in deployment
 
 ---
 
 ## 🔧 Customization
 
-### Add more utility types
-In `script.js`, search for `['elec','wifi','gas','khala','other']` and add new keys.
-Add matching labels in the `renderUtility` function.
+### Add a new utility bill type
+In `script.js`, add the key to all arrays like `['elec','wifi','gas','khala','other']` and add its label to the label maps like `{elec:'Electricity', ...}`.
 
-### Change default mess settings
-Edit the `PALETTE` array in `script.js` to customize avatar colors.
+### Change avatar colors
+Edit the `PALETTE` array in `script.js`.
+
+### Change superadmin credentials
+Find `const SUPERADMIN` in `script.js` and update the username/password.
 
 ### Branding
-Replace `M` logo with your own SVG by editing the `land-logo-icon` elements in `index.html`.
+Replace the `M` in `land-logo-icon` elements in `index.html` with your own initial or SVG.
 
 ---
 
-Built with ❤️ for Dhaka messes · 2025
+## 📱 Mobile Support
+- Full responsive design — works on phones and tablets
+- Bottom navigation bar on mobile with 5 quick-access buttons
+- Modals, tables, and cards all adapt to small screens
+
+---
+
+Built with ❤️ for Dhaka messes · 2026
