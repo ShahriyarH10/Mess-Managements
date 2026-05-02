@@ -3,17 +3,6 @@
 -- Run the DROP section first, then the rest
 -- ═══════════════════════════════════════════════════════
 
--- ── CLEAN SLATE ────────────────────────────────────────
-drop table if exists chores             cascade;
-drop table if exists announcements      cascade;
-drop table if exists notifications      cascade;
-drop table if exists utility_payments   cascade;
-drop table if exists rent               cascade;
-drop table if exists bazar              cascade;
-drop table if exists meals              cascade;
-drop table if exists members            cascade;
-drop table if exists messes             cascade;
-
 -- ── EXTENSIONS ─────────────────────────────────────────
 create extension if not exists "uuid-ossp";
 
