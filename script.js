@@ -397,6 +397,20 @@ async function getPendingCount() {
   return count || 0;
 }
 
+async function getUnreadAnnouncementCount() {
+  const { data: announcements } = await sb
+    .from('announcements')
+    .select('id, created_at')
+    .eq('mess_id', messId())
+    .order('created_at', { ascending: false });
+
+  if (!announcements?.length) return 0;
+
+  // Store last-read timestamp in localStorage per member
+  const lastRead = localStorage.getItem(`mm_announce_read_${currentUser.memberId}`) || '1970-01-01';
+  return announcements.filter(a => a.created_at > lastRead).length;
+}
+
 /* ═══════════════════════════════════════════
    SCREEN NAVIGATION
 ═══════════════════════════════════════════ */
@@ -797,12 +811,13 @@ function buildNav() {
 
   // Sidebar nav (desktop)
   document.getElementById('sidebar-nav').innerHTML = nav.map(i =>
-    i.section ? `<div class="nav-section">${i.section}</div>` :
-    `<button class="nav-item" onclick="navigate('${i.page}')" data-page="${i.page}">
-      ${i.icon}${i.label}
-      ${i.page==='notifications'?`<span class="notif-badge" id="notif-badge" style="display:none">0</span>`:''}
-    </button>`
-  ).join('');
+  i.section ? `<div class="nav-section">${i.section}</div>` :
+  `<button class="nav-item" onclick="navigate('${i.page}')" data-page="${i.page}">
+    ${i.icon}${i.label}
+    ${i.page==='notifications' ? `<span class="notif-badge" id="notif-badge" style="display:none">0</span>` : ''}
+    ${i.page==='my-announce'   ? `<span class="notif-badge" id="announce-notif-badge" style="display:none">0</span>` : ''}
+  </button>`
+).join('');
 
   // Mobile bottom nav — 4 main items + "More" button
   const managerMain = [
@@ -848,7 +863,7 @@ function buildNav() {
   const memberMore = [
     {page:'mess-overview', label:'Mess Overview',  icon:IC.log},
     {page:'my-profile',    label:'My Profile',     icon:IC.profile},
-    {page:'my-announce',   label:'Announcements',  icon:IC.announce},
+    {page:'my-announce', label: 'Announcements', icon: IC.announce, bell: true },
     {page:'my-chores',     label:'Chore Roster',   icon:IC.chores},
   ];
 
@@ -884,10 +899,11 @@ function buildNav() {
     </div>
     <div class="mob-drawer-grid">
       ${moreItems.map(i => `
-        <button class="mob-drawer-item" onclick="closeMobileMore();navigate('${i.page}')" data-page="${i.page}">
-          ${i.icon}
-          <span>${i.label}</span>
-        </button>`).join('')}
+      <button class="mob-drawer-item" onclick="closeMobileMore();navigate('${i.page}')" data-page="${i.page}">
+        ${i.icon}
+        <span>${i.label}</span>
+        ${i.page==='my-announce' ? `<span class="notif-badge" id="announce-notif-badge-drawer" style="display:none">0</span>` : ''}
+      </button>`).join('')}
     </div>
     <div class="mob-drawer-footer">
       <button class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px" onclick="doLogout()">
@@ -896,7 +912,12 @@ function buildNav() {
     </div>`;
   document.body.appendChild(drawer);
 
-  if(isManager) refreshNotifBadge();
+  // Refresh appropriate badges after nav is built
+  if (isManager) {
+    refreshNotifBadge();
+  } else {
+    refreshMemberAnnounceBadge();
+  }
 }
 
 function toggleMobileMore() {
@@ -931,6 +952,22 @@ async function refreshNotifBadge() {
   } else {
     badge.style.display = "none";
   }
+}
+
+async function refreshMemberAnnounceBadge() {
+  const badge       = document.getElementById('announce-notif-badge');
+  const badgeDrawer = document.getElementById('announce-notif-badge-drawer');
+  if (!badge && !badgeDrawer) return;
+  const count = await getUnreadAnnouncementCount();
+  [badge, badgeDrawer].forEach(b => {
+    if (!b) return;
+    if (count > 0) {
+      b.textContent = count;
+      b.style.display = 'inline-flex';
+    } else {
+      b.style.display = 'none';
+    }
+  });
 }
 
 function updateSidebarUser() {
@@ -1964,9 +2001,9 @@ async function renderUtility(el) {
       <!-- Prepaid bills -->
       <div class="card-title">Prepaid bills</div>
       <div class="util-fields">
-        ${['elec','wifi','gas','other'].map(k=>`
+        ${['elec','wifi','gas'].map(k=>`
           <div class="field" style="margin:0">
-            <label>${{elec:'Electricity',wifi:'WiFi',gas:'Gas',other:'Other'}[k]} (৳)</label>
+            <label>${{elec:'Electricity',wifi:'WiFi',gas:'Gas'}[k]} (৳)</label>
             <input type="number" class="input" id="ut-${k}" min="0" placeholder="0" oninput="updUtilSum()"/>
           </div>`).join('')}
       </div>
@@ -1977,6 +2014,10 @@ async function renderUtility(el) {
         <div class="field" style="margin:0">
           <label>Khala salary (৳)</label>
           <input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilSum()"/>
+        </div>
+        <div class="field" style="margin:0">
+          <label>Other (৳)</label>
+          <input type="number" class="input" id="ut-other" min="0" placeholder="0" oninput="updUtilSum()"/>
         </div>
       </div>
     </div>
@@ -2343,99 +2384,148 @@ function renderLog(el) {
       "",
     )}</select><button class="btn btn-primary" onclick="loadLog()">Generate</button></div><div id="log-content"><div class="empty">Select a month and click Generate</div></div></div>`;
 }
-async function loadLog() {
-  const month   = parseInt(document.getElementById('log-month').value);
-  const year    = parseInt(document.getElementById('log-year').value);
-  const key     = monthKey(year, month);
 
-  const [allMeals, allBazar, rentRec, {data:utilRec}] = await Promise.all([
-    dbGetAll('meals'), dbGetAll('bazar'), dbGetMonth('rent', key),
-    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', key).maybeSingle()
+async function loadLog() {
+  const month = parseInt(document.getElementById('log-month').value);
+  const year  = parseInt(document.getElementById('log-year').value);
+  const key   = monthKey(year, month);
+
+  // ── Previous month (for postpaid data) ─────────────────
+  const prevMonth = month === 0 ? 11 : month - 1;
+  const prevYear  = month === 0 ? year - 1 : year;
+  const prevKey   = monthKey(prevYear, prevMonth);
+
+  // Fetch current month (prepaid: elec/wifi/gas/rent) AND previous month (postpaid: meals/khala/other)
+  const [
+    allMeals,
+    allBazar,
+    currentRentRec,       // Rent for current month (prepaid)
+    currentUtilRes,       // Utility for current month (elec/wifi/gas — prepaid)
+    prevUtilRes,          // Utility for previous month (khala/other — postpaid)
+  ] = await Promise.all([
+    dbGetAll('meals'),
+    dbGetAll('bazar'),
+    dbGetMonth('rent', key),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', key).maybeSingle(),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', prevKey).maybeSingle(),
   ]);
 
-  const fm = allMeals.filter(r => r.date.startsWith(key)).sort((a,b) => a.date.localeCompare(b.date));
-  const fb = allBazar.filter(r => r.date.startsWith(key)).sort((a,b) => a.date.localeCompare(b.date));
+  const currentUtilRec = currentUtilRes.data;
+  const prevUtilRec    = prevUtilRes.data;
 
   const getMT = (mObj, n) => {
-    if(mObj[n+'_day'] != null || mObj[n+'_night'] != null)
+    if (mObj[n+'_day'] != null || mObj[n+'_night'] != null)
       return round2(Number(mObj[n+'_day']||0) + Number(mObj[n+'_night']||0));
     return Number(mObj[n]||0);
   };
 
-  // Meal & bazar totals
+  // ── POSTPAID: Meals from PREVIOUS month ─────────────────
+  const prevMealRows  = allMeals.filter(r => r.date.startsWith(prevKey)).sort((a,b) => a.date.localeCompare(b.date));
+  const prevBazarRows = allBazar.filter(r => r.date.startsWith(prevKey)).sort((a,b) => a.date.localeCompare(b.date));
+
   let totalMeals = 0, totalBazar = 0;
   const memMeals = {}, memBazar = {};
-  members.forEach(m => { memMeals[m.name]=0; memBazar[m.name]=0; });
-  fm.forEach(r => { members.forEach(m => { const t=getMT(r.meals,m.name); memMeals[m.name]+=t; totalMeals+=t; }); });
-  fb.forEach(r => { Object.entries(r.bazar||{}).forEach(([n,v]) => { memBazar[n]=(memBazar[n]||0)+Number(v); totalBazar+=Number(v); }); });
+  members.forEach(m => { memMeals[m.name] = 0; memBazar[m.name] = 0; });
+
+  prevMealRows.forEach(r => {
+    members.forEach(m => {
+      const t = getMT(r.meals, m.name);
+      memMeals[m.name] += t;
+      totalMeals += t;
+    });
+  });
+  prevBazarRows.forEach(r => {
+    Object.entries(r.bazar||{}).forEach(([n,v]) => {
+      memBazar[n] = (memBazar[n]||0) + Number(v);
+      totalBazar += Number(v);
+    });
+  });
   members.forEach(m => memMeals[m.name] = round2(memMeals[m.name]));
 
   const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
 
-  // ── Bills split: Prepaid vs Postpaid ──────────────────
-  const bills = utilRec?.bills || {};
-  const prepaidKeys  = ['elec','wifi','gas','other'];
-  const postpaidKeys = ['khala'];
+  // ── POSTPAID bills: Khala + Other from PREVIOUS month ───
+  const prevBills      = prevUtilRec?.bills || {};
+  const khalaTotal     = Number(prevBills.khala||0);
+  const otherPostpaid  = Number(prevBills.other||0);  // 'other' from prev month is postpaid
+  const khalaPerHead   = members.length > 0 ? round2(khalaTotal    / members.length) : 0;
+  const otherPerHead   = members.length > 0 ? round2(otherPostpaid / members.length) : 0;
+  const totalPostpaid  = khalaTotal + otherPostpaid;
 
-  const totalPrepaid  = prepaidKeys.reduce((s,k)  => s + (Number(bills[k])||0), 0);
-  const totalPostpaid = postpaidKeys.reduce((s,k) => s + (Number(bills[k])||0), 0);
-  const totalUtil     = totalPrepaid + totalPostpaid;
+  // ── PREPAID bills: Elec + WiFi + Gas from CURRENT month ─
+  const currentBills   = currentUtilRec?.bills || {};
+  const totalPrepaid   = ['elec','wifi','gas'].reduce((s,k) => s + (Number(currentBills[k])||0), 0);
+  const prepaidPerHead = members.length > 0 ? round2(totalPrepaid / members.length) : 0;
 
-  const prepaidPerHead  = members.length > 0 ? round2(totalPrepaid  / members.length) : 0;
-  const khalaPerHead    = members.length > 0 ? round2(totalPostpaid / members.length) : 0;
+  // Utility payments recorded in CURRENT month (who paid elec/wifi/gas)
+  const utilPayments   = currentUtilRec?.payments || {};
 
-  // Per-member settlement
+  // ── Current month bazar rows (for the bazar log table display) ──
+  const currBazarRows  = allBazar.filter(r => r.date.startsWith(key)).sort((a,b) => a.date.localeCompare(b.date));
+
+  // ── Per-member settlement ────────────────────────────────
   const payData = members.map(m => {
-  const re = rentRec?.entries?.find(e => e.name === m.name) || {};
+    const rentEntry      = currentRentRec?.entries?.find(e => e.name === m.name) || {};
+    const meals          = memMeals[m.name] || 0;
+    const bazar          = memBazar[m.name] || 0;   // Previous month bazar (their credit)
+    const mealCost       = round2(meals * mealRate);
+    const rent           = Number(m.rent || 0);
 
-  const meals    = memMeals[m.name] || 0;
-  const bazar    = memBazar[m.name] || 0;
-  const mealCost = round2(meals * mealRate);
+    // What they actually paid toward this month's prepaid utility
+    const utilActualPaid = Number((utilPayments[m.name]?.paid) || 0);
 
-  // Always use current default rent from members table
-  // so monthly log reflects latest rent setting
-  const rent = Number(m.rent || 0);
+    // Postpaid owed = meal cost (prev month) + khala share (prev month) + other share (prev month)
+    const postpaid = round2(mealCost + khalaPerHead + otherPerHead);
 
-  // How much was actually collected (from rent record)
-  const rentPaid = Number(re.paid || 0);
+    // Prepaid owed = rent (current month) + elec/wifi/gas share (current month)
+    const prepaid  = round2(rent + prepaidPerHead);
 
-  const postpaid  = round2(mealCost + khalaPerHead);
-  const prepaid   = round2(prepaidPerHead + rent);
-  const totalOwed = round2(postpaid + prepaid);
-  const net       = round2(totalOwed - bazar);
+    const totalOwed = round2(postpaid + prepaid);
 
-  return {
-    name: m.name,
-    meals,
-    bazar,
-    mealCost,
-    khala:      khalaPerHead,
-    utility:    prepaidPerHead,
-    rent,
-    rentPaid,
-    postpaid,
-    prepaid,
-    totalOwed,
-    net
-  };
-});
+    // Net = total owed - previous month bazar credit - what they already paid for prepaid utility
+    const net = round2(totalOwed - bazar - utilActualPaid);
+
+    return {
+      name: m.name,
+      meals, bazar, mealCost,
+      khala:        khalaPerHead,
+      other:        otherPerHead,
+      utility:      prepaidPerHead,
+      utilPaid:     utilActualPaid,
+      rent,
+      postpaid, prepaid, totalOwed, net
+    };
+  });
+
+  // ── Current month meal rows (for meal log table display) ─
+  const currMealRows = allMeals.filter(r => r.date.startsWith(key)).sort((a,b) => a.date.localeCompare(b.date));
 
   document.getElementById('log-content').innerHTML = `
 
+    <!-- INFO BANNER -->
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:14px;font-size:13px;color:var(--text2);display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:16px">ℹ️</span>
+      <div>
+        <b>How this settlement works:</b><br>
+        🔴 <b>Postpaid</b> — Meal cost & Khala are from <b>${MONTHS[prevMonth]} ${prevYear}</b> (previous month, settled now)<br>
+        🔵 <b>Prepaid</b> — Electricity, WiFi, Gas & Rent are from <b>${MONTHS[month]} ${year}</b> (current month, paid upfront)
+      </div>
+    </div>
+
     <!-- SUMMARY STATS -->
     <div class="stat-grid" style="margin-bottom:14px">
-      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalMeals)}</div></div>
+      <div class="stat-card"><div class="stat-label">Meals (${MONTHS[prevMonth].slice(0,3)})</div><div class="stat-value">${round2(totalMeals)}</div></div>
       <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div></div>
-      <div class="stat-card"><div class="stat-label">Prepaid bills</div><div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(totalPrepaid)}</div></div>
-      <div class="stat-card"><div class="stat-label">Khala (postpaid)</div><div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(totalPostpaid)}</div></div>
-      <div class="stat-card"><div class="stat-label">Per head utility</div><div class="stat-value" style="font-size:17px">${fmtTk(prepaidPerHead + khalaPerHead)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total bazar (${MONTHS[prevMonth].slice(0,3)})</div><div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div></div>
+      <div class="stat-card"><div class="stat-label">🔵 Prepaid bills</div><div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(totalPrepaid)}</div></div>
+      <div class="stat-card"><div class="stat-label">🔴 Khala+Other (${MONTHS[prevMonth].slice(0,3)})</div><div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(totalPostpaid)}</div></div>
+      <div class="stat-card"><div class="stat-label">Prepaid per head</div><div class="stat-value" style="font-size:17px">${fmtTk(prepaidPerHead)}</div></div>
     </div>
 
     <!-- LEGEND -->
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);display:inline-block"></span>Postpaid (settle at month end)</span>
-      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--blue);display:inline-block"></span>Prepaid (collect at month start)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);display:inline-block"></span>Postpaid — from ${MONTHS[prevMonth]} ${prevYear} (meals, khala, other)</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--blue);display:inline-block"></span>Prepaid — for ${MONTHS[month]} ${year} (electricity, WiFi, gas, rent)</span>
     </div>
 
     <!-- SETTLEMENT TABLE -->
@@ -2445,16 +2535,18 @@ async function loadLog() {
         <thead>
           <tr>
             <th rowspan="2">Member</th>
-            <th rowspan="2">Meals</th>
-            <th colspan="2" style="text-align:center;color:var(--red);border-bottom:1px solid var(--border)">🔴 Postpaid</th>
-            <th colspan="2" style="text-align:center;color:var(--blue);border-bottom:1px solid var(--border)">🔵 Prepaid</th>
-            <th rowspan="2">Bazar credit</th>
+            <th rowspan="2">Meals<br><span style="font-size:10px;font-weight:400;color:var(--text3)">${MONTHS[prevMonth].slice(0,3)}</span></th>
+            <th colspan="3" style="text-align:center;color:var(--red);border-bottom:1px solid var(--border)">🔴 Postpaid (${MONTHS[prevMonth].slice(0,3)})</th>
+            <th colspan="3" style="text-align:center;color:var(--blue);border-bottom:1px solid var(--border)">🔵 Prepaid (${MONTHS[month].slice(0,3)})</th>
+            <th rowspan="2">Bazar credit<br><span style="font-size:10px;font-weight:400;color:var(--text3)">${MONTHS[prevMonth].slice(0,3)}</span></th>
             <th rowspan="2">Net</th>
           </tr>
           <tr>
             <th style="color:var(--red)">Meal cost</th>
             <th style="color:var(--red)">Khala</th>
-            <th style="color:var(--blue)">Utility</th>
+            <th style="color:var(--red)">Other</th>
+            <th style="color:var(--blue)">Util share</th>
+            <th style="color:var(--blue)">Util paid</th>
             <th style="color:var(--blue)">Rent</th>
           </tr>
         </thead>
@@ -2462,12 +2554,21 @@ async function loadLog() {
           ${payData.map(p => {
             const nc = p.net > 0 ? 'net-neg' : p.net < 0 ? 'net-pos' : '';
             const nl = p.net > 0 ? `Pay ${fmtTk(p.net)}` : p.net < 0 ? `Get ${fmtTk(-p.net)}` : 'Settled';
+            const utilPaidColor = p.utilPaid > p.utility ? 'var(--green)' : p.utilPaid > 0 ? 'var(--amber)' : 'var(--text2)';
             return `<tr>
               <td><b>${p.name}</b></td>
               <td>${p.meals}</td>
               <td style="color:var(--red)">${fmtTk(p.mealCost)}</td>
               <td style="color:var(--red)">${fmtTk(p.khala)}</td>
+              <td style="color:var(--red)">${fmtTk(p.other)}</td>
               <td style="color:var(--blue)">${fmtTk(p.utility)}</td>
+              <td style="color:${utilPaidColor};font-weight:500">${fmtTk(p.utilPaid)}
+                ${p.utilPaid >= p.utility && p.utilPaid > 0
+                  ? `<span class="badge badge-green" style="font-size:9px;margin-left:3px">paid</span>`
+                  : p.utilPaid > 0
+                  ? `<span class="badge badge-amber" style="font-size:9px;margin-left:3px">partial</span>`
+                  : ''}
+              </td>
               <td style="color:var(--blue)">${fmtTk(p.rent)}</td>
               <td style="color:var(--green)">${fmtTk(p.bazar)}</td>
               <td class="${nc}"><b>${nl}</b></td>
@@ -2479,8 +2580,10 @@ async function loadLog() {
             <td><b>Total</b></td>
             <td>${round2(totalMeals)}</td>
             <td style="color:var(--red)">${fmtTk(round2(payData.reduce((s,p)=>s+p.mealCost,0)))}</td>
-            <td style="color:var(--red)">${fmtTk(totalPostpaid)}</td>
+            <td style="color:var(--red)">${fmtTk(khalaTotal)}</td>
+            <td style="color:var(--red)">${fmtTk(otherPostpaid)}</td>
             <td style="color:var(--blue)">${fmtTk(totalPrepaid)}</td>
+            <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p)=>s+p.utilPaid,0)))}</td>
             <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p)=>s+p.rent,0)))}</td>
             <td style="color:var(--green)">${fmtTk(totalBazar)}</td>
             <td></td>
@@ -2489,14 +2592,17 @@ async function loadLog() {
       </table></div>
     </div>
 
-    <!-- MEAL & BAZAR LOGS -->
+    <!-- MEAL & BAZAR LOGS (previous month — postpaid source) -->
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:500">
+      📋 Meal & Bazar data below is from <b>${MONTHS[prevMonth]} ${prevYear}</b> — the postpaid source for this settlement
+    </div>
     <div class="grid-2" style="gap:12px">
       <div class="card">
-        <div class="card-title">Meal log</div>
+        <div class="card-title">Meal log — ${MONTHS[prevMonth]} ${prevYear}</div>
         <div class="scroll-table tbl-wrap"><table>
           <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
-          <tbody>${fm.map(r => {
-            let t=0;
+          <tbody>${prevMealRows.map(r => {
+            let t = 0;
             const cells = members.map(m => { const mv=getMT(r.meals,m.name); t+=mv; return `<td>${mv}</td>`; }).join('');
             return `<tr><td>${r.date.slice(8)}</td>${cells}<td><b>${round2(t)}</b></td></tr>`;
           }).join('')}</tbody>
@@ -2504,10 +2610,10 @@ async function loadLog() {
         </table></div>
       </div>
       <div class="card">
-        <div class="card-title">Bazar log</div>
+        <div class="card-title">Bazar log — ${MONTHS[prevMonth]} ${prevYear}</div>
         <div class="scroll-table tbl-wrap"><table>
           <thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join('')}<th>Total</th></tr></thead>
-          <tbody>${fb.map(r => {
+          <tbody>${prevBazarRows.map(r => {
             const bt = Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0);
             return `<tr><td>${r.date.slice(8)}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):'0'}</td>`).join('')}<td><b>${fmtTk(bt)}</b></td></tr>`;
           }).join('')}</tbody>
@@ -2519,33 +2625,66 @@ async function loadLog() {
 
 /* --- ANNOUNCEMENTS --- */
 async function renderAnnouncements(el, isAdmin) {
-  el.innerHTML = `<div class="topbar"><div><div class="page-title">Announcements</div><div class="page-sub">Mess-wide notices & updates</div></div>${isAdmin ? `<div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="openAnnounceModal()">+ Post notice</button></div>` : ""}</div>
-  <div class="content"><div id="announce-list"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>`;
+  // Mark as read when member opens announcements
+  if (!isAdmin && currentUser.memberId) {
+    localStorage.setItem(`mm_announce_read_${currentUser.memberId}`, new Date().toISOString());
+    refreshMemberAnnounceBadge();
+  }
+
+  el.innerHTML = `
+  <div class="topbar">
+    <div>
+      <div class="page-title">Announcements</div>
+      <div class="page-sub">Mess-wide notices & updates</div>
+    </div>
+    ${isAdmin ? `<div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="openAnnounceModal()">+ Post notice</button></div>` : ""}
+  </div>
+  <div class="content">
+    <div id="announce-list">
+      <div class="loading"><div class="spinner"></div>Loading…</div>
+    </div>
+  </div>`;
+
   await loadAnnouncements(isAdmin);
 }
 
 async function loadAnnouncements(isAdmin) {
-  const items = await dbGetAnnouncements();
   const list = document.getElementById("announce-list");
   if (!list) return;
-  if (!items.length) {
-    list.innerHTML = '<div class="empty">No announcements yet.</div>';
-    return;
+
+  try {
+    const { data, error } = await sb
+      .from("announcements")
+      .select("*")
+      .eq("mess_id", messId())
+      .order("pinned", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    const items = data || [];
+
+    if (!items.length) {
+      list.innerHTML = '<div class="empty">No announcements yet.</div>';
+      return;
+    }
+
+    list.innerHTML = items.map(a => `
+      <div class="announce-item">
+        <div class="announce-item-header">
+          <div class="announce-item-title">
+            ${a.pinned ? '<span class="announce-pin">📌 </span>' : ""}${escapeHtml(a.title)}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <div class="announce-item-meta">${escapeHtml(a.author)} · ${new Date(a.created_at).toLocaleDateString()}</div>
+            ${isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="deleteAnnounce('${a.id}')">✕</button>` : ""}
+          </div>
+        </div>
+        <div class="announce-item-body">${escapeHtml(a.body)}</div>
+      </div>`).join("");
+
+  } catch(e) {
+    list.innerHTML = `<div class="empty">Error loading announcements: ${e.message}</div>`;
   }
-  list.innerHTML = items
-    .map(
-      (a) => `<div class="announce-item">
-    <div class="announce-item-header">
-      <div class="announce-item-title">${a.pinned ? '<span class="announce-pin">📌 </span>' : ""}${a.title}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <div class="announce-item-meta">${a.author} · ${new Date(a.created_at).toLocaleDateString()}</div>
-        ${isAdmin ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="deleteAnnounce('${a.id}')">✕</button>` : ""}
-      </div>
-    </div>
-    <div class="announce-item-body">${a.body}</div>
-  </div>`,
-    )
-    .join("");
 }
 
 function openAnnounceModal() {
@@ -2560,20 +2699,21 @@ function openAnnounceModal() {
 }
 
 async function postAnnounce() {
-  const title = cleanText(document.getElementById("an-title")?.value);
-  const body = cleanText(document.getElementById("an-body")?.value);
-  const pinned = document.getElementById("an-pin")?.checked || false;
-  if (!title || !body) {
-    toast("Title and message required");
-    return;
-  }
+  const title  = cleanText(document.getElementById('an-title')?.value);
+  const body   = cleanText(document.getElementById('an-body')?.value);
+  const pinned = document.getElementById('an-pin')?.checked || false;
+  if (!title || !body) { toast('Title and message required'); return; }
   try {
     await dbSaveAnnouncement({ title, body, pinned });
+
+    // Mark as already read for the manager who posted it
+    localStorage.setItem(`mm_announce_read_${currentUser.memberId}`, new Date().toISOString());
+
     closeModal();
-    toast("Posted", "success");
-    navigate("announce");
-  } catch (e) {
-    toast("Error: " + e.message, "error");
+    toast('Posted — members will be notified 📢', 'success');
+    navigate('announce');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
   }
 }
 
@@ -3172,54 +3312,87 @@ async function renderMyDashboard(el) {
   const member = await getMe();
   if(!member) { el.innerHTML='<div class="content"><div class="empty">Profile not found. Contact manager.</div></div>'; return; }
 
-  const {month, year} = thisMonth(); const key = monthKey(year, month);
-  const [allMeals, allBazar, rentRec, utilRes] = await Promise.all([
-    dbGetAll('meals'), dbGetAll('bazar'), dbGetMonth('rent', key),
-    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', key).maybeSingle()
-  ]);
-  const utilRec = utilRes.data;
+  const {month, year} = thisMonth();
+  const key = monthKey(year, month);
 
-  const mM = allMeals.filter(r => r.date.startsWith(key));
-  const mB = allBazar.filter(r => r.date.startsWith(key));
+  // Previous month (for postpaid: meals, khala, other)
+  const prevMonth = month === 0 ? 11 : month - 1;
+  const prevYear  = month === 0 ? year - 1 : year;
+  const prevKey   = monthKey(prevYear, prevMonth);
+
+  const [allMeals, allBazar, rentRec, currentUtilRes, prevUtilRes] = await Promise.all([
+    dbGetAll('meals'),
+    dbGetAll('bazar'),
+    dbGetMonth('rent', key),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', key).maybeSingle(),
+    sb.from('utility_payments').select('*').eq('mess_id', messId()).eq('month_key', prevKey).maybeSingle(),
+  ]);
+
+  const currentUtilRec = currentUtilRes.data;
+  const prevUtilRec    = prevUtilRes.data;
+
+  // ── POSTPAID: Meals & Bazar from PREVIOUS month ──────────
+  const prevMealRows  = allMeals.filter(r => r.date.startsWith(prevKey));
+  const prevBazarRows = allBazar.filter(r => r.date.startsWith(prevKey));
 
   let myMeals = 0, myBazar = 0;
-  mM.forEach(r => {
+  let allMealsTotal = 0, allBazarTotal = 0;
+
+  prevMealRows.forEach(r => {
     const d = Number(r.meals[member.name+'_day'] ?? 0);
     const n = Number(r.meals[member.name+'_night'] ?? 0);
     myMeals += round2(d+n) || Number(r.meals[member.name]||0);
+    allMealsTotal += Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0);
   });
-  mB.forEach(r => { myBazar += Number(r.bazar[member.name]||0); });
+  prevBazarRows.forEach(r => {
+    myBazar += Number(r.bazar[member.name]||0);
+    allBazarTotal += Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0);
+  });
 
-  const allMealsTotal = mM.reduce((s,r) => s+Object.values(r.meals||{}).reduce((a,v)=>a+Number(v),0), 0);
-  const allBazarTotal = mB.reduce((s,r) => s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0), 0);
   const mealRate = allMealsTotal > 0 ? round2(allBazarTotal / allMealsTotal) : 0;
   const mealCost = round2(myMeals * mealRate);
 
-  const bills        = utilRec?.bills || {};
-  const prepaidKeys  = ['elec','wifi','gas','other'];
-  const totalPrepaid = prepaidKeys.reduce((s,k) => s+(Number(bills[k])||0), 0);
-  const khalaTotal   = Number(bills.khala||0);
+  // ── POSTPAID bills: Khala + Other from PREVIOUS month ────
+  const prevBills   = prevUtilRec?.bills || {};
+  const khalaTotal  = Number(prevBills.khala||0);
+  const otherTotal  = Number(prevBills.other||0);
+  const khalaShare  = members.length > 0 ? round2(khalaTotal / members.length) : 0;
+  const otherShare  = members.length > 0 ? round2(otherTotal / members.length) : 0;
+
+  // ── PREPAID bills: Elec + WiFi + Gas from CURRENT month ──
+  const currentBills = currentUtilRec?.bills || {};
+  const totalPrepaid = ['elec','wifi','gas'].reduce((s,k) => s+(Number(currentBills[k])||0), 0);
   const prepaidShare = members.length > 0 ? round2(totalPrepaid / members.length) : 0;
-  const khalaShare   = members.length > 0 ? round2(khalaTotal   / members.length) : 0;
 
-  const myRe       = rentRec?.entries?.find(e => e.name===member.name) || {};
-  const myRentDue  = Number(myRe.rent || member.rent || 0);
-  const myRentPaid = Number(myRe.paid || 0);
-  const myUtilPay  = (utilRec?.payments||{})[member.name] || {};
+  const myRe           = rentRec?.entries?.find(e => e.name===member.name) || {};
+  const myRentDue      = Number(myRe.rent || member.rent || 0);
+  const myRentPaid     = Number(myRe.paid || 0);
+  const myUtilPay      = (currentUtilRec?.payments||{})[member.name] || {};
+  const myUtilActualPaid = Number(myUtilPay.paid || 0);
 
-  const mealNet = round2(myBazar - mealCost);
-  const rentNet = round2(myRentPaid - myRentDue);
-  const utilNet = round2(Number(myUtilPay.paid||0) - (prepaidShare + khalaShare));
+  // Balances
+  const mealNet  = round2(myBazar - mealCost);
+  const rentNet  = round2(myRentPaid - myRentDue);
+  const utilNet  = round2(myUtilActualPaid - prepaidShare);
 
-  const todayStr = today();
-  const todayRec = allMeals.find(r => r.date === todayStr);
+  // Net = postpaid owed + prepaid owed - bazar credit - utility already paid
+  const netTotal = round2(
+    mealCost + khalaShare + otherShare   // postpaid
+    + myRentDue + prepaidShare           // prepaid
+    - myBazar                            // bazar credit
+    - myUtilActualPaid                   // already paid prepaid utility
+  );
+
+  // ── Today's meals (current month for display) ────────────
+  const todayStr  = today();
+  const todayRec  = allMeals.find(r => r.date === todayStr);
   let todayDayTotal=0, todayNightTotal=0;
   if(todayRec) {
     members.forEach(m => {
       todayDayTotal   += Number(todayRec.meals[m.name+'_day']   ?? todayRec.meals[m.name] ?? 0);
       todayNightTotal += Number(todayRec.meals[m.name+'_night'] ?? 0);
     });
-    todayDayTotal = round2(todayDayTotal);
+    todayDayTotal   = round2(todayDayTotal);
     todayNightTotal = round2(todayNightTotal);
   }
 
@@ -3227,8 +3400,6 @@ async function renderMyDashboard(el) {
   const col = avatarCol(Math.max(idx, 0));
   const rc  = myRe.status==='paid'?'badge-green':myRe.status==='partial'?'badge-amber':'badge-red';
   const uc  = myUtilPay.status==='paid'?'badge-green':myUtilPay.status==='partial'?'badge-amber':'badge-red';
-
-  const netTotal = round2(mealCost + khalaShare + myRentDue + prepaidShare - myBazar);
 
   el.innerHTML = `
   <div class="topbar">
@@ -3272,12 +3443,12 @@ async function renderMyDashboard(el) {
 
       <!-- QUICK STATS -->
       <div class="card">
-        <div class="card-title">This month</div>
+        <div class="card-title">This month's settlement <span style="font-size:11px;color:var(--text3);font-weight:400">(meals from ${MONTHS[prevMonth].slice(0,3)})</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="stat-card" style="padding:10px">
             <div class="stat-label">My meals</div>
             <div class="stat-value">${round2(myMeals)}</div>
-            <div class="stat-sub">${MONTHS[month]}</div>
+            <div class="stat-sub">${MONTHS[prevMonth].slice(0,3)}</div>
           </div>
           <div class="stat-card" style="padding:10px">
             <div class="stat-label">Meal rate</div>
@@ -3331,52 +3502,67 @@ async function renderMyDashboard(el) {
         <div style="font-size:28px">🍽️</div>
         <div style="color:var(--text3);font-size:13px">No meal entry today</div>
       </div>`}
-
     </div>
 
     <!-- WHAT I OWE THIS MONTH -->
     <div class="card" style="margin-bottom:14px">
       <div class="card-title">What I owe — ${MONTHS[month]} ${year}</div>
 
-      <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">🔴 Postpaid (settle at month end)</div>
+      <!-- POSTPAID -->
+      <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;font-weight:600">
+        🔴 Postpaid — from ${MONTHS[prevMonth]} ${prevYear} (settle now)
+      </div>
       <div class="my-stat-row">
-        <span class="my-stat-key">🍽️ Meal cost <span style="font-size:10px;color:var(--text3)">${myMeals} meals × ${fmtTk(mealRate)}</span></span>
+        <span class="my-stat-key">🍽️ Meal cost <span style="font-size:10px;color:var(--text3)">${round2(myMeals)} meals × ${fmtTk(mealRate)}</span></span>
         <span class="my-stat-val">${fmtTk(mealCost)}</span>
       </div>
       <div class="my-stat-row">
         <span class="my-stat-key">👩 Khala <span style="font-size:10px;color:var(--text3)">my share</span></span>
         <span class="my-stat-val">${fmtTk(khalaShare)}</span>
       </div>
+      <div class="my-stat-row">
+        <span class="my-stat-key">📦 Other <span style="font-size:10px;color:var(--text3)">my share</span></span>
+        <span class="my-stat-val">${fmtTk(otherShare)}</span>
+      </div>
       <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:var(--text3)">
-        <span>Postpaid subtotal</span><span>${fmtTk(round2(mealCost+khalaShare))}</span>
+        <span>Postpaid subtotal</span><span>${fmtTk(round2(mealCost+khalaShare+otherShare))}</span>
       </div>
 
-      <div style="font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;font-weight:600;border-top:1px solid var(--border);padding-top:12px">🔵 Prepaid (pay at month start)</div>
+      <!-- PREPAID -->
+      <div style="font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 8px;font-weight:600;border-top:1px solid var(--border);padding-top:12px">
+        🔵 Prepaid — for ${MONTHS[month]} ${year} (pay upfront)
+      </div>
       <div class="my-stat-row">
         <span class="my-stat-key">🏠 Room rent</span>
         <span class="my-stat-val" style="color:${myRe.status==='paid'?'var(--green)':'var(--text)'}">${fmtTk(myRentDue)} ${myRe.status==='paid'?'✓':''}</span>
       </div>
       <div class="my-stat-row">
-        <span class="my-stat-key">⚡ Utility bills <span style="font-size:10px;color:var(--text3)">my share</span></span>
+        <span class="my-stat-key">⚡ Utility bills <span style="font-size:10px;color:var(--text3)">elec+wifi+gas share</span></span>
         <span class="my-stat-val" style="color:${myUtilPay.status==='paid'?'var(--green)':'var(--text)'}">${fmtTk(prepaidShare)} ${myUtilPay.status==='paid'?'✓':''}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:var(--text3)">
         <span>Prepaid subtotal</span><span>${fmtTk(round2(myRentDue+prepaidShare))}</span>
       </div>
 
+      <!-- NET -->
       <div style="border-top:2px solid var(--border2);margin-top:4px;padding-top:12px">
         <div class="my-stat-row" style="font-size:15px">
           <span style="font-weight:600">Total this month</span>
-          <span style="font-weight:700">${fmtTk(round2(mealCost+khalaShare+myRentDue+prepaidShare))}</span>
+          <span style="font-weight:700">${fmtTk(round2(mealCost+khalaShare+otherShare+myRentDue+prepaidShare))}</span>
         </div>
         <div class="my-stat-row">
-          <span class="my-stat-key" style="color:var(--green)">− Bazar credit</span>
+          <span class="my-stat-key" style="color:var(--green)">− Bazar credit <span style="font-size:10px;color:var(--text3)">${MONTHS[prevMonth].slice(0,3)}</span></span>
           <span class="my-stat-val" style="color:var(--green)">${fmtTk(myBazar)}</span>
         </div>
+        ${myUtilActualPaid > 0 ? `
+        <div class="my-stat-row">
+          <span class="my-stat-key" style="color:var(--green)">− Utility already paid</span>
+          <span class="my-stat-val" style="color:var(--green)">${fmtTk(myUtilActualPaid)}</span>
+        </div>` : ''}
         <div class="my-stat-row" style="font-size:16px;border-top:1px solid var(--border);margin-top:6px;padding-top:10px">
           <span style="font-weight:700">Net</span>
           <span style="font-weight:700;font-size:18px;color:${netTotal>0?'var(--red)':'var(--green)'}">
-            ${netTotal>0 ? 'Pay '+fmtTk(netTotal) : 'Get '+fmtTk(-netTotal)}
+            ${netTotal > 0 ? 'Pay '+fmtTk(netTotal) : netTotal < 0 ? 'Get '+fmtTk(-netTotal) : 'Settled ✓'}
           </span>
         </div>
       </div>
@@ -3384,6 +3570,7 @@ async function renderMyDashboard(el) {
 
   </div>`;
 }
+
 async function renderMyProfile(el) {
   const member = await getMe();
   if(!member) { el.innerHTML='<div class="content"><div class="empty">Profile not found</div></div>'; return; }
@@ -4058,3 +4245,4 @@ async function init() {
 }
 
 init();
+
