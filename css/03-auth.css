@@ -1,0 +1,18 @@
+/* ══════════════════════════════════════════════
+   AUTH SCREENS
+══════════════════════════════════════════════ */
+.auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--land-bg);position:relative;overflow:hidden;}
+.auth-bg{position:absolute;inset:0;background:radial-gradient(ellipse at 20% 20%,rgba(212,168,83,.06) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(91,155,213,.04) 0%,transparent 60%);pointer-events:none;}
+.auth-card{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:36px 40px;width:100%;max-width:420px;box-shadow:0 24px 80px var(--shadow);animation:slideUp .45s var(--ease-spring) both;position:relative;z-index:1;margin:20px;}
+.auth-back{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;font-family:var(--font);margin-bottom:20px;padding:0;transition:color .15s;}
+.auth-back:hover{color:var(--accent);}
+.auth-logo{display:flex;align-items:center;gap:10px;font-family:var(--font-serif);font-size:18px;color:var(--accent);margin-bottom:24px;}
+.auth-title{font-family:var(--font-serif);font-size:26px;margin-bottom:5px;}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:22px;}
+.auth-error{background:var(--red-bg);border:1px solid rgba(224,82,82,.25);color:var(--red);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:16px;}
+.auth-hint{font-size:12px;color:var(--text3);margin-top:16px;text-align:center;}
+.auth-theme-btn{position:fixed;top:20px;right:20px;background:var(--bg2);border:1px solid var(--border2);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);z-index:10;transition:all .2s;}
+.auth-theme-btn:hover{color:var(--accent);}
+.pw-wrap{position:relative;}
+.pw-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;transition:color .15s;}
+.pw-eye:hover{color:var(--text2);}

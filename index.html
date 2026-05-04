@@ -9,7 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="style.css"/>
+<!-- ── CSS ── -->
+<link rel="stylesheet" href="css/01-variables.css"/>
+<link rel="stylesheet" href="css/02-landing.css"/>
+<link rel="stylesheet" href="css/03-auth.css"/>
+<link rel="stylesheet" href="css/04-layout.css"/>
+<link rel="stylesheet" href="css/05-components.css"/>
+<link rel="stylesheet" href="css/06-animations-responsive.css"/>
 </head>
 <body>
 
@@ -293,7 +299,7 @@
           <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           <span class="theme-label"></span>
         </button>
-        <button class="btn btn-ghost btn-sm logout-btn" onclick="doLogout()">Sign out</button>
+        <button class="nav-item logout-btn" id="sidebar-logout" onclick="doLogout()" style="color:var(--red);margin-bottom:4px"></button>
         <div class="db-status"><div class="db-dot live" id="db-dot"></div><span id="db-label">Connecting…</span></div>
       </div>
     </aside>
@@ -319,7 +325,48 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" referrerpolicy="no-referrer"></script>
-<script src="config.js"></script>
-<script src="script.js"></script>
+
+<!-- ── Core ── -->
+<script src="js/core/config.js"></script>
+<script src="js/core/helpers.js"></script>
+<script src="js/core/db.js"></script>
+<script src="js/core/auth.js"></script>
+<script src="js/core/nav.js"></script>
+
+<!-- ── Manager pages ── -->
+<script src="js/manager/dashboard.js"></script>
+<script src="js/manager/profiles.js"></script>
+<script src="js/manager/meals.js"></script>
+<script src="js/manager/bazar.js"></script>
+<script src="js/manager/utility.js"></script>
+<script src="js/manager/log.js"></script>
+<script src="js/manager/announcements.js"></script>
+<script src="js/manager/notifications.js"></script>
+<script src="js/manager/members.js"></script>
+
+<!-- ── Member pages ── -->
+<script src="js/member/dashboard.js"></script>
+<script src="js/member/pages.js"></script>
+
+<!-- Entry point -->
+<script>
+  loadTheme();
+  loadSession();
+  async function init() {
+    if (currentUser) {
+      if (currentUser.role === "superadmin") { bootSuperAdmin(); return; }
+      if (currentUser.memberId) {
+        try {
+          const { data: fresh } = await sb.from("members").select("role,name,username").eq("id", currentUser.memberId).maybeSingle();
+          if (fresh) { currentUser.role = fresh.role; saveSession(currentUser, currentMess); }
+          else { clearSession(); showLanding(); return; }
+        } catch(e) { console.error("Role refresh failed:", e); }
+      }
+      await bootApp(); return;
+    }
+    showLanding();
+  }
+  init();
+</script>
 </body>
 </html>

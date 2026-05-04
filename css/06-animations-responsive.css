@@ -1,0 +1,52 @@
+/* ══════════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════════ */
+.page-enter{animation:pageIn .32s var(--ease-spring) both;}
+@keyframes pageIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.94);}to{opacity:1;transform:scale(1);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.5);}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════ */
+@media(max-width:900px){
+  .land-nav{padding:14px 20px;}
+  .features,.how-it-works,.testimonials{padding:60px 20px;}
+  .hero{padding:60px 20px 48px;}
+  .land-footer{padding:24px 20px;flex-direction:column;gap:12px;text-align:center;}
+  .land-footer-logo{justify-content:center;}
+  .land-footer-links{justify-content:center;}
+  .land-cta{padding:60px 20px;}
+  .land-nav-links{display:none;}
+}
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .mobile-topbar{display:flex;}
+  .mobile-nav{display:flex;}
+  .shell{flex-direction:column;}
+  .main{padding-top:52px;padding-bottom:72px;}
+  .topbar{padding:14px 14px 0;}
+  .content{padding:14px 14px 32px;}
+  .page-title{font-size:22px;}
+  .stat-grid{grid-template-columns:repeat(2,1fr);gap:7px;}
+  .card{padding:14px;}
+  .grid-2{grid-template-columns:1fr;}
+  .meal-grid{grid-template-columns:repeat(2,1fr);}
+  .modal{padding:16px;max-height:90vh;}
+  .auth-card{padding:24px 22px;}
+}
+@media(max-width:640px){
+  .dash-side-by-side{grid-template-columns:1fr !important;}
+}
+@media(max-width:480px){
+  .land-nav-actions .btn-ghost{display:none;}
+  .hero-stats{flex-direction:column;gap:16px;}
+  .hero-stat-sep{display:none;}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+}
