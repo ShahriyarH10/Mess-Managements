@@ -31,25 +31,133 @@
   .mobile-nav{display:flex;}
   .shell{flex-direction:column;}
   .main{padding-top:52px;padding-bottom:78px;}
-  .topbar{padding:14px 14px 0;}
-  .content{padding:14px 14px 32px;}
-  .page-title{font-size:22px;}
+  .topbar{padding:14px 14px 0;flex-direction:column;align-items:flex-start;gap:10px;}
+  .topbar-actions{width:100%;flex-wrap:wrap;gap:6px;}
+  .topbar-actions .input,.topbar-actions select{flex:1;min-width:120px;}
+  .content{padding:14px 12px 32px;}
+  .page-title{font-size:20px;}
+  .page-sub{font-size:12px;}
   .stat-grid{grid-template-columns:repeat(2,1fr);gap:7px;}
-  .card{padding:14px;}
+  .stat-card{padding:10px 11px;}
+  .stat-value{font-size:18px;}
+  .card{padding:14px 12px;}
   .grid-2{grid-template-columns:1fr;}
+
+  /* Inline 2-column grids → single column on mobile.
+     Catches places that use inline `grid-template-columns:1fr 1fr`
+     or `repeat(2,1fr)` instead of the .grid-2 class. */
+  [style*="grid-template-columns:1fr 1fr"],
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:repeat(2,1fr)"],
+  [style*="grid-template-columns: repeat(2,1fr)"]{
+    grid-template-columns:1fr !important;
+  }
+  /* 3-column inline grids → 2 columns */
+  [style*="grid-template-columns:1fr 1fr 1fr"],
+  [style*="grid-template-columns:repeat(3,1fr)"]{
+    grid-template-columns:repeat(2,1fr) !important;
+  }
+  /* Auto-fill grids: relax min so 1 card fits per row on small phones */
+  [style*="grid-template-columns:repeat(auto-fill,minmax(260px"],
+  [style*="grid-template-columns:repeat(auto-fill,minmax(220px"]{
+    grid-template-columns:1fr !important;
+  }
+
+  /* Profile detail header summary — wrap each badge onto its own line,
+     drop the awkward border-left dividers. */
+  .modal-content [style*="border-left:1px solid"]{
+    border-left:none !important;
+    padding-left:0 !important;
+  }
+
   .meal-grid{grid-template-columns:repeat(2,1fr);}
-  .modal{padding:16px;max-height:90vh;}
+  .meal-cell{padding:10px;}
+  .meal-num-input{width:48px;font-size:13px;}
+
+  /* Modals: full-width on phones */
+  .modal-bg{padding:8px;}
+  .modal{padding:16px;max-height:94vh;border-radius:10px;}
+  .modal.modal-wide{max-width:100%;}
+  .modal-title{font-size:17px;}
+
+  /* Tables — keep readable while letting .tbl-wrap scroll horizontally */
+  .tbl-wrap{margin:6px -6px 0;width:calc(100% + 12px);padding:0 6px;-webkit-overflow-scrolling:touch;}
+  .tbl-wrap table{font-size:12px;min-width:max-content;}
+  .tbl-wrap th,.tbl-wrap td{padding:7px 8px;white-space:nowrap;}
+
+  /* Month selectors / date rows on small screens */
+  .month-sel{flex-wrap:wrap;gap:8px;}
+  .month-sel label{font-size:12px;}
+  .month-sel .input{flex:1;min-width:100px;}
+  .date-row{flex-wrap:wrap;}
+  .date-row .input{flex:1;min-width:140px;}
+
   .auth-card{padding:24px 22px;}
+
+  /* Settlement formula info card */
+  .settlement-formula-box [style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:1fr !important;
+  }
+
+  /* Bottom-aligned action rows */
+  [style*="justify-content:flex-end"]{justify-content:flex-start !important;}
+  [style*="margin-left:auto"]{margin-left:0 !important;}
+
+  /* Profile cards: ensure long names don't blow up the card */
+  .profile-card{padding:13px;}
+
+  /* Long pill rows in summary banners (Collect Payment etc.) */
+  #ut-summary-bar > div,
+  [id$="-summary-bar"] > div{
+    flex-direction:column !important;
+    align-items:flex-start !important;
+    gap:6px !important;
+  }
 }
 
-@media(max-width:640px){
-  .dash-side-by-side{grid-template-columns:1fr !important;}
-}
 @media(max-width:480px){
   .land-nav-actions .btn-ghost{display:none;}
   .hero-stats{flex-direction:column;gap:16px;}
   .hero-stat-sep{display:none;}
+
+  .stat-grid{grid-template-columns:1fr 1fr;gap:6px;}
+  .stat-card{padding:9px 10px;}
+  .stat-value{font-size:16px;}
+  .stat-label{font-size:10px;}
+
+  /* Even auto-fill 180px+ → 1 col on tiny screens */
+  [style*="grid-template-columns:repeat(auto-fill,minmax(180px"]{
+    grid-template-columns:1fr !important;
+  }
+
+  .topbar{padding:12px 12px 0;}
+  .content{padding:12px 10px 32px;}
+  .page-title{font-size:18px;}
+
+  .card{padding:12px 11px;}
+  .modal{padding:14px;}
+  .modal-title{font-size:16px;}
+
+  .btn{padding:7px 12px;font-size:12px;}
+  .btn-sm{padding:5px 9px;font-size:11px;}
+
+  .tbl-wrap table{font-size:11px;}
+  .tbl-wrap th,.tbl-wrap td{padding:6px;}
 }
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+}
+
+/* Tablet portrait (769–1024px) — sidebar still visible, but content density
+   must stay readable. Don't collapse 2-col grids; just ease padding/font. */
+@media(min-width:769px) and (max-width:1024px){
+  .sidebar{width:200px;}
+  .content{padding:18px 16px 36px;}
+  .stat-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+  .modal.modal-wide{max-width:96vw;}
+  .tbl-wrap table{font-size:13px;}
+
+  /* Heavy multi-column tables (Monthly Log) — let them scroll instead
+     of cramming. .tbl-wrap already has overflow-x:auto. */
+  .tbl-wrap table{min-width:max-content;}
 }

@@ -76,9 +76,9 @@ create table if not exists rent (
 );
 
 -- ── UTILITY PAYMENTS ───────────────────────────────────
--- bills column: { elec, wifi, gas, khala, other }
---   elec/wifi/gas/other = prepaid bills
---   khala              = postpaid bill
+-- bills column: { elec, gas, wifi, khala, other }
+--   elec/gas/wifi = prepaid bills
+--   khala/other   = postpaid bills
 -- payments column: { "MemberName": { paid, status, notes } }
 -- status = 'paid' | 'partial' | 'unpaid'
 create table if not exists utility_payments (
