@@ -44,8 +44,8 @@ select.input option{background:var(--bg3);color:var(--text);}
 /* ── Table ── */
 .tbl-wrap{overflow-x:auto;margin-top:4px;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
-tbody tr:nth-child(even){background:var(--bg3);}
-tbody tr{background:var(--bg4);}
+tbody tr:nth-child(odd){background:var(--bg1);}
+tbody tr{background:var(--bg2);}
 th{color:var(--text3);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:7px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;background:var(--bg3);}
 td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle;transition:background .12s;}
 tr:last-child td{border-bottom:none;}
@@ -146,3 +146,60 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .chore-task{flex:1;font-size:14px;font-weight:500;}
 .chore-assignee{font-size:13px;color:var(--text2);}
 .chore-status{font-size:12px;}
+
+/* ── Meal month history ── */
+.meal-month-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:9px;}
+.meal-month-chip{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:left;color:var(--text);cursor:pointer;font-family:var(--font);transition:all .18s var(--ease-spring);}
+.meal-month-chip:hover{border-color:var(--accent);background:var(--accent-bg);transform:translateY(-2px);}
+.meal-month-chip span{display:block;font-weight:600;font-size:13px;margin-bottom:3px;}
+.meal-month-chip small{color:var(--text3);font-size:11px;}
+.meal-calendar{display:grid;grid-template-columns:repeat(7,minmax(58px,1fr));gap:8px;}
+.meal-day{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px;min-height:76px;transition:all .18s;}
+.meal-day.has-meal{background:var(--green-bg);border-color:rgba(76,175,130,.35);}
+.meal-day.has-meal .meal-day-num,.meal-day.has-meal .meal-day-total{color:var(--green);}
+.meal-day-num{font-size:11px;color:var(--text3);font-weight:600;}
+.meal-day-total{font-size:20px;font-weight:700;margin:5px 0 2px;line-height:1;}
+.meal-day-meta{font-size:10px;color:var(--text3);}
+.meal-cell-active{background:var(--green-bg);border-color:rgba(76,175,130,.28);}
+.settlement-note{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--text2);margin-bottom:14px;}
+@media(max-width:720px){.meal-calendar{grid-template-columns:repeat(3,1fr)}.meal-day{min-height:70px}.grid-2{grid-template-columns:1fr!important}}
+
+/* ── Settlement breakdown improvements ── */
+.settlement-formula-box {
+  animation: fadeIn .3s ease;
+}
+
+.my-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.my-stat-row:last-child { border-bottom: none; }
+.my-stat-key {
+  font-size: 13px;
+  color: var(--text2);
+  flex: 1;
+}
+.my-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Stat sub-label */
+.stat-sub {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* Better scroll table */
+.scroll-table { max-height: 300px; overflow-y: auto; }
+
+/* Net labels */
+.net-neg { color: var(--red) !important; }
+.net-pos { color: var(--green) !important; }

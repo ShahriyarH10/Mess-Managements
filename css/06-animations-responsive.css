@@ -23,12 +23,14 @@
   .land-cta{padding:60px 20px;}
   .land-nav-links{display:none;}
 }
+
+
 @media(max-width:768px){
   .sidebar{display:none;}
   .mobile-topbar{display:flex;}
   .mobile-nav{display:flex;}
   .shell{flex-direction:column;}
-  .main{padding-top:52px;padding-bottom:72px;}
+  .main{padding-top:52px;padding-bottom:78px;}
   .topbar{padding:14px 14px 0;}
   .content{padding:14px 14px 32px;}
   .page-title{font-size:22px;}
@@ -39,6 +41,7 @@
   .modal{padding:16px;max-height:90vh;}
   .auth-card{padding:24px 22px;}
 }
+
 @media(max-width:640px){
   .dash-side-by-side{grid-template-columns:1fr !important;}
 }

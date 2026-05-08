@@ -15,25 +15,32 @@ const IC = {
   bell:    `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a5 5 0 015 5v3l1.5 2H1.5L3 9V6a5 5 0 015-5zM6.5 13a1.5 1.5 0 003 0"/></svg>`,
   transfer:`<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 3l3 3-3 3M2 6h12M5 13l-3-3 3-3M14 10H2"/></svg>`,
   logout:  `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6"/></svg>`,
+  moon:    `<svg class="nav-icon moon-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 10.5A5.5 5.5 0 015.5 3 6 6 0 1013 10.5z"/></svg>`,
+  sun:     `<svg class="nav-icon sun-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M13 3l-1.5 1.5M4.5 11.5L3 13"/></svg>`,
 };
 
 const MANAGER_NAV = [
   { section:"Overview" },
   { page:"dashboard",     label:"Dashboard",       icon:IC.dash },
   { page:"profiles",      label:"Member Profiles", icon:IC.profile },
+
   { section:"Entry" },
   { page:"meals",         label:"Meal Entry",      icon:IC.meal },
   { page:"bazar",         label:"Bazar Entry",     icon:IC.bazar },
   { page:"utility",       label:"Utility Entry",   icon:IC.util },
   { page:"rent",          label:"Room Rent",       icon:IC.rent },
+  { page:"collect",       label:"Collect Payment", icon:IC.bazar },
+
   { section:"Reports" },
   { page:"log",           label:"Monthly Log",     icon:IC.log },
+
   { section:"Mess" },
   { page:"announce",      label:"Announcements",   icon:IC.announce },
   { page:"chores",        label:"Chore Roster",    icon:IC.chores },
-  { page:"notifications", label:"Requests",        icon:IC.bell },
+  { page:"notifications", label:"Notifications",   icon:IC.bell },
   { page:"members",       label:"Members",         icon:IC.members },
   { page:"transfer",      label:"Transfer Role",   icon:IC.transfer },
+
   { section:"Account" },
   { page:"my-profile",    label:"My Profile",      icon:IC.profile },
 ];
@@ -42,10 +49,11 @@ const MEMBER_NAV = [
   { section:"My Account" },
   { page:"my-dashboard",  label:"My Dashboard",   icon:IC.dash },
   { page:"my-profile",    label:"My Profile",     icon:IC.profile },
+
   { section:"Mess" },
   { page:"my-meals",      label:"Meal Log",       icon:IC.meal },
   { page:"my-bazar",      label:"Bazar Log",      icon:IC.bazar },
-  { page:"my-payments",   label:"My Payments",    icon:IC.rent },
+  { page:"my-payments",   label:"Utility/Rent",   icon:IC.rent },
   { page:"mess-overview", label:"Mess Overview",  icon:IC.log },
   { page:"my-announce",   label:"Announcements",  icon:IC.announce },
   { page:"my-chores",     label:"Chore Roster",   icon:IC.chores },
@@ -54,109 +62,170 @@ const MEMBER_NAV = [
 /* ═══════════════════════════════════════════
    BUILD NAV
 ═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   BUILD NAV
+═══════════════════════════════════════════ */
 function buildNav() {
   const isManager = currentUser.role === "manager";
   const nav = isManager ? MANAGER_NAV : MEMBER_NAV;
 
-  // Build sidebar HTML using a loop to avoid nested backtick issues
+  /* Sidebar */
   let sidebarHTML = "";
+
   for (const i of nav) {
     if (i.section) {
       sidebarHTML += '<div class="nav-section">' + i.section + '</div>';
     } else {
       let badge = "";
-      if (i.page === "notifications") badge = '<span class="notif-badge" id="notif-badge" style="display:none">0</span>';
-      if (i.page === "my-announce")   badge = '<span class="notif-badge" id="announce-notif-badge" style="display:none">0</span>';
-      sidebarHTML += '<button class="nav-item" onclick="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' + i.icon + i.label + badge + '</button>';
+
+      if (i.page === "notifications") {
+        badge = '<span class="notif-badge" id="notif-badge" style="display:none">0</span>';
+      }
+
+      if (i.page === "my-announce") {
+        badge = '<span class="notif-badge" id="announce-notif-badge" style="display:none">0</span>';
+      }
+
+      sidebarHTML +=
+        '<button class="nav-item" onclick="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
+          i.icon +
+          i.label +
+          badge +
+        '</button>';
     }
   }
+
   document.getElementById("sidebar-nav").innerHTML = sidebarHTML;
 
-  const managerMain = [
-    {page:"dashboard",    label:"Home",    icon:IC.dash},
-    {page:"meals",        label:"Meals",   icon:IC.meal},
-    {page:"bazar",        label:"Bazar",   icon:IC.bazar},
-    {page:"notifications",label:"Requests",icon:IC.bell},
+  /* Mobile bottom nav: only main options + More */
+  const managerMainPages = [
+    "dashboard",
+    "meals",
+    "bazar",
+    "notifications",
   ];
-  const memberMain = [
-    {page:"my-dashboard", label:"Home",  icon:IC.dash},
-    {page:"my-meals",     label:"Meals", icon:IC.meal},
-    {page:"my-bazar",     label:"Bazar", icon:IC.bazar},
-    {page:"my-payments",  label:"Pay",   icon:IC.rent},
-  ];
-  const mainItems = isManager ? managerMain : memberMain;
 
-  // Mobile bottom nav — loop to avoid nested backtick issues
+  const memberMainPages = [
+    "my-dashboard",
+    "my-meals",
+    "my-bazar",
+    "my-payments",
+  ];
+
+  const mainPages = isManager ? managerMainPages : memberMainPages;
+
+  const mobileMainItems = nav.filter(i =>
+    !i.section && mainPages.includes(i.page)
+  );
+
+  const mobileMoreItems = nav.filter(i =>
+    !i.section && !mainPages.includes(i.page)
+  );
+
   let mobileNavHTML = "";
-  for (const i of mainItems) {
-    mobileNavHTML += '<button class="mob-nav-btn" onclick="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' + i.icon + '<span>' + i.label + '</span></button>';
+
+  for (const i of mobileMainItems) {
+    let badge = "";
+
+    if (i.page === "notifications") {
+      badge = '<span class="notif-badge mob-inline-badge" id="notif-badge-mobile" style="display:none">0</span>';
+    }
+
+    if (i.page === "my-announce") {
+      badge = '<span class="notif-badge mob-inline-badge" id="announce-notif-badge-mobile" style="display:none">0</span>';
+    }
+
+    mobileNavHTML +=
+      '<button class="mob-nav-btn" onclick="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
+        i.icon +
+        '<span>' + i.label + '</span>' +
+        badge +
+      '</button>';
   }
-  mobileNavHTML += `<button class="mob-nav-btn" onclick="toggleMobileMore()" id="mob-more-btn">
-    <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <circle cx="3" cy="8" r="1.2" fill="currentColor"/>
-      <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
-      <circle cx="13" cy="8" r="1.2" fill="currentColor"/>
-    </svg>
-    <span>More</span>
-  </button>`;
+
+  mobileNavHTML += `
+    <button class="mob-nav-btn" onclick="toggleMobileMore()" id="mob-more-btn" data-page="more">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="3" cy="8" r="1.2" fill="currentColor"/>
+        <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+        <circle cx="13" cy="8" r="1.2" fill="currentColor"/>
+      </svg>
+      <span>More</span>
+    </button>`;
+
   document.getElementById("mobile-nav").innerHTML = mobileNavHTML;
 
-  const managerMore = [
-    {page:"rent",      label:"Room Rent",     icon:IC.rent},
-    {page:"utility",   label:"Utility Entry", icon:IC.util},
-    {page:"log",       label:"Monthly Log",   icon:IC.log},
-    {page:"profiles",  label:"Profiles",      icon:IC.profile},
-    {page:"announce",  label:"Announcements", icon:IC.announce},
-    {page:"chores",    label:"Chore Roster",  icon:IC.chores},
-    {page:"members",   label:"Members",       icon:IC.members},
-    {page:"transfer",  label:"Transfer Role", icon:IC.transfer},
-    {page:"my-profile",label:"My Profile",    icon:IC.profile},
-  ];
-  const memberMore = [
-    {page:"mess-overview",label:"Mess Overview", icon:IC.log},
-    {page:"my-profile",   label:"My Profile",    icon:IC.profile},
-    {page:"my-announce",  label:"Announcements", icon:IC.announce},
-    {page:"my-chores",    label:"Chore Roster",  icon:IC.chores},
-  ];
-  const moreItems = isManager ? managerMore : memberMore;
-
+  /* Remove old drawer if exists */
   const existing = document.getElementById("mobile-more-drawer");
   if (existing) existing.remove();
+
   const existingBg = document.getElementById("mobile-more-bg");
   if (existingBg) existingBg.remove();
 
+  /* More drawer backdrop */
   const backdrop = document.createElement("div");
   backdrop.id = "mobile-more-bg";
   backdrop.onclick = closeMobileMore;
   document.body.appendChild(backdrop);
 
-  // Build drawer HTML using loop to avoid nested backtick issues
+  /* More drawer items */
   let drawerItemsHTML = "";
-  for (const i of moreItems) {
+
+  for (const i of mobileMoreItems) {
     let badge = "";
-    if (i.page === "my-announce") badge = '<span class="notif-badge" id="announce-notif-badge-drawer" style="display:none">0</span>';
-    drawerItemsHTML += '<button class="mob-drawer-item" onclick="closeMobileMore();navigate(\'' + i.page + '\')" data-page="' + i.page + '">' + i.icon + '<span>' + i.label + '</span>' + badge + '</button>';
+
+    if (i.page === "my-announce") {
+      badge = '<span class="notif-badge" id="announce-notif-badge-drawer" style="display:none">0</span>';
+    }
+
+    drawerItemsHTML +=
+      '<button class="mob-drawer-item" onclick="closeMobileMore();navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
+        i.icon +
+        '<span>' + i.label + '</span>' +
+        badge +
+      '</button>';
   }
+
+  drawerItemsHTML += `
+    <button class="mob-drawer-item" onclick="toggleTheme();closeMobileMore()" data-page="theme">
+      ${IC.moon}
+      ${IC.sun}
+      <span class="drawer-theme-label">Light mode</span>
+    </button>
+
+    <button class="mob-drawer-item mob-drawer-signout" onclick="doLogout()" data-page="logout">
+      ${IC.logout}
+      <span>Sign out</span>
+    </button>`;
 
   const drawer = document.createElement("div");
   drawer.id = "mobile-more-drawer";
+
   drawer.innerHTML = `
     <div class="mob-drawer-handle"></div>
+
     <div class="mob-drawer-header">
       <div class="mob-drawer-title">More options</div>
       <button onclick="closeMobileMore()" class="mob-drawer-close">✕</button>
     </div>
+
     <div class="mob-drawer-user">
-      <div class="avatar" style="background:${currentUser._col?.bg||"#2a2218"};color:${currentUser._col?.fg||"#d4a853"};width:36px;height:36px;font-size:13px">${initials(currentUser.name)}</div>
+      <div class="avatar" style="background:${currentUser._col?.bg || "#2a2218"};color:${currentUser._col?.fg || "#d4a853"};width:36px;height:36px;font-size:13px">
+        ${initials(currentUser.name)}
+      </div>
+
       <div>
         <div style="font-weight:600;font-size:14px">${currentUser.name}</div>
-        <div style="font-size:11px;color:var(--text3)">${isManager?"👑 Manager":"Member"} · @${currentUser.username}</div>
+        <div style="font-size:11px;color:var(--text3)">
+          ${isManager ? "👑 Manager" : "Member"} · @${currentUser.username}
+        </div>
       </div>
     </div>
-    <div class="mob-drawer-grid">${drawerItemsHTML}</div>
-    <div class="mob-drawer-footer">
-      <button class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px" onclick="doLogout()">Sign out</button>
+
+    <div class="mob-drawer-grid">
+      ${drawerItemsHTML}
     </div>`;
+
   document.body.appendChild(drawer);
 
   const logoutBtn = document.getElementById("sidebar-logout");
@@ -167,45 +236,109 @@ function buildNav() {
 }
 
 function toggleMobileMore() {
-  const drawer=document.getElementById("mobile-more-drawer"), bg=document.getElementById("mobile-more-bg");
-  if(!drawer) return;
-  if(drawer.classList.contains("open")) { closeMobileMore(); }
-  else { drawer.classList.add("open"); bg.classList.add("open"); document.getElementById("mob-more-btn")?.classList.add("active"); }
+  const drawer = document.getElementById("mobile-more-drawer");
+  const bg = document.getElementById("mobile-more-bg");
+  const moreBtn = document.getElementById("mob-more-btn");
+
+  if (!drawer || !bg) return;
+
+  if (drawer.classList.contains("open")) {
+    closeMobileMore();
+  } else {
+    drawer.classList.add("open");
+    bg.classList.add("open");
+    moreBtn?.classList.add("active");
+  }
 }
+
 function closeMobileMore() {
-  const drawer=document.getElementById("mobile-more-drawer"), bg=document.getElementById("mobile-more-bg");
-  if(drawer) drawer.classList.remove("open");
-  if(bg) bg.classList.remove("open");
+  const drawer = document.getElementById("mobile-more-drawer");
+  const bg = document.getElementById("mobile-more-bg");
+  const moreBtn = document.getElementById("mob-more-btn");
+
+  if (drawer) drawer.classList.remove("open");
+  if (bg) bg.classList.remove("open");
+
+  moreBtn?.classList.remove("active");
+}
+
+function removeMobileMoreDrawer() {
+  const existing = document.getElementById("mobile-more-drawer");
+  if (existing) existing.remove();
+
+  const existingBg = document.getElementById("mobile-more-bg");
+  if (existingBg) existingBg.remove();
+
   document.getElementById("mob-more-btn")?.classList.remove("active");
 }
 
+/* ═══════════════════════════════════════════
+   BADGES
+═══════════════════════════════════════════ */
 async function refreshNotifBadge() {
   const count = await getPendingCount();
-  const badge = document.getElementById("notif-badge");
-  if (!badge) return;
-  badge.textContent = count; badge.style.display = count > 0 ? "inline-flex" : "none";
-}
-async function refreshMemberAnnounceBadge() {
-  const badge       = document.getElementById("announce-notif-badge");
-  const badgeDrawer = document.getElementById("announce-notif-badge-drawer");
-  if (!badge && !badgeDrawer) return;
-  const count = await getUnreadAnnouncementCount();
-  [badge, badgeDrawer].forEach(b => {
-    if (!b) return;
-    b.textContent = count; b.style.display = count > 0 ? "inline-flex" : "none";
+
+  const badges = [
+    document.getElementById("notif-badge"),
+    document.getElementById("notif-badge-mobile"),
+  ];
+
+  badges.forEach(badge => {
+    if (!badge) return;
+
+    badge.textContent = count;
+    badge.style.display = count > 0 ? "inline-flex" : "none";
   });
 }
 
+async function refreshMemberAnnounceBadge() {
+  const badges = [
+    document.getElementById("announce-notif-badge"),
+    document.getElementById("announce-notif-badge-mobile"),
+    document.getElementById("announce-notif-badge-drawer"),
+  ];
+
+  if (!badges.some(Boolean)) return;
+
+  const count = await getUnreadAnnouncementCount();
+
+  badges.forEach(badge => {
+    if (!badge) return;
+
+    badge.textContent = count;
+    badge.style.display = count > 0 ? "inline-flex" : "none";
+  });
+}
+
+/* ═══════════════════════════════════════════
+   SIDEBAR USER
+═══════════════════════════════════════════ */
 function updateSidebarUser() {
   if (!currentUser) return;
+
   const isManager = currentUser.role === "manager";
   const idx = members.findIndex(m => m.id === currentUser.memberId);
-  const col = isManager ? { bg:"#2a2218", fg:"#d4a853" } : avatarCol(idx);
+  const col = isManager
+    ? { bg:"#2a2218", fg:"#d4a853" }
+    : avatarCol(idx);
+
   document.getElementById("sidebar-user").innerHTML = `
-    <div class="su-avatar" style="background:${col.bg};color:${col.fg}">${initials(currentUser.name)}</div>
-    <div class="su-info"><div class="su-name">${currentUser.name}</div><div class="su-role">${isManager?"👑 Manager":"Member"}</div></div>`;
+    <div class="su-avatar" style="background:${col.bg};color:${col.fg}">
+      ${initials(currentUser.name)}
+    </div>
+
+    <div class="su-info">
+      <div class="su-name">${currentUser.name}</div>
+      <div class="su-role">${isManager ? "👑 Manager" : "Member"}</div>
+    </div>`;
+
   const mob = document.getElementById("mob-user-badge");
-  if (mob) { mob.style.background=col.bg; mob.style.color=col.fg; mob.textContent=initials(currentUser.name); }
+
+  if (mob) {
+    mob.style.background = col.bg;
+    mob.style.color = col.fg;
+    mob.textContent = initials(currentUser.name);
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -213,57 +346,101 @@ function updateSidebarUser() {
 ═══════════════════════════════════════════ */
 function navigate(page) {
   currentPage = page;
+
   closeMobileMore();
-  document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.page===page));
-  document.querySelectorAll(".mob-nav-btn").forEach(b => b.classList.toggle("active", b.dataset.page===page));
-  document.querySelectorAll(".mob-drawer-item").forEach(b => b.classList.toggle("active", b.dataset.page===page));
-  const mainPages = currentUser.role==="manager"
-    ? ["dashboard","meals","bazar","notifications"]
-    : ["my-dashboard","my-meals","my-bazar","my-payments"];
+
+  document.querySelectorAll(".nav-item").forEach(n => {
+    n.classList.toggle("active", n.dataset.page === page);
+  });
+
+  document.querySelectorAll(".mob-nav-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.page === page);
+  });
+
   const moreBtn = document.getElementById("mob-more-btn");
-  if (moreBtn) moreBtn.classList.toggle("mob-more-active", !mainPages.includes(page));
+  if (moreBtn) moreBtn.classList.remove("mob-more-active");
+
   const main = document.getElementById("main-content");
-  main.innerHTML = '<div class="loading" style="min-height:200px"><div class="spinner"></div>Loading…</div>';
+
+  main.innerHTML = `
+    <div class="loading" style="min-height:200px">
+      <div class="spinner"></div>
+      Loading…
+    </div>`;
+
   renderPage(page);
 }
 
 async function renderPage(page) {
   members = await dbGetMembers();
+
   updateSidebarUser();
+
   const main = document.getElementById("main-content");
   const isManager = currentUser.role === "manager";
-  const managerOnly = ["dashboard","profiles","meals","bazar","utility","rent","log","members","announce","chores","transfer","notifications"];
-  if (!isManager && managerOnly.includes(page)) page = "my-dashboard";
+
+  const managerOnly = [
+    "dashboard",
+    "profiles",
+    "meals",
+    "bazar",
+    "utility",
+    "rent",
+    "collect",
+    "log",
+    "members",
+    "announce",
+    "chores",
+    "transfer",
+    "notifications",
+  ];
+
+  if (!isManager && managerOnly.includes(page)) {
+    page = "my-dashboard";
+  }
+
   main.innerHTML = "";
+
   const div = document.createElement("div");
-  div.className = "page-enter"; div.style.minHeight = "100%";
+  div.className = "page-enter";
+  div.style.minHeight = "100%";
+
   main.appendChild(div);
+
   try {
     switch (page) {
-      case "dashboard":     await renderDashboard(div);              break;
-      case "profiles":      await renderProfiles(div);               break;
-      case "meals":               renderMeals(div);                  break;
-      case "bazar":               renderBazar(div);                  break;
-      case "utility":       await renderUtility(div);                break;
-      case "rent":                renderRent(div);                   break;
-      case "log":                 renderLog(div);                    break;
-      case "members":             renderMembers(div);                break;
-      case "announce":      await renderAnnouncements(div, true);    break;
-      case "chores":        await renderChores(div, true);           break;
-      case "transfer":      await renderTransferRole(div);           break;
-      case "my-profile":    await renderMyProfile(div);              break;
-      case "my-dashboard":  await renderMyDashboard(div);            break;
-      case "my-meals":      await renderMyMeals(div);                break;
-      case "my-bazar":      await renderMyBazar(div);                break;
-      case "my-payments":   await renderMyPayments(div);             break;
-      case "mess-overview": await renderMessOverview(div);           break;
-      case "my-announce":   await renderAnnouncements(div, false);   break;
-      case "my-chores":     await renderChores(div, false);          break;
-      case "notifications": await renderNotifications(div);          break;
-      default: div.innerHTML = '<div class="content"><div class="empty">Page not found</div></div>';
+      case "dashboard":      await renderDashboard(div);              break;
+      case "profiles":       await renderProfiles(div);               break;
+      case "meals":                renderMeals(div);                  break;
+      case "bazar":                renderBazar(div);                  break;
+      case "utility":        await renderUtility(div);                break;
+      case "rent":                 renderRent(div);                   break;
+      case "collect":        await renderCollect(div);                break;
+      case "log":                  renderLog(div);                    break;
+      case "members":              renderMembers(div);                break;
+      case "announce":       await renderAnnouncements(div, true);    break;
+      case "chores":         await renderChores(div, true);           break;
+      case "transfer":       await renderTransferRole(div);           break;
+      case "notifications":  await renderNotifications(div);          break;
+
+      case "my-profile":     await renderMyProfile(div);              break;
+      case "my-dashboard":   await renderMyDashboard(div);            break;
+      case "my-meals":       await renderMyMeals(div);                break;
+      case "my-bazar":       await renderMyBazar(div);                break;
+      case "my-payments":    await renderMyPayments(div);             break;
+      case "mess-overview":  await renderMessOverview(div);           break;
+      case "my-announce":    await renderAnnouncements(div, false);   break;
+      case "my-chores":      await renderChores(div, false);          break;
+
+      default:
+        div.innerHTML = '<div class="content"><div class="empty">Page not found</div></div>';
     }
   } catch (e) {
-    div.innerHTML = `<div class="content"><div class="empty">Error loading page: ${e.message}</div></div>`;
+    div.innerHTML = `
+      <div class="content">
+        <div class="empty">Error loading page: ${e.message}</div>
+      </div>`;
+
     console.error(e);
   }
 }

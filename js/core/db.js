@@ -129,33 +129,55 @@ async function dbDeleteChore(id) {
 }
 
 /* ── Notifications ── */
+/* ── Notifications / Activity Log ── */
 async function dbGetNotifications(statusFilter) {
-  let q = sb.from("notifications").select("*").eq("mess_id", messId()).order("created_at", { ascending: false });
+  let q = sb
+    .from("notifications")
+    .select("*")
+    .eq("mess_id", messId())
+    .order("created_at", { ascending: false });
+
   if (statusFilter) q = q.eq("status", statusFilter);
+
   const { data, error } = await q;
   if (error) throw error;
+
   return sanitize(data || []);
 }
 
 async function dbSaveNotification(row) {
   const { error } = await sb.from("notifications").insert({
-    mess_id: messId(), type: row.type, from_id: currentUser.memberId,
-    from_name: currentUser.name, date: row.date, data: row.data,
-    note: row.note || "", status: "pending",
+    mess_id: messId(),
+    type: row.type,
+    from_id: currentUser.memberId,
+    from_name: currentUser.name,
+    date: row.date,
+    data: row.data,
+    note: row.note || "",
+    status: row.status || "new",
   });
+
   if (error) throw error;
 }
 
 async function dbUpdateNotifStatus(id, status) {
-  const { error } = await sb.from("notifications").update({ status }).eq("id", id);
+  const { error } = await sb
+    .from("notifications")
+    .update({ status })
+    .eq("id", id);
+
   if (error) throw error;
 }
 
 async function getPendingCount() {
-  const { count, error } = await sb.from("notifications")
+  const { count, error } = await sb
+    .from("notifications")
     .select("id", { count: "exact", head: true })
-    .eq("mess_id", messId()).eq("status", "pending");
+    .eq("mess_id", messId())
+    .in("status", ["new", "pending"]);
+
   if (error) return 0;
+
   return count || 0;
 }
 
