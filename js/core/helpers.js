@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════
    CORE — Helpers: utils, theme, session, modal, toast
    ═══════════════════════════════════════════════ */
-const today      = () => new Date().toISOString().slice(0, 10);
+const today      = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
 const thisMonth  = () => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; };
 const pad2       = (n) => String(n + 1).padStart(2, "0");
 const monthKey   = (y, m) => `${y}-${pad2(m)}`;

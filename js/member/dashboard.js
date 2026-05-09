@@ -39,8 +39,13 @@ async function renderMyDashboard(el) {
   // Use the canonical settlement calc
   const calc = calcMemberSettlement(member, allMeals, allBazar, rentRec, utilRec, prevUtilRec, key);
 
-  const todayStr = today();
-  const todayRec = allMeals.find(r => r.date === todayStr);
+  const now = new Date();
+  const displayDate = now.getHours() >= 23
+    ? new Date(now.getTime() + 24*60*60*1000)
+    : now;
+  const displayStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth()+1).padStart(2,"0")}-${String(displayDate.getDate()).padStart(2,"0")}`;
+  const isNextDay = now.getHours() >= 23;
+  const todayRec = allMeals.find(r => r.date === displayStr);
   let todayDay = 0, todayNight = 0;
   if (todayRec) {
     members.forEach(m => {
@@ -100,7 +105,7 @@ async function renderMyDashboard(el) {
 
     <!-- Today's meals -->
     <div class="card" style="margin-bottom:14px">
-      <div class="card-title">Today — ${todayStr}</div>
+      <div class="card-title">${isNextDay ? "Tomorrow" : "Today"} — ${displayStr}</div>
       ${todayRec ? `
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px">
           <div style="background:var(--blue-bg);border:1px solid rgba(91,155,213,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
