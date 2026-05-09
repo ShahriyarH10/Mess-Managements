@@ -391,18 +391,29 @@ function buildMemberMealCalendar(memberName, allMeals, key) {
   (allMeals || []).filter(r => String(r.date || "").startsWith(key)).forEach(r => {
     byDate[String(r.date).slice(8, 10)] = mealPartsFromObj(r.meals || {}, memberName);
   });
-  let total = 0, active = 0;
+  let total = 0, active = 0, dayTotal = 0, nightTotal = 0;
   const cells = Array.from({ length: days }, (_, i) => {
     const day   = String(i + 1).padStart(2, "0");
     const entry = byDate[day] || { day: 0, night: 0, total: 0 };
-    if (entry.total > 0) { active++; total += entry.total; }
+    if (entry.total > 0) {
+      active++;
+      total      += entry.total;
+      dayTotal   += entry.day;
+      nightTotal += entry.night;
+    }
     return `<div class="meal-day ${entry.total > 0 ? "has-meal" : ""}">
       <div class="meal-day-num">${i + 1}</div>
       <div class="meal-day-total">${entry.total > 0 ? entry.total : "—"}</div>
       ${entry.total > 0 ? `<div class="meal-day-meta">D ${entry.day} · N ${entry.night}</div>` : `<div class="meal-day-meta">No meal</div>`}
     </div>`;
   }).join("");
-  return { html: `<div class="meal-calendar">${cells}</div>`, total: round2(total), active };
+  return {
+    html: `<div class="meal-calendar">${cells}</div>`,
+    total: round2(total),
+    active,
+    dayTotal:   round2(dayTotal),
+    nightTotal: round2(nightTotal),
+  };
 }
 
 async function openMemberMealMonth(memberName, key) {
@@ -424,22 +435,71 @@ async function openMemberMealMonth(memberName, key) {
 
 async function openManagerMealMonth(key) {
   const allMeals = await dbGetAll("meals");
-  const rows     = (allMeals || []).filter(r => String(r.date || "").startsWith(key)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const totals   = {};
-  members.forEach(m => totals[m.name] = 0);
-  rows.forEach(r => members.forEach(m => { totals[m.name] += mealTotalFromObj(r.meals || {}, m.name); }));
+  const monthLabel = monthLabelFromKey(key);
+
+  // Build per-member calendars + totals
+  const perMember = members.map(m => {
+    const cal = buildMemberMealCalendar(m.name, allMeals, key);
+    return { name: m.name, ...cal };
+  });
+
+  // Mess-wide stats
+  const grandMeals = round2(perMember.reduce((s, p) => s + p.total, 0));
+  const grandDays  = perMember.reduce((s, p) => Math.max(s, p.active), 0); // active member-day max as a hint
+
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
-    <div class="modal-title">All Members — ${monthLabelFromKey(key)}</div>
-    <div class="modal-sub">Manager view of every member's monthly meal count. Colored cards show members with meals this month.</div>
-    <div class="meal-grid" style="margin-bottom:16px">
-      ${members.map(m => `<div class="meal-cell ${totals[m.name] > 0 ? "meal-cell-active" : ""}"><div class="meal-cell-name">${m.name}</div><div style="font-size:26px;font-weight:700">${round2(totals[m.name])}</div><div style="font-size:11px;color:var(--text3);margin-top:4px">total meals</div></div>`).join("")}
+    <div class="modal-title">All Members — ${monthLabel}</div>
+    <div class="modal-sub">Each member's monthly meal calendar. Highlighted days show meal entries with day/night split.</div>
+
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="stat-card"><div class="stat-label">Total meals (mess)</div><div class="stat-value">${grandMeals}</div></div>
+      <div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Most active days</div><div class="stat-value">${grandDays}</div></div>
     </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Date</th>${members.map(m => `<th>${m.name}</th>`).join("")}<th>Total</th></tr></thead>
-      <tbody>${rows.length ? rows.map(r => { let dayTotal = 0; const cells = members.map(m => { const v = mealTotalFromObj(r.meals || {}, m.name); dayTotal += v; return `<td class="${v > 0 ? "net-pos" : ""}">${v > 0 ? v : "—"}</td>`; }).join(""); return `<tr><td><b>${r.date}</b></td>${cells}<td><b>${round2(dayTotal)}</b></td></tr>`; }).join("") : `<tr><td colspan="${members.length + 2}" class="empty">No meal entries in this month</td></tr>`}</tbody>
-      <tfoot><tr><td>Total</td>${members.map(m => `<td>${round2(totals[m.name])}</td>`).join("")}<td>${round2(Object.values(totals).reduce((a, v) => a + v, 0))}</td></tr></tfoot>
-    </table></div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+      ${perMember.map((p, i) => {
+        const col = avatarCol(i);
+        const dim = p.total === 0;
+        const dPct = p.total > 0 ? Math.round((p.dayTotal   / p.total) * 100) : 0;
+        const nPct = p.total > 0 ? 100 - dPct : 0;
+        return `
+          <div class="card mc-compact" style="padding:14px;${dim ? 'opacity:.55' : ''};border-color:${p.total>0?'var(--accent)':'var(--border)'}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${initials(p.name)}</div>
+              <div style="min-width:0;flex:1">
+                <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${monthLabel}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+              <div class="stat-card" style="padding:8px 10px">
+                <div class="stat-label" style="font-size:10px">Total meals</div>
+                <div style="font-size:18px;font-weight:700;color:${p.total>0?'var(--green)':'var(--text3)'}">${p.total}</div>
+              </div>
+              <div class="stat-card" style="padding:8px 10px">
+                <div class="stat-label" style="font-size:10px">Meal days</div>
+                <div style="font-size:18px;font-weight:700">${p.active}</div>
+              </div>
+            </div>
+
+            ${p.total > 0 ? `
+              <div class="dn-split-bar" title="Day vs Night meal split">
+                <div class="dn-d" style="width:${dPct}%"></div>
+                <div class="dn-n" style="width:${nPct}%"></div>
+              </div>
+              <div class="dn-split-row">
+                <span>☀ Day &nbsp;<b class="d-val">${p.dayTotal}</b> <span style="opacity:.6">(${dPct}%)</span></span>
+                <span>🌙 Night &nbsp;<b class="n-val">${p.nightTotal}</b> <span style="opacity:.6">(${nPct}%)</span></span>
+              </div>
+            ` : ""}
+
+            ${p.html}
+          </div>`;
+      }).join("")}
+    </div>
+
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
   document.querySelector(".modal").classList.add("modal-wide");
   openModal();

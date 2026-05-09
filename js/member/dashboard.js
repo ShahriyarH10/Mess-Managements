@@ -98,58 +98,30 @@ async function renderMyDashboard(el) {
       </button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-
-      <!-- Settlement summary -->
-      <div class="card">
-        <div class="card-title">Settlement summary</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
-          <div class="stat-card">
-            <div class="stat-label">My meals (${MONTHS[prevInfo.month].slice(0,3)})</div>
-            <div class="stat-value">${calc.memberMeals}</div>
-            <div class="stat-sub">${calc.memberMeals} × ${fmtTk(calc.mealRate)}</div>
+    <!-- Today's meals -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Today — ${todayStr}</div>
+      ${todayRec ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px">
+          <div style="background:var(--blue-bg);border:1px solid rgba(91,155,213,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
+            <div style="font-size:11px;color:var(--blue);font-weight:600;margin-bottom:6px">Day</div>
+            <div style="font-size:20px;font-weight:700;color:var(--blue);line-height:1">${todayDay}</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Meal rate</div>
-            <div class="stat-value" style="font-size:17px">${fmtTk(calc.mealRate)}</div>
-            <div class="stat-sub">${fmtTk(calc.totalBazar)} ÷ ${calc.totalMeals} meals</div>
+          <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
+            <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px">Night</div>
+            <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${todayNight}</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Meal cost</div>
-            <div class="stat-value" style="font-size:17px">${fmtTk(calc.mealCost)}</div>
-          </div>
-          <div class="stat-card" style="border-color:rgba(39,174,96,.3)">
-            <div class="stat-label" style="color:var(--green)">My bazar credit</div>
-            <div class="stat-value" style="font-size:17px;color:var(--green)">${fmtTk(calc.memberBazar)}</div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center">
+            <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">Total</div>
+            <div style="font-size:20px;font-weight:700;line-height:1">${round2(todayDay + todayNight)}</div>
           </div>
         </div>
-      </div>
-
-      <!-- Today's meals -->
-      <div class="card">
-        <div class="card-title">Today — ${todayStr}</div>
-        ${todayRec ? `
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px">
-            <div style="background:var(--blue-bg);border:1px solid rgba(91,155,213,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
-              <div style="font-size:11px;color:var(--blue);font-weight:600;margin-bottom:6px">Day</div>
-              <div style="font-size:20px;font-weight:700;color:var(--blue);line-height:1">${todayDay}</div>
-            </div>
-            <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
-              <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px">Night</div>
-              <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${todayNight}</div>
-            </div>
-            <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center">
-              <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">Total</div>
-              <div style="font-size:20px;font-weight:700;line-height:1">${round2(todayDay + todayNight)}</div>
-            </div>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:7px">${memberBadgesHTML}</div>
-        ` : `<div class="empty" style="padding:20px">No meal entry today</div>`}
-      </div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">${memberBadgesHTML}</div>
+      ` : `<div class="empty" style="padding:20px">No meal entry today</div>`}
     </div>
 
-    <!-- ── Embedded Mess Overview (current month) ── -->
-    ${buildMessOverviewBlock(allMeals, allBazar, allRent, allUtil || [], key)}
+    <!-- ── Embedded mess snapshot (current month) ── -->
+    ${buildMessSnapshotBlock(allMeals, allBazar, key)}
   </div>`;
 
   // Store calc in window for breakdown modal
@@ -278,10 +250,77 @@ function showMySettlementBreakdown() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MESS OVERVIEW BLOCK — reusable. Renders monthly stats, bazar
-   contributors, member meal totals, and a per-member settlement
-   table for the chosen month. Used by both the standalone Mess
-   Overview page AND embedded into the member's dashboard.
+   MESS SNAPSHOT BLOCK — light, current-month view embedded in the
+   member's My Dashboard. Shows mess-wide totals, bazar
+   contributors, and member meal totals for the chosen month
+   (uses *current* month data, not previous-month settlement basis).
+   ═══════════════════════════════════════════════════════════════ */
+function buildMessSnapshotBlock(allM, allB, key) {
+  const mM = (allM || []).filter(r => String(r.date || "").startsWith(key));
+  const mB = (allB || []).filter(r => String(r.date || "").startsWith(key));
+
+  let totalM = 0, totalB = 0;
+  const memMeals = {};
+  const memBazar = {};
+  members.forEach(m => { memMeals[m.name] = 0; memBazar[m.name] = 0; });
+
+  mM.forEach(r => members.forEach(m => {
+    const v = mealTotalFromObj(r.meals || {}, m.name);
+    memMeals[m.name] += v;
+    totalM += v;
+  }));
+  mB.forEach(r => members.forEach(m => {
+    const v = Number((r.bazar || {})[m.name] || 0);
+    memBazar[m.name] += v;
+    totalB += v;
+  }));
+
+  const mealRate = totalM > 0 ? round2(totalB / totalM) : 0;
+  const topB = Object.entries(memBazar).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxB = topB[0]?.[1] || 1;
+
+  return `
+    <div class="stat-grid" style="margin-bottom:12px">
+      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalM)}</div></div>
+      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div>
+      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalB)}</div></div>
+      <div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card">
+        <div class="card-title">🛒 Bazar contributors</div>
+        ${topB.length && totalB > 0
+          ? topB.map(([name, amt]) => `
+              <div class="mini-bar">
+                <div class="mini-bar-label">${name}</div>
+                <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt / maxB) * 100)}%"></div></div>
+                <div class="mini-bar-val">${fmtTk(amt)}</div>
+              </div>`).join("")
+          : '<div class="empty">No bazar data this month</div>'}
+      </div>
+      <div class="card">
+        <div class="card-title">🍽 Member meal totals</div>
+        ${members.length
+          ? `<div class="tbl-wrap"><table>
+              <thead><tr><th>Member</th><th>Meals</th><th>Bazar</th><th>Meal cost</th><th>Balance</th></tr></thead>
+              <tbody>${members.map(m => {
+                const myM = round2(memMeals[m.name] || 0);
+                const myB = round2(memBazar[m.name] || 0);
+                const mc  = round2(myM * mealRate);
+                const bal = round2(myB - mc);
+                return `<tr><td><b>${m.name}</b></td><td>${myM}</td><td style="color:var(--green)">${fmtTk(myB)}</td><td>${fmtTk(mc)}</td><td class="${bal>=0?"net-pos":"net-neg"}">${bal>=0?"Get "+fmtTk(bal):"Pay "+fmtTk(-bal)}</td></tr>`;
+              }).join("")}</tbody>
+            </table></div>`
+          : '<div class="empty">No members</div>'}
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MESS OVERVIEW BLOCK — used by the standalone Mess Overview page.
+   Shows a personal Settlement Summary + a per-member settlement
+   table for the chosen month (canonical, prev-month basis).
    ═══════════════════════════════════════════════════════════════ */
 function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
   const month = monthIndexFromKey(key);
@@ -322,6 +361,12 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
 
   const hideHeading = opts.hideHeading;
 
+  // Resolve the logged-in member's settlement (for the personal Settlement
+  // Summary shown at the top of the block). Falls back gracefully when no
+  // member context (e.g. manager preview).
+  const me      = members.find(m => m.id === currentUser?.memberId) || null;
+  const myCalc  = me ? settlements.find(s => s.memberName === me.name) : null;
+
   return `
     ${hideHeading ? "" : `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -329,41 +374,32 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
         <div style="font-size:11px;color:var(--text3)">Settlement uses meals/bazar from ${MONTHS[prev.month]} ${prev.year}</div>
       </div>`}
 
-    <div class="stat-grid" style="margin-bottom:12px">
-      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalM)}</div></div>
-      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalB)}</div></div>
-      <div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-      <div class="card">
-        <div class="card-title">🛒 Bazar contributors</div>
-        ${topB.length
-          ? topB.map(([name, amt]) => `
-              <div class="mini-bar">
-                <div class="mini-bar-label">${name}</div>
-                <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt / maxB) * 100)}%"></div></div>
-                <div class="mini-bar-val">${fmtTk(amt)}</div>
-              </div>`).join("")
-          : '<div class="empty">No bazar data</div>'}
+    <!-- ── Personal Settlement Summary (replaces mess-wide stats / contributors / meal totals) ── -->
+    ${myCalc ? `
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-title">Settlement summary</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px">
+          <div class="stat-card">
+            <div class="stat-label">My meals (${MONTHS[prev.month].slice(0,3)})</div>
+            <div class="stat-value">${myCalc.memberMeals}</div>
+            <div class="stat-sub">${myCalc.memberMeals} × ${fmtTk(myCalc.mealRate)}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Meal rate</div>
+            <div class="stat-value" style="font-size:17px">${fmtTk(myCalc.mealRate)}</div>
+            <div class="stat-sub">${fmtTk(myCalc.totalBazar)} ÷ ${myCalc.totalMeals} meals</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Meal cost</div>
+            <div class="stat-value" style="font-size:17px">${fmtTk(myCalc.mealCost)}</div>
+          </div>
+          <div class="stat-card" style="border-color:rgba(39,174,96,.3)">
+            <div class="stat-label" style="color:var(--green)">My bazar credit</div>
+            <div class="stat-value" style="font-size:17px;color:var(--green)">${fmtTk(myCalc.memberBazar)}</div>
+          </div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-title">🍽 Member meal totals</div>
-        ${members.length
-          ? `<div class="tbl-wrap"><table>
-              <thead><tr><th>Member</th><th>Meals</th><th>Bazar</th><th>Meal cost</th><th>Balance</th></tr></thead>
-              <tbody>${members.map(m => {
-                const myM = round2(memMeals[m.name] || 0);
-                const myB = round2(memBazar[m.name] || 0);
-                const mc  = round2(myM * mealRate);
-                const bal = round2(myB - mc);
-                return `<tr><td><b>${m.name}</b></td><td>${myM}</td><td style="color:var(--green)">${fmtTk(myB)}</td><td>${fmtTk(mc)}</td><td class="${bal>=0?"net-pos":"net-neg"}">${bal>=0?"Get "+fmtTk(bal):"Pay "+fmtTk(-bal)}</td></tr>`;
-              }).join("")}</tbody>
-            </table></div>`
-          : '<div class="empty">No members</div>'}
-      </div>
-    </div>
+    ` : ""}
 
     <!-- ── Read-only Monthly Log (settlement table) ── -->
     <div class="card">

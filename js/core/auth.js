@@ -75,13 +75,7 @@ function showLoginError(msg) {
   const el = document.getElementById("login-error");
   el.style.display = "block"; el.textContent = msg;
 }
-function doLogout() {
-  /* Close and remove mobile drawer/backdrop before signing out */
-  closeMobileMore();
-  removeMobileMoreDrawer();
-  clearSession();
-  showLanding();
-}
+function doLogout() { clearSession(); showLanding(); }
 
 /* ═══════════════════════════════════════════
    SUPERADMIN
