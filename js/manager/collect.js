@@ -601,13 +601,23 @@ function printCollectReceipt() {
   const d = window._lastReceiptData;
   if (!d) { toast("No receipt data — save a payment first", "error"); return; }
 
-  let frame = document.getElementById("_rcpt-print-frame");
-  if (frame) frame.remove();
-  frame = document.createElement("iframe");
-  frame.id = "_rcpt-print-frame";
-  frame.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
-  document.body.appendChild(frame);
-  const w = frame.contentWindow;
+  // Safari (iPad/iPhone) blocks iframe printing — detect and use window.open() instead.
+  // Other browsers block window.open() when deployed, so they use the hidden iframe path.
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+  let w, frame;
+  if (isSafari) {
+    w = window.open("", "_blank", "width=480,height=700");
+    if (!w) { toast("Pop-up blocked — allow pop-ups to print", "error"); return; }
+  } else {
+    frame = document.getElementById("_rcpt-print-frame");
+    if (frame) frame.remove();
+    frame = document.createElement("iframe");
+    frame.id = "_rcpt-print-frame";
+    frame.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+    document.body.appendChild(frame);
+    w = frame.contentWindow;
+  }
 
   const messName = currentMess?.name || "Mess";
   const dt = d.timestamp.toLocaleString("en-IN", {
@@ -773,8 +783,12 @@ function printCollectReceipt() {
 </body>
 </html>`);
   w.document.close();
-  frame.onload = function() {
+  if (isSafari) {
     setTimeout(() => { w.focus(); w.print(); }, 250);
-  };
+  } else {
+    frame.onload = function() {
+      setTimeout(() => { w.focus(); w.print(); }, 250);
+    };
+  }
 }
 
