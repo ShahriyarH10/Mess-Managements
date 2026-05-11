@@ -219,26 +219,29 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
             const p       = payments[m.name] || {};
             const credit  = round2(Number(messCredit[m.name] || 0));
             const paid    = Number(p.paid || 0);
-            // Pre-fill with carry-forward credit if no manual payment recorded yet
-            const prefill = paid === 0 && credit > 0 ? credit : paid;
-            const status  = p.status || (credit > 0 && paid === 0 ? (credit >= perHead ? "paid" : "partial") : "unpaid");
+            // Carry-forward reduces what the member owes, not what they paid
+            const effectiveDue = round2(Math.max(0, perHead - credit));
+            const status  = p.status || "unpaid";
 
             return `
               <tr id="utr-${m.id}">
                 <td><b>${m.name}</b></td>
-                <td><b>${fmtTk(perHead)}</b></td>
+                <td>
+                  <b>${fmtTk(effectiveDue)}</b>
+                  ${credit > 0 ? `<div style="font-size:10px;color:var(--blue);margin-top:2px">↩ ${fmtTk(credit)} carried fwd</div>` : ''}
+                </td>
                 <td>
                   <input
                     type="number"
                     class="input input-sm"
                     id="up-${m.id}"
-                    value="${prefill}"
+                    value="${paid}"
                     min="0"
                     step="1"
                     style="width:100px"
-                    oninput="onUtilPaidInput('${m.id}', ${perHead})"
+                    data-due="${effectiveDue}"
+                    oninput="onUtilPaidInput('${m.id}', ${effectiveDue})"
                   />
-                  ${credit > 0 ? `<div style="font-size:10px;color:var(--blue);margin-top:3px">↩ ${fmtTk(credit)} carried fwd</div>` : ''}
                 </td>
                 <td>
                   <select class="input input-sm" id="ust-${m.id}" style="width:110px">
@@ -265,16 +268,7 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
 
   if (actions)  actions.style.display  = "block";
   if (summary)  summary.style.display  = "block";
-
-  // Merge carry-forward credits into payments for accurate summary display
-  const effectivePayments = {};
-  members.forEach(m => {
-    const p      = payments[m.name] || {};
-    const credit = round2(Number(messCredit[m.name] || 0));
-    const paid   = Number(p.paid || 0);
-    effectivePayments[m.name] = { ...p, paid: paid === 0 && credit > 0 ? credit : paid };
-  });
-  updateSummaryBar(perHead, effectivePayments);
+  updateSummaryBar(perHead, payments, messCredit);
 }
 
 function onUtilPaidInput(memberId, perHead) {
@@ -295,12 +289,20 @@ function onUtilPaidInput(memberId, perHead) {
   updateSummaryTotals(perHead);
 }
 
-function updateSummaryTotals(perHead) {
+function updateSummaryTotals(perHead, messCredit = {}) {
+  let totalDue = 0;
   let totalCollected = 0;
   members.forEach(m => {
-    const v = parseFloat(document.getElementById("up-" + m.id)?.value || 0);
-    totalCollected += v;
+    const credit = round2(Number((messCredit)[m.name] || 0));
+    // Read effective due from the input's data-due attribute if available
+    const inputEl = document.getElementById("up-" + m.id);
+    const effectiveDue = inputEl
+      ? round2(parseFloat(inputEl.dataset.due ?? (perHead - credit)))
+      : round2(Math.max(0, perHead - credit));
+    totalDue       += effectiveDue;
+    totalCollected += parseFloat(inputEl?.value || 0);
   });
+  totalDue       = round2(totalDue);
   totalCollected = round2(totalCollected);
 
   const set = (id, v, color) => {
@@ -310,8 +312,8 @@ function updateSummaryTotals(perHead) {
   set("ut-total-collected", totalCollected, "var(--green)");
 }
 
-function updateSummaryBar(perHead, payments) {
-  updateSummaryTotals(perHead);
+function updateSummaryBar(perHead, payments, messCredit = {}) {
+  updateSummaryTotals(perHead, messCredit);
 }
 
 async function loadUtilityPayments() {
@@ -337,7 +339,18 @@ async function loadUtilityPayments() {
   set("ut-cur-prepaid",    currentPrepaid);
   set("ut-prev-postpaid",  previousPostpaid);
 
-  const messCredit = currentUtilRec?.bills?.mess_credit || {};
+  const rawMessCredit   = currentUtilRec?.bills?.mess_credit   || {};
+  const rawChangeCredit = currentUtilRec?.bills?.change_credit || {};
+
+  // Merge both credit sources per member into a single credit map
+  const messCredit = {};
+  members.forEach(m => {
+    messCredit[m.name] = round2(
+      Number(rawMessCredit[m.name]   || 0) +
+      Number(rawChangeCredit[m.name] || 0)
+    );
+  });
+
   buildUtilPaymentTable(perHead, currentUtilRec?.payments || {}, messCredit);
 }
 
@@ -345,7 +358,11 @@ function markAllUtilPaid() {
   members.forEach(m => {
     const paidEl = document.getElementById("up-" + m.id);
     const statEl = document.getElementById("ust-" + m.id);
-    if (paidEl) paidEl.value = _utPerHead;
+    if (paidEl) {
+      // Use the per-member effective due (after credit deduction) stored in data-due
+      const due = parseFloat(paidEl.dataset.due ?? _utPerHead);
+      paidEl.value = due;
+    }
     if (statEl) statEl.value = "paid";
   });
   updateSummaryTotals(_utPerHead);

@@ -60,12 +60,12 @@ async function renderMyMeals(el) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
           <div class="field">
             <label>Day meals</label>
-            <input type="number" class="input" id="my-meal-day" min="0" max="4" step="0.5" value="1"/>
+            <input type="number" class="input" id="my-meal-day" min="0" max="4" step="0.5" value="0"/>
           </div>
 
           <div class="field">
             <label>Night meals</label>
-            <input type="number" class="input" id="my-meal-night" min="0" max="4" step="0.5" value="1"/>
+            <input type="number" class="input" id="my-meal-night" min="0" max="4" step="0.5" value="0"/>
           </div>
         </div>
 

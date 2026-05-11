@@ -73,6 +73,15 @@ async function renderCollect(el) {
       </div>
       <div id="cp-credit-wrap"></div>
     </div>
+
+    <div class="card" id="cp-change-card" style="display:none">
+      <div class="card-title">💸 Change & Carry Forward</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:12px">
+        These members <b>overpaid</b> — they are owed change. Enter how much cash to return now.
+        Any unpaid remainder will <b>carry forward</b> to next month's utility deduction automatically.
+      </div>
+      <div id="cp-change-wrap"></div>
+    </div>
   </div>`;
 
   await loadCollectMonth();
@@ -105,7 +114,9 @@ async function loadCollectMonth() {
   const utilRecNext = utilNextR.data || null;
 
   // Existing carry-forward credits stored in NEXT month's bills
-  const existingCredits = utilRecNext?.bills?.mess_credit || {};
+  const existingCredits      = utilRecNext?.bills?.mess_credit || {};
+  // Change carry-forward credits (from overpayment) also stored in next month's bills
+  const existingChangeCredits = utilRecNext?.bills?.change_credit || {};
 
   const perMember = {};
   members.forEach(m => {
@@ -115,21 +126,26 @@ async function loadCollectMonth() {
       mealCost:      p.mealCost,
       memberBazar:   p.memberBazar,
       mealPaid:      p.mealPaid,
-      utilDue:       round2(p.prepaidUtility + p.postpaidUtility),
+      utilDue:       round2(Math.max(0, p.prepaidUtility + p.postpaidUtility - p.messCredit)),
       utilPaid:      p.utilityPaid,
       rentDue:       p.roomRent,
       rentPaid:      p.roomRentPaid,
       netPayable:    p.netPayable,
       // Carry-forward credit applied FROM last month INTO this month
       messCredit:    p.messCredit,
-      // Credit already stored in next month for this member
+      // Credit already stored in next month for this member (mess-owes path)
       existingCarryCredit: round2(Number(existingCredits[m.name] || 0)),
+      // Change overpayment pending return/carry (set after saveCollectRow)
+      pendingChange: 0,
+      // Change credit already carried to next month (overpayment path)
+      existingChangeCredit: round2(Number(existingChangeCredits[m.name] || 0)),
     };
   });
 
-  _collectCtx = { month, year, key, prevKey: prev.key, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits };
+  _collectCtx = { month, year, key, prevKey: prev.key, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits };
   buildCollectTable();
   buildCreditTable();
+  buildChangeTable();
 }
 
 function buildCollectTable() {
@@ -291,6 +307,411 @@ function buildCreditTable() {
       💡 <b>Tip:</b> Enter ৳0 and Save to carry the full amount to next month. The carry-forward
       credit will automatically reduce ${MONTHS[nm.month]} ${nm.year} utility dues for that member.
     </div>`;
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   Change & Carry Forward — overpayment section
+   ═════════════════════════════════════════════════════════════════ */
+function buildChangeTable() {
+  const card = document.getElementById("cp-change-card");
+  const wrap = document.getElementById("cp-change-wrap");
+  if (!wrap || !card) return;
+
+  const changeMembers = members.filter(m => {
+    const r = _collectCtx.perMember[m.id];
+    return r && (r.pendingChange > 0 || r.existingChangeCredit > 0);
+  });
+
+  if (!changeMembers.length) { card.style.display = "none"; return; }
+
+  card.style.display = "";
+  const { nextMonth: nm } = _collectCtx;
+
+  wrap.innerHTML = `
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Overpaid (Change)</th>
+            <th>Already Carried Fwd</th>
+            <th>Remaining</th>
+            <th>Cash to Return Now (৳)</th>
+            <th>Will Carry to ${MONTHS[nm.month]} ${nm.year}</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${changeMembers.map(m => {
+            const r = _collectCtx.perMember[m.id];
+            const totalChange   = round2(r.pendingChange || 0);
+            const alreadyFwd    = round2(r.existingChangeCredit);
+            const remaining     = round2(Math.max(0, totalChange - alreadyFwd));
+
+            return `
+              <tr id="chgr-${m.id}">
+                <td><b>${m.name}</b></td>
+                <td style="color:var(--amber);font-weight:700">${fmtTk(totalChange)}</td>
+                <td style="color:var(--blue);font-weight:600" id="chg-fwd-${m.id}">
+                  ${alreadyFwd > 0 ? fmtTk(alreadyFwd) : '—'}
+                </td>
+                <td style="color:var(--amber);font-weight:700" id="chg-rem-${m.id}">
+                  ${fmtTk(remaining)}
+                </td>
+                <td>
+                  <input type="number" class="input input-sm" id="chg-amt-${m.id}"
+                    min="0" max="${remaining}" step="1"
+                    placeholder="0" style="width:120px"
+                    oninput="onChangeAmtInput('${m.id}')"/>
+                </td>
+                <td style="color:var(--blue);font-weight:600" id="chg-carry-${m.id}">
+                  ${fmtTk(remaining)}
+                </td>
+                <td>
+                  <button class="btn btn-sm" style="background:var(--amber-bg,rgba(243,156,18,.1));border:1px solid var(--amber);color:var(--amber)"
+                    onclick="saveChangeRow('${m.id}')">💸 Save</button>
+                </td>
+              </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;padding:10px 14px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
+      💡 <b>Tip:</b> Enter ৳0 and Save to carry the full change to next month. It will automatically reduce
+      ${MONTHS[nm.month]} ${nm.year} utility dues for that member.
+    </div>`;
+}
+
+function onChangeAmtInput(memberId) {
+  if (!_collectCtx) return;
+  const r = _collectCtx.perMember[memberId];
+  if (!r) return;
+  const totalChange = round2(r.pendingChange || 0);
+  const alreadyFwd  = round2(r.existingChangeCredit);
+  const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
+
+  const raw      = parseFloat(document.getElementById("chg-amt-" + memberId)?.value || 0);
+  const cashNow  = round2(Math.min(Math.max(0, raw), remaining));
+  const carryFwd = round2(remaining - cashNow);
+
+  const carryEl = document.getElementById("chg-carry-" + memberId);
+  if (carryEl) {
+    carryEl.textContent = fmtTk(carryFwd);
+    carryEl.style.color = carryFwd > 0 ? "var(--blue)" : "var(--green)";
+  }
+}
+
+async function saveChangeRow(memberId) {
+  if (!_collectCtx) return;
+  const ctx = _collectCtx;
+  const r   = ctx.perMember[memberId];
+  const m   = members.find(x => x.id === memberId);
+  if (!r || !m) return;
+
+  const totalChange = round2(r.pendingChange || 0);
+  const alreadyFwd  = round2(r.existingChangeCredit);
+  const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
+
+  const raw      = parseFloat(document.getElementById("chg-amt-" + memberId)?.value || 0);
+  const cashNow  = round2(Math.min(Math.max(0, raw), remaining));
+  const newCarry = round2(remaining - cashNow);
+
+  try {
+    const nm = ctx.nextMonth;
+    const { data: latestNext } = await sb.from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
+
+    const nextBills    = { ...(latestNext?.bills    || {}) };
+    const nextPayments = { ...(latestNext?.payments || {}) };
+
+    // Write change carry-forward into next month bills
+    const changeCredits = { ...(nextBills.change_credit || {}) };
+    if (newCarry > 0) {
+      changeCredits[m.name] = newCarry;
+    } else {
+      delete changeCredits[m.name];
+    }
+    nextBills.change_credit = changeCredits;
+
+    await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+
+    // Update in-memory
+    r.existingChangeCredit = round2(alreadyFwd + newCarry);
+    ctx.existingChangeCredits[m.name] = newCarry;
+
+    // Refresh row display
+    const fwdEl = document.getElementById("chg-fwd-" + memberId);
+    if (fwdEl) {
+      const total = round2(alreadyFwd + newCarry);
+      fwdEl.textContent = total > 0 ? fmtTk(total) : "—";
+    }
+    const remEl = document.getElementById("chg-rem-" + memberId);
+    if (remEl) remEl.textContent = fmtTk(Math.max(0, remaining - cashNow));
+
+    const amtEl = document.getElementById("chg-amt-" + memberId);
+    if (amtEl) amtEl.value = "";
+    onChangeAmtInput(memberId);
+
+    const parts = [];
+    if (cashNow  > 0) parts.push(`Cash returned: ${fmtTk(cashNow)}`);
+    if (newCarry > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(newCarry)}`);
+    toast("Change saved ✓  " + (parts.join("  ·  ") || "No change"), "success");
+
+    showChangeReceipt({
+      member: m,
+      monthLabel:     monthLabelFromKey(ctx.key),
+      nextMonthLabel: MONTHS[nm.month] + " " + nm.year,
+      totalChange, cashNow, newCarry,
+      timestamp: new Date(),
+    });
+
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+/* ── Change receipt ── */
+function buildChangeReceiptText(d) {
+  const messName = currentMess?.name || "Mess";
+  const dt = d.timestamp.toLocaleString("en-IN", {
+    day:"2-digit", month:"short", year:"numeric",
+    hour:"2-digit", minute:"2-digit", hour12:true
+  });
+  const lines = [];
+  lines.push(`💸 CHANGE RECEIPT`);
+  lines.push(`─────────────────────`);
+  lines.push(`Mess:    ${messName}`);
+  lines.push(`Member:  ${d.member.name}`);
+  lines.push(`Month:   ${d.monthLabel}`);
+  lines.push(`Date:    ${dt}`);
+  lines.push(``);
+  lines.push(`Overpaid (change):  ${fmtTk(d.totalChange)}`);
+  lines.push(`─────────────────────`);
+  if (d.cashNow  > 0) lines.push(`💵 Cash returned now:  ${fmtTk(d.cashNow)}`);
+  if (d.newCarry > 0) lines.push(`↩ Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
+  lines.push(`─────────────────────`);
+  lines.push(d.newCarry > 0
+    ? `Remaining carried forward: ${fmtTk(d.newCarry)}`
+    : `✓ Change fully returned`);
+  lines.push(``);
+  lines.push(`— sent from ${messName} manager`);
+  return lines.join("\n");
+}
+
+function showChangeReceipt(d) {
+  const messName = currentMess?.name || "Mess";
+  const dt = d.timestamp.toLocaleString("en-IN", {
+    day:"2-digit", month:"short", year:"numeric",
+    hour:"2-digit", minute:"2-digit", hour12:true
+  });
+
+  const receiptNo = "CHG-"
+    + d.timestamp.getFullYear()
+    + String(d.timestamp.getMonth()+1).padStart(2,"0")
+    + String(d.timestamp.getDate()).padStart(2,"0")
+    + "-" + String(d.timestamp.getHours()).padStart(2,"0")
+    + String(d.timestamp.getMinutes()).padStart(2,"0");
+
+  const isFullyReturned = d.newCarry === 0;
+  const text   = buildChangeReceiptText(d);
+  const phoneRaw = (d.member.phone || "").replace(/[^\d]/g, "");
+  const phone  = phoneRaw.length === 11 && phoneRaw.startsWith("0") ? "880" + phoneRaw.slice(1) : phoneRaw;
+  const waUrl  = phone
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+
+  const html = `
+  <style>
+    #chg-modal{font-family:var(--font);max-width:420px;margin:0 auto;}
+    .chg-head{text-align:center;padding:4px 0 16px;border-bottom:2px dashed var(--border2);margin-bottom:16px;}
+    .chg-head-icon{font-size:30px;line-height:1;margin-bottom:6px;}
+    .chg-head-name{font-family:var(--font-serif);font-size:21px;font-weight:700;color:var(--text);}
+    .chg-head-sub{font-size:10px;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;margin-top:3px;}
+    .chg-badge{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+    .chg-badge-ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(76,175,130,.3);}
+    .chg-badge-fwd{background:var(--amber-bg,rgba(243,156,18,.1));color:var(--amber);border:1px solid rgba(243,156,18,.3);}
+    .chg-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px;}
+    .chg-ml{display:flex;flex-direction:column;gap:1px;}
+    .chg-ml span:first-child{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);}
+    .chg-ml span:last-child{font-size:12px;font-weight:600;color:var(--text);}
+    .chg-hero{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:var(--amber-bg,rgba(243,156,18,.08));border:2px solid var(--amber);border-radius:10px;margin-bottom:14px;}
+    .chg-hero-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--amber);}
+    .chg-hero-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+    .chg-hero-amt{font-size:26px;font-weight:800;color:var(--amber);}
+    .chg-sec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--text3);display:flex;align-items:center;gap:8px;margin:14px 0 7px;}
+    .chg-sec::after{content:'';flex:1;height:1px;background:var(--border2);}
+    .chg-row{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;background:var(--bg3);border-radius:7px;margin-bottom:6px;}
+    .chg-row-left{display:flex;align-items:center;gap:10px;}
+    .chg-row-ico{font-size:18px;line-height:1;}
+    .chg-row-lbl{font-size:13px;font-weight:600;color:var(--text);}
+    .chg-row-sub{font-size:10px;color:var(--text3);margin-top:1px;}
+    .chg-row-val{font-size:15px;font-weight:800;}
+    .chg-hr{border:none;border-top:2px dashed var(--border2);margin:14px 0;}
+    .chg-net{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-radius:10px;margin-top:12px;font-weight:800;font-size:15px;}
+    .chg-net-ok{background:var(--green-bg);border:2px solid rgba(76,175,130,.45);}
+    .chg-net-fwd{background:var(--amber-bg,rgba(243,156,18,.08));border:2px solid var(--amber);}
+    .chg-foot{text-align:center;padding:12px 0 2px;border-top:2px dashed var(--border2);margin-top:14px;}
+    .chg-foot-txt{font-size:10px;color:var(--text3);letter-spacing:.4px;}
+    .chg-btns{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px;}
+    .chg-btns .btn{flex:1;min-width:90px;justify-content:center;}
+  </style>
+
+  <div id="chg-modal">
+    <div class="chg-head">
+      <div class="chg-head-icon">💸</div>
+      <div class="chg-head-name">${messName}</div>
+      <div class="chg-head-sub">Change & Carry Forward Receipt</div>
+      <span class="chg-badge ${isFullyReturned ? 'chg-badge-ok' : 'chg-badge-fwd'}">
+        ${isFullyReturned ? "✓ Fully Returned" : "↩ Partially Carried"}
+      </span>
+    </div>
+
+    <div class="chg-meta">
+      <div class="chg-ml"><span>Receipt No.</span><span style="font-family:monospace;font-size:11px">${receiptNo}</span></div>
+      <div class="chg-ml"><span>Date &amp; Time</span><span style="font-size:11px">${dt}</span></div>
+      <div class="chg-ml" style="margin-top:5px"><span>Member</span><span>${d.member.name}</span></div>
+      <div class="chg-ml" style="margin-top:5px"><span>Settlement Month</span><span>${d.monthLabel}</span></div>
+    </div>
+
+    <div class="chg-hero">
+      <div>
+        <div class="chg-hero-lbl">Overpaid (Change Owed)</div>
+        <div class="chg-hero-sub">Member paid more than net payable</div>
+      </div>
+      <div class="chg-hero-amt">${fmtTk(d.totalChange)}</div>
+    </div>
+
+    <div class="chg-sec">Breakdown</div>
+
+    ${d.cashNow > 0 ? `
+    <div class="chg-row">
+      <div class="chg-row-left">
+        <span class="chg-row-ico">💵</span>
+        <div>
+          <div class="chg-row-lbl">Cash Returned Now</div>
+          <div class="chg-row-sub">Handed back to ${d.member.name}</div>
+        </div>
+      </div>
+      <span class="chg-row-val" style="color:var(--green)">${fmtTk(d.cashNow)}</span>
+    </div>` : ""}
+
+    ${d.newCarry > 0 ? `
+    <div class="chg-row" style="border:1px solid var(--blue)">
+      <div class="chg-row-left">
+        <span class="chg-row-ico">↩</span>
+        <div>
+          <div class="chg-row-lbl">Carried to ${d.nextMonthLabel}</div>
+          <div class="chg-row-sub">Reduces utility total due next month</div>
+        </div>
+      </div>
+      <span class="chg-row-val" style="color:var(--blue)">${fmtTk(d.newCarry)}</span>
+    </div>` : ""}
+
+    ${d.cashNow === 0 && d.newCarry === 0 ? `
+    <div class="chg-row" style="color:var(--text3);font-size:12px;justify-content:center">No action recorded.</div>` : ""}
+
+    <hr class="chg-hr">
+
+    <div class="chg-net ${isFullyReturned ? 'chg-net-ok' : 'chg-net-fwd'}">
+      <span>Change Status</span>
+      <span style="color:${isFullyReturned ? 'var(--green)' : 'var(--blue)'}">
+        ${isFullyReturned ? "✓ Fully returned" : `↩ ${fmtTk(d.newCarry)} carried forward`}
+      </span>
+    </div>
+
+    <div class="chg-foot">
+      <div class="chg-foot-txt">— Generated by ${messName} Manager —</div>
+      ${d.member.phone ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
+    </div>
+
+    <div class="chg-btns">
+      <button class="btn btn-primary btn-sm" onclick="copyChangeReceipt(this)">📋 Copy</button>
+      <a class="btn btn-sm" href="${waUrl}" target="_blank" rel="noopener"
+         style="background:#25D366;border:1px solid #1fb759;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;border-radius:var(--radius-sm)">
+        💬 WhatsApp
+      </a>
+      <button class="btn btn-ghost btn-sm" onclick="printChangeReceipt()">🖨 Print</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()" style="margin-left:auto">✕ Close</button>
+    </div>
+  </div>`;
+
+  window._lastChangeReceiptText = text;
+  window._lastChangeReceiptData = d;
+  document.getElementById("modal-content").innerHTML = html;
+  document.querySelector(".modal").classList.remove("modal-wide");
+  openModal();
+}
+
+async function copyChangeReceipt(btn) {
+  const text = window._lastChangeReceiptText || "";
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) { const o = btn.textContent; btn.textContent = "✓ Copied"; setTimeout(() => btn.textContent = o, 1600); }
+    toast("Receipt copied to clipboard", "success");
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); toast("Receipt copied", "success"); }
+    catch (_) { toast("Copy failed", "error"); }
+    document.body.removeChild(ta);
+  }
+}
+
+function printChangeReceipt() {
+  const d = window._lastChangeReceiptData;
+  if (!d) { toast("No receipt data", "error"); return; }
+
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  let w, frame;
+  if (isSafari) {
+    w = window.open("", "_blank", "width:480,height:700");
+    if (!w) { toast("Pop-up blocked — allow pop-ups to print", "error"); return; }
+  } else {
+    frame = document.getElementById("_chg-print-frame");
+    if (frame) frame.remove();
+    frame = document.createElement("iframe");
+    frame.id = "_chg-print-frame";
+    frame.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+    document.body.appendChild(frame);
+    w = frame.contentWindow;
+  }
+
+  const messName = currentMess?.name || "Mess";
+  const dt = d.timestamp.toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", hour12:true });
+  const receiptNo = "CHG-" + d.timestamp.getFullYear() + String(d.timestamp.getMonth()+1).padStart(2,"0") + String(d.timestamp.getDate()).padStart(2,"0") + "-" + String(d.timestamp.getHours()).padStart(2,"0") + String(d.timestamp.getMinutes()).padStart(2,"0");
+  const isFullyReturned = d.newCarry === 0;
+  const fmtTkP = v => "৳" + Number(v).toLocaleString("en-IN", { minimumFractionDigits:0, maximumFractionDigits:2 });
+
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Change Receipt — ${d.member.name}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#222;padding:28px 24px;max-width:440px;margin:0 auto;}
+  .head{text-align:center;padding-bottom:16px;border-bottom:2px dashed #ccc;margin-bottom:16px;}.head-icon{font-size:32px;line-height:1;margin-bottom:6px;}.head-name{font-size:22px;font-weight:700;}.head-sub{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.8px;margin-top:3px;}
+  .badge{display:inline-block;margin-top:8px;padding:3px 12px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}.badge-ok{background:#e8f8f0;color:#27ae60;border:1px solid #b2dfce;}.badge-fwd{background:#fef9ee;color:#d4950a;border:1px solid #f5d78a;}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;background:#f7f7f7;border-radius:8px;padding:10px 14px;margin-bottom:14px;border:1px solid #eee;}.ml{display:flex;flex-direction:column;gap:1px;}.ml-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#999;}.ml-val{font-size:12px;font-weight:600;color:#222;}
+  .hero{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:#fef9ee;border:2px solid #d4950a;border-radius:10px;margin-bottom:14px;}.hero-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#d4950a;}.hero-sub{font-size:11px;color:#999;margin-top:2px;}.hero-amt{font-size:26px;font-weight:800;color:#d4950a;}
+  .sec{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#aaa;display:flex;align-items:center;gap:8px;margin:14px 0 7px;}.sec::after{content:'';flex:1;height:1px;background:#ddd;}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;background:#f7f7f7;border-radius:7px;margin-bottom:6px;}.row-left{display:flex;align-items:center;gap:10px;}.row-ico{font-size:18px;line-height:1;}.row-lbl{font-size:13px;font-weight:600;color:#222;}.row-sub{font-size:10px;color:#888;margin-top:1px;}.row-val{font-size:15px;font-weight:800;}
+  .divider{border:none;border-top:2px dashed #ccc;margin:14px 0;}.net{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-radius:10px;margin-top:12px;font-weight:800;font-size:15px;}.net-ok{background:#e8f8f0;border:2px solid #b2dfce;}.net-fwd{background:#fef9ee;border:2px solid #d4950a;}
+  .foot{text-align:center;padding:12px 0 2px;border-top:2px dashed #ccc;margin-top:16px;}.foot-txt{font-size:10px;color:#aaa;letter-spacing:.4px;}
+  @media print{body{padding:16px 14px;}@page{margin:10mm;size:A5;}}</style></head><body>
+  <div class="head"><div class="head-icon">💸</div><div class="head-name">${messName}</div><div class="head-sub">Change &amp; Carry Forward Receipt</div>
+  <span class="badge ${isFullyReturned ? 'badge-ok' : 'badge-fwd'}">${isFullyReturned ? "✓ Fully Returned" : "↩ Partially Carried"}</span></div>
+  <div class="meta">
+    <div class="ml"><span class="ml-lbl">Receipt No.</span><span class="ml-val" style="font-family:monospace;font-size:11px">${receiptNo}</span></div>
+    <div class="ml"><span class="ml-lbl">Date &amp; Time</span><span class="ml-val" style="font-size:11px">${dt}</span></div>
+    <div class="ml" style="margin-top:5px"><span class="ml-lbl">Member</span><span class="ml-val">${d.member.name}</span></div>
+    <div class="ml" style="margin-top:5px"><span class="ml-lbl">Settlement Month</span><span class="ml-val">${d.monthLabel}</span></div>
+  </div>
+  <div class="hero"><div><div class="hero-lbl">Overpaid (Change Owed)</div><div class="hero-sub">Member paid more than net payable</div></div><div class="hero-amt">${fmtTkP(d.totalChange)}</div></div>
+  <div class="sec">Breakdown</div>
+  ${d.cashNow > 0 ? `<div class="row"><div class="row-left"><span class="row-ico">💵</span><div><div class="row-lbl">Cash Returned Now</div><div class="row-sub">Handed back to ${d.member.name}</div></div></div><span class="row-val" style="color:#27ae60">${fmtTkP(d.cashNow)}</span></div>` : ""}
+  ${d.newCarry > 0 ? `<div class="row" style="border:1px solid #aed6f1"><div class="row-left"><span class="row-ico">↩</span><div><div class="row-lbl">Carried to ${d.nextMonthLabel}</div><div class="row-sub">Reduces utility total due next month</div></div></div><span class="row-val" style="color:#2980b9">${fmtTkP(d.newCarry)}</span></div>` : ""}
+  <hr class="divider">
+  <div class="net ${isFullyReturned ? 'net-ok' : 'net-fwd'}"><span>Change Status</span><span style="color:${isFullyReturned ? '#27ae60' : '#d4950a'}">${isFullyReturned ? "✓ Fully returned" : `↩ ${fmtTkP(d.newCarry)} carried forward`}</span></div>
+  <div class="foot"><div class="foot-txt">— Generated by ${messName} Manager —</div></div>
+  </body></html>`);
+  w.document.close();
+  if (isSafari) { setTimeout(() => { w.focus(); w.print(); }, 250); }
+  else { frame.onload = () => setTimeout(() => { w.focus(); w.print(); }, 250); }
 }
 
 /* ── Live preview for credit drawdown ── */
@@ -514,6 +935,12 @@ async function saveCollectRow(memberId) {
     // If member is now owed (netPayable < 0), rebuild credit table
     if (r.netPayable < 0) {
       buildCreditTable();
+    }
+
+    // If there's change to return, add to pending change table
+    if (change > 0) {
+      r.pendingChange = round2((r.pendingChange || 0) + change);
+      buildChangeTable();
     }
 
     const parts = [];
