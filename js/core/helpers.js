@@ -257,10 +257,15 @@ function calcMemberSettlement(
   // Positive → member owes; negative → member is owed back.
   const mealBalance = round2(mealCost - memberBazar);
 
+  // Carry-forward credit: if the mess owed this member last month and the
+  // manager chose to carry it forward, it is stored in THIS month's
+  // utility_payments.bills.mess_credit[memberName] and deducted here.
+  const messCredit = round2(Number((currentUtilRec?.bills?.mess_credit || {})[member.name] || 0));
+
   const totalPay   = round2(mealCost + roomRent + prepaidUtility + postpaidUtility);
-  // Deduct credits: bazar bought, utility paid, rent paid, and any cash
-  // already collected against the meal portion (meal_paid).
-  const netPayable = round2(totalPay - memberBazar - utilityPaid - roomRentPaid - mealPaid);
+  // Deduct credits: bazar bought, utility paid, rent paid, meal_paid, and
+  // any carry-forward credit from the previous month.
+  const netPayable = round2(totalPay - memberBazar - utilityPaid - roomRentPaid - mealPaid - messCredit);
 
   return {
     memberName: member.name,
@@ -292,6 +297,7 @@ function calcMemberSettlement(
     rentStatus:    rentEntry.status || "unpaid",
 
     mealBalance,
+    messCredit,
     mealPaid,
 
     totalPay,

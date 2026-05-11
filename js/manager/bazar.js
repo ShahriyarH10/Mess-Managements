@@ -190,7 +190,7 @@ async function saveUtilityGroup(type) {
    ───────────────────────────────────────────────────────────────────────── */
 let _utPerHead = 0; // module-level so oninput can access it
 
-function buildUtilPaymentTable(perHead, payments = {}) {
+function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
   _utPerHead = perHead;
   const wrap = document.getElementById("ut-payment-table");
   const actions = document.getElementById("ut-payment-actions");
@@ -217,8 +217,11 @@ function buildUtilPaymentTable(perHead, payments = {}) {
         <tbody id="ut-tbody">
           ${members.map(m => {
             const p       = payments[m.name] || {};
+            const credit  = round2(Number(messCredit[m.name] || 0));
             const paid    = Number(p.paid || 0);
-            const status  = p.status || "unpaid";
+            // Pre-fill with carry-forward credit if no manual payment recorded yet
+            const prefill = paid === 0 && credit > 0 ? credit : paid;
+            const status  = p.status || (credit > 0 && paid === 0 ? (credit >= perHead ? "paid" : "partial") : "unpaid");
 
             return `
               <tr id="utr-${m.id}">
@@ -229,12 +232,13 @@ function buildUtilPaymentTable(perHead, payments = {}) {
                     type="number"
                     class="input input-sm"
                     id="up-${m.id}"
-                    value="${paid}"
+                    value="${prefill}"
                     min="0"
                     step="1"
                     style="width:100px"
                     oninput="onUtilPaidInput('${m.id}', ${perHead})"
                   />
+                  ${credit > 0 ? `<div style="font-size:10px;color:var(--blue);margin-top:3px">↩ ${fmtTk(credit)} carried fwd</div>` : ''}
                 </td>
                 <td>
                   <select class="input input-sm" id="ust-${m.id}" style="width:110px">
@@ -261,7 +265,16 @@ function buildUtilPaymentTable(perHead, payments = {}) {
 
   if (actions)  actions.style.display  = "block";
   if (summary)  summary.style.display  = "block";
-  updateSummaryBar(perHead, payments);
+
+  // Merge carry-forward credits into payments for accurate summary display
+  const effectivePayments = {};
+  members.forEach(m => {
+    const p      = payments[m.name] || {};
+    const credit = round2(Number(messCredit[m.name] || 0));
+    const paid   = Number(p.paid || 0);
+    effectivePayments[m.name] = { ...p, paid: paid === 0 && credit > 0 ? credit : paid };
+  });
+  updateSummaryBar(perHead, effectivePayments);
 }
 
 function onUtilPaidInput(memberId, perHead) {
@@ -324,7 +337,8 @@ async function loadUtilityPayments() {
   set("ut-cur-prepaid",    currentPrepaid);
   set("ut-prev-postpaid",  previousPostpaid);
 
-  buildUtilPaymentTable(perHead, currentUtilRec?.payments || {});
+  const messCredit = currentUtilRec?.bills?.mess_credit || {};
+  buildUtilPaymentTable(perHead, currentUtilRec?.payments || {}, messCredit);
 }
 
 function markAllUtilPaid() {
