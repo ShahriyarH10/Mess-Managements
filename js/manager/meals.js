@@ -61,6 +61,7 @@ async function loadMealDate() {
   else { members.forEach(m=>{ mealDayVals[m.id]=0; mealNightVals[m.id]=0; }); buildMealGrid(); }
 }
 async function saveMeals() {
+  if (!requireManager(arguments.callee.name || 'fn')) return;
   const date=document.getElementById("meal-date")?.value; if(!date){ toast("Select a date"); return; }
   const meals={};
   members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
@@ -71,7 +72,7 @@ async function loadMealsRecent() {
   const all=await dbGetAll("meals");
   const recent=all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if(!recent.length){ wrap.innerHTML='<div class="empty">No meal entries yet</div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join("")}<th>Total</th><th></th></tr></thead>
+  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${escapeHtml(m.name)}</th>`).join("")}<th>Total</th><th></th></tr></thead>
   <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealTotalFromObj(r.meals||{},m.name); t+=v; return`<td>${v}</td>`; }).join(""); return`<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delMeal('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
 }
 async function loadManagerMealMonths() {
@@ -106,7 +107,7 @@ function renderBazar(el) {
 }
 function buildBazarGrid() {
   const g=document.getElementById("bazar-grid"); if(!g) return;
-  g.innerHTML=members.map(m=>`<div class="meal-cell"><div class="meal-cell-name">${m.name}</div><div class="meal-cell-row"><span class="meal-cell-label">৳</span><input type="number" class="meal-num-input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSum()"/></div></div>`).join("");
+  g.innerHTML=members.map(m=>`<div class="meal-cell"><div class="meal-cell-name">${escapeHtml(m.name)}</div><div class="meal-cell-row"><span class="meal-cell-label">৳</span><input type="number" class="meal-num-input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSum()"/></div></div>`).join("");
 }
 function updBazarSum() { let b=0; members.forEach(m=>{ b+=parseFloat(document.getElementById("bz-"+m.id)?.value||0); }); const bt=document.getElementById("bazar-tot"); if(bt) bt.textContent=fmtTk(b); }
 async function loadBazarDate() {
@@ -116,6 +117,7 @@ async function loadBazarDate() {
 }
 function clearBazar() { members.forEach(m=>{ const e=document.getElementById("bz-"+m.id); if(e) e.value=""; }); updBazarSum(); }
 async function saveBazar() {
+  if (!requireManager(arguments.callee.name || 'fn')) return;
   const date=document.getElementById("bazar-date")?.value; if(!date){ toast("Select a date"); return; }
   const bazar={}; members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
   try{ await dbUpsertBazar(date,bazar); toast("Bazar saved","success"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error: "+e.message,"error"); }
@@ -124,7 +126,7 @@ async function loadBazarRecent() {
   const wrap=document.getElementById("bazar-tbl"); if(!wrap) return;
   const all=await dbGetAll("bazar"); const recent=all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   if(!recent.length){ wrap.innerHTML='<div class="empty">No bazar entries</div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${m.name}</th>`).join("")}<th>Total</th><th></th></tr></thead><tbody>${recent.map(r=>{ const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0); return`<tr><td>${r.date}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):"—"}</td>`).join("")}<td><b>${fmtTk(bt)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delBazar('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
+  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${escapeHtml(m.name)}</th>`).join("")}<th>Total</th><th></th></tr></thead><tbody>${recent.map(r=>{ const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0); return`<tr><td>${r.date}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):"—"}</td>`).join("")}<td><b>${fmtTk(bt)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delBazar('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
 }
 
 /* Bazar month-history grid: one card per month with totals, top contributor,

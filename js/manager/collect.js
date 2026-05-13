@@ -401,6 +401,7 @@ function onChangeAmtInput(memberId) {
 }
 
 async function saveChangeRow(memberId) {
+  if (!requireManager(arguments.callee.name || 'fn')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
   const r   = ctx.perMember[memberId];
@@ -750,6 +751,7 @@ function onCreditAmtInput(memberId) {
 
 /* ── Save credit drawdown + carry-forward ── */
 async function saveCreditRow(memberId) {
+  if (!requireManager(arguments.callee.name || 'fn')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
   const r   = ctx.perMember[memberId];
@@ -854,6 +856,7 @@ function onCollectAmtInput(memberId) {
 }
 
 async function saveCollectRow(memberId) {
+  if (!requireManager(arguments.callee.name || 'fn')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
   const r = ctx.perMember[memberId];

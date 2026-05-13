@@ -47,23 +47,46 @@ function togglePw() {
 /* SESSION */
 function saveSession(u, m) {
   currentUser = u; currentMess = m;
-  localStorage.setItem("mm_user", JSON.stringify(u));
-  localStorage.setItem("mm_mess", JSON.stringify(m));
-  sessionStorage.setItem("mm_user", JSON.stringify(u));
-  sessionStorage.setItem("mm_mess", JSON.stringify(m));
+  const payload = { u, m, exp: Date.now() + SESSION_TTL_MS };
+  const s = JSON.stringify(payload);
+  localStorage.setItem("mm_session", s);
+  sessionStorage.setItem("mm_session", s);
 }
 function loadSession() {
   try {
-    const u = localStorage.getItem("mm_user") || sessionStorage.getItem("mm_user");
-    const m = localStorage.getItem("mm_mess") || sessionStorage.getItem("mm_mess");
-    if (u) currentUser = JSON.parse(u);
-    if (m) currentMess = JSON.parse(m);
+    const raw = localStorage.getItem("mm_session") || sessionStorage.getItem("mm_session");
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    if (!payload.exp || Date.now() > payload.exp) {
+      clearSession();
+      return;
+    }
+    if (payload.u) currentUser = payload.u;
+    if (payload.m) currentMess = payload.m;
   } catch (e) { currentUser = null; currentMess = null; }
 }
 function clearSession() {
   currentUser = null; currentMess = null; members = [];
+  localStorage.removeItem("mm_session");
+  sessionStorage.removeItem("mm_session");
+  // Legacy keys cleanup
   localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess");
   sessionStorage.removeItem("mm_user"); sessionStorage.removeItem("mm_mess");
+}
+
+/* ROLE GUARD — call at top of every manager-only write function */
+function requireManager(fnName) {
+  if (!currentUser) {
+    console.warn(`[Security] ${fnName} blocked — not logged in`);
+    toast("Not authenticated", "error");
+    return false;
+  }
+  if (currentUser.role !== "manager" && currentUser.role !== "superadmin") {
+    console.warn(`[Security] ${fnName} blocked — insufficient role: ${currentUser.role}`);
+    toast("Manager access required", "error");
+    return false;
+  }
+  return true;
 }
 
 /* MODAL & TOAST */

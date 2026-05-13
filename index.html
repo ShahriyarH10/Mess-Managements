@@ -299,6 +299,10 @@
           <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           <span class="theme-label"></span>
         </button>
+        <button class="nav-item" id="sidebar-change-pw" onclick="openChangePasswordModal(currentUser?.memberId)" style="color:var(--text2);margin-bottom:2px">
+          <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
+          Change Password
+        </button>
         <button class="nav-item logout-btn" id="sidebar-logout" onclick="doLogout()" style="color:var(--red);margin-bottom:4px"></button>
         <div class="db-status"><div class="db-dot live" id="db-dot"></div><span id="db-label">Connecting…</span></div>
       </div>

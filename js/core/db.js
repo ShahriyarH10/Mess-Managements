@@ -66,14 +66,19 @@ async function dbGetMembers() {
 
 async function dbSaveMember(row) {
   const payload = {
-    name: row.name, username: row.username, password: row.password,
+    name: row.name, username: row.username,
     role: row.role || "member", room: row.room || "",
     phone: row.phone || "", joined: row.joined || null, mess_id: messId(),
   };
+  // Only include password in payload if explicitly provided (avoids overwriting with undefined)
+  if (row.password) payload.password = row.password;
+
   if (row.id) {
     const { error } = await sb.from("members").update(payload).eq("id", row.id);
     if (error) throw error;
   } else {
+    // New member must have a password
+    if (!payload.password) throw new Error("Password is required for new members");
     const { error } = await sb.from("members").insert(payload);
     if (error) throw error;
   }

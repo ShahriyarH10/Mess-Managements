@@ -667,3 +667,74 @@ async function loadMyProfile(member) {
     </div>
   </div>`;
 }
+
+/* ═══════════════════════════════════════════
+   CHANGE PASSWORD
+═══════════════════════════════════════════ */
+function openChangePasswordModal(memberId) {
+  document.getElementById("modal-content").innerHTML = `
+    <div class="modal-title">🔑 Change Password</div>
+    <div class="modal-sub">Enter your current password to confirm, then set a new one.</div>
+
+    <div class="field">
+      <label>Current password *</label>
+      <input type="password" class="input" id="cp-current" placeholder="Your current password" autocomplete="current-password"/>
+    </div>
+    <div class="field">
+      <label>New password *</label>
+      <input type="password" class="input" id="cp-new" placeholder="Min 6 characters" autocomplete="new-password"/>
+    </div>
+    <div class="field">
+      <label>Confirm new password *</label>
+      <input type="password" class="input" id="cp-confirm" placeholder="Repeat new password" autocomplete="new-password"/>
+    </div>
+    <div id="cp-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:8px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doChangePassword('${memberId}')">Update password</button>
+    </div>`;
+  openModal();
+}
+
+async function doChangePassword(memberId) {
+  const currentPw  = document.getElementById("cp-current")?.value;
+  const newPw      = document.getElementById("cp-new")?.value;
+  const confirmPw  = document.getElementById("cp-confirm")?.value;
+  const errEl      = document.getElementById("cp-error");
+
+  const showErr = (msg) => { errEl.style.display = "block"; errEl.textContent = msg; };
+  errEl.style.display = "none";
+
+  if (!currentPw)               return showErr("Enter your current password.");
+  if (!newPw || newPw.length < 6) return showErr("New password must be at least 6 characters.");
+  if (newPw !== confirmPw)       return showErr("New passwords do not match.");
+  if (newPw === currentPw)       return showErr("New password must be different from current.");
+
+  try {
+    // Verify current password against DB
+    const currentHash = await hashPassword(currentPw);
+    const { data: member } = await sb.from("members").select("id, password")
+      .eq("id", memberId).maybeSingle();
+
+    if (!member) return showErr("Incorrect password. Please try again.");
+
+    // Support both hashed and legacy plaintext passwords during transition
+    const isHashed  = member.password === currentHash;
+    const isLegacy  = member.password === currentPw;
+    if (!isHashed && !isLegacy) return showErr("Incorrect password. Please try again.");
+
+    // Save new hashed password
+    const newHash = await hashPassword(newPw);
+    const { error } = await sb.from("members").update({ password: newHash }).eq("id", memberId);
+    if (error) throw error;
+
+    closeModal();
+    toast("Password updated successfully ✓", "success");
+
+    // Refresh session so it stays valid
+    saveSession(currentUser, currentMess);
+  } catch (e) {
+    showErr("Error: " + e.message);
+  }
+}

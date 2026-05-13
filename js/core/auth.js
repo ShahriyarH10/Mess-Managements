@@ -25,9 +25,10 @@ async function doCreateMess() {
   const btn = document.getElementById("cm-btn");
   btn.disabled = true; btn.textContent = "Creating…";
   try {
+    const hashedPw = await hashPassword(password);
     const { data: mess, error: messErr } = await sb.from("messes").insert({ name: messName, location: location || "" }).select().single();
     if (messErr) throw messErr;
-    const { data: member, error: memErr } = await sb.from("members").insert({ mess_id: mess.id, name: myName, username, password, role: "manager" }).select().single();
+    const { data: member, error: memErr } = await sb.from("members").insert({ mess_id: mess.id, name: myName, username, password: hashedPw, role: "manager" }).select().single();
     if (memErr) throw memErr;
     toast("Mess created! Signing you in…", "success");
     saveSession({ name: myName, username, role: "manager", memberId: member.id }, mess);
@@ -53,18 +54,62 @@ async function doLogin() {
   const errEl = document.getElementById("login-error");
   errEl.style.display = "none";
   if (!user || !pass) { showLoginError("Enter username and password."); return; }
+
+  // ── Brute-force protection ──────────────────────────────────
+  const LOCKOUT_KEY    = "mm_login_lock";
+  const ATTEMPTS_KEY   = "mm_login_attempts";
+  const MAX_ATTEMPTS   = 5;
+  const LOCKOUT_MS     = 5 * 60 * 1000; // 5 minutes
+
+  const lockUntil = parseInt(sessionStorage.getItem(LOCKOUT_KEY) || "0");
+  if (Date.now() < lockUntil) {
+    const remaining = Math.ceil((lockUntil - Date.now()) / 1000);
+    showLoginError(`Too many failed attempts. Try again in ${remaining}s.`);
+    return;
+  }
+
   btn.disabled = true; btn.textContent = "Signing in…";
   try {
-    if (user === SUPERADMIN.username && pass === SUPERADMIN.password) {
+    const hashedPw = await hashPassword(pass);
+
+    // Superadmin check — compare hash only, never plaintext
+    if (user === SUPERADMIN.username && hashedPw === SUPERADMIN.passwordHash) {
+      sessionStorage.removeItem(ATTEMPTS_KEY);
       saveSession({ name: "Super Admin", username: user, role: "superadmin", memberId: null }, null);
       bootSuperAdmin(); return;
     }
-    const { data: member } = await sb.from("members").select("*, messes(*)").eq("username", user).eq("password", pass).maybeSingle();
+
+    // Member login — compare hashed password
+    const { data: member } = await sb.from("members").select("*, messes(*)")
+      .eq("username", user).eq("password", hashedPw).maybeSingle();
+
     if (member) {
+      sessionStorage.removeItem(ATTEMPTS_KEY);
       saveSession({ name: member.name, username: user, role: member.role, memberId: member.id }, member.messes);
       await bootApp(); return;
     }
-    showLoginError("Invalid username or password.");
+
+    // Legacy fallback: support accounts created before hashing was added
+    const { data: legacyMember } = await sb.from("members").select("*, messes(*)")
+      .eq("username", user).eq("password", pass).maybeSingle();
+
+    if (legacyMember) {
+      sessionStorage.removeItem(ATTEMPTS_KEY);
+      await sb.from("members").update({ password: hashedPw }).eq("id", legacyMember.id);
+      saveSession({ name: legacyMember.name, username: user, role: legacyMember.role, memberId: legacyMember.id }, legacyMember.messes);
+      await bootApp(); return;
+    }
+
+    // Failed — increment attempt counter
+    const attempts = parseInt(sessionStorage.getItem(ATTEMPTS_KEY) || "0") + 1;
+    sessionStorage.setItem(ATTEMPTS_KEY, attempts);
+    if (attempts >= MAX_ATTEMPTS) {
+      sessionStorage.setItem(LOCKOUT_KEY, Date.now() + LOCKOUT_MS);
+      sessionStorage.removeItem(ATTEMPTS_KEY);
+      showLoginError(`Too many failed attempts. Locked for 5 minutes.`);
+    } else {
+      showLoginError(`Invalid username or password. (${MAX_ATTEMPTS - attempts} attempt${MAX_ATTEMPTS - attempts === 1 ? "" : "s"} remaining)`);
+    }
   } catch (e) {
     showLoginError("Connection error. Check your network."); console.error(e);
   } finally {
@@ -113,6 +158,7 @@ async function renderSAMesses(main) {
   </tr>`).join("");
 }
 async function saDeleteMess(id) {
+  if (!currentUser || currentUser.role !== "superadmin") { toast("Superadmin access required", "error"); return; }
   if (!confirm("Delete this mess and ALL its data? This cannot be undone.")) return;
   try {
     for (const t of ["meals","bazar","rent","utility_payments","members","announcements","chores"]) {

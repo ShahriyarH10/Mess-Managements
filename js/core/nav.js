@@ -193,6 +193,11 @@ function buildNav() {
       <span class="drawer-theme-label">Light mode</span>
     </button>
 
+    <button class="mob-drawer-item" onclick="closeMobileMore();openChangePasswordModal(currentUser?.memberId)" data-page="change-pw">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
+      <span>Change Password</span>
+    </button>
+
     <button class="mob-drawer-item mob-drawer-signout" onclick="doLogout()" data-page="logout">
       ${IC.logout}
       <span>Sign out</span>
