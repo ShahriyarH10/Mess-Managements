@@ -114,9 +114,11 @@ async function loadCollectMonth() {
   const utilRecNext = utilNextR.data || null;
 
   // Existing carry-forward credits stored in NEXT month's bills
-  const existingCredits      = utilRecNext?.bills?.mess_credit || {};
+  const existingCredits       = utilRecNext?.bills?.mess_credit    || {};
   // Change carry-forward credits (from overpayment) also stored in next month's bills
-  const existingChangeCredits = utilRecNext?.bills?.change_credit || {};
+  const existingChangeCredits = utilRecNext?.bills?.change_credit  || {};
+  // Pending change (overpayment not yet resolved) stored in CURRENT month's bills
+  const pendingChangeBills    = utilRec?.bills?.pending_change     || {};
 
   const perMember = {};
   members.forEach(m => {
@@ -131,13 +133,10 @@ async function loadCollectMonth() {
       rentDue:       p.roomRent,
       rentPaid:      p.roomRentPaid,
       netPayable:    p.netPayable,
-      // Carry-forward credit applied FROM last month INTO this month
       messCredit:    p.messCredit,
-      // Credit already stored in next month for this member (mess-owes path)
-      existingCarryCredit: round2(Number(existingCredits[m.name] || 0)),
-      // Change overpayment pending return/carry (set after saveCollectRow)
-      pendingChange: 0,
-      // Change credit already carried to next month (overpayment path)
+      existingCarryCredit:  round2(Number(existingCredits[m.name]       || 0)),
+      // Persisted pending change — survives page reload
+      pendingChange:        round2(Number(pendingChangeBills[m.name]    || 0)),
       existingChangeCredit: round2(Number(existingChangeCredits[m.name] || 0)),
     };
   });
@@ -435,7 +434,22 @@ async function saveChangeRow(memberId) {
 
     await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
 
+    // Clear pending_change from current month bills — it's now resolved
+    const { data: curUtil } = await sb.from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+    const curBills    = { ...(curUtil?.bills    || {}) };
+    const curPayments = curUtil?.payments || {};
+    const pendingMap  = { ...(curBills.pending_change || {}) };
+    delete pendingMap[m.name];
+    if (Object.keys(pendingMap).length === 0) {
+      delete curBills.pending_change;
+    } else {
+      curBills.pending_change = pendingMap;
+    }
+    await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
+
     // Update in-memory
+    r.pendingChange        = 0;
     r.existingChangeCredit = round2(alreadyFwd + newCarry);
     ctx.existingChangeCredits[m.name] = newCarry;
 
@@ -937,9 +951,22 @@ async function saveCollectRow(memberId) {
       buildCreditTable();
     }
 
-    // If there's change to return, add to pending change table
+    // If there's change to return, persist it to DB and show change table
     if (change > 0) {
       r.pendingChange = round2((r.pendingChange || 0) + change);
+
+      // Persist to current month's bills.pending_change so it survives reload
+      try {
+        const { data: freshUtil } = await sb.from("utility_payments")
+          .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+        const freshBills    = { ...(freshUtil?.bills    || {}) };
+        const freshPayments = freshUtil?.payments || {};
+        const pendingMap    = { ...(freshBills.pending_change || {}) };
+        pendingMap[m.name]  = r.pendingChange;
+        freshBills.pending_change = pendingMap;
+        await dbUpsertUtility(ctx.month, ctx.year, ctx.key, freshBills, freshPayments);
+      } catch (_) { /* non-critical — in-memory still works this session */ }
+
       buildChangeTable();
     }
 

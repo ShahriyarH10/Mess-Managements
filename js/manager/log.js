@@ -39,10 +39,10 @@ function renderLog(el) {
           </div>
         </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);color:var(--green);font-weight:600">
-          ✅ Credits (deducted): Bazar spent + Meal cash + Rent paid + Utility paid
+          ✅ Credits (deducted): Bazar spent + Meal cash + Rent paid + Utility paid + ↩ Carry-forward credit
         </div>
         <div style="margin-top:6px;background:var(--accent-bg);border-radius:6px;padding:8px 12px;font-weight:600;color:var(--accent)">
-          Net = Meal cost + Khala + Other + Rent + Elec/Gas/WiFi − Bazar − Meal paid − Rent paid − Util paid
+          Net = Meal cost + Khala + Other + Rent + Elec/Gas/WiFi − Bazar − Meal paid − Rent paid − Util paid − Carried fwd
         </div>
       </div>
 
@@ -192,7 +192,7 @@ async function loadLog() {
               <th colspan="2" style="color:var(--blue);background:rgba(91,155,213,.07)">
                 🔵 Prepaid — ${MONTHS[month].slice(0,3)} ${year}
               </th>
-              <th colspan="4" style="color:var(--green);background:rgba(39,174,96,.07)">
+              <th colspan="5" style="color:var(--green);background:rgba(39,174,96,.07)">
                 ✅ Credits
               </th>
               <th rowspan="2" style="background:var(--bg3)">Net</th>
@@ -207,6 +207,7 @@ async function loadLog() {
               <th style="color:var(--green)">Meal paid</th>
               <th style="color:var(--green)">Rent paid</th>
               <th style="color:var(--green)">Util paid</th>
+              <th style="color:var(--blue)">↩ Carried fwd</th>
             </tr>
           </thead>
 
@@ -246,6 +247,9 @@ async function loadLog() {
                 <td style="color:${p.utilityPaid > 0 ? 'var(--green)' : 'var(--text3)'}">
                   ${p.utilityPaid > 0 ? fmtTk(p.utilityPaid) : '৳0'}
                 </td>
+                <td style="color:${(p.messCredit||0) > 0 ? 'var(--blue)' : 'var(--text3)'}">
+                  ${(p.messCredit||0) > 0 ? `↩ ${fmtTk(p.messCredit)}` : '—'}
+                </td>
                 <td style="background:var(--bg3)">
                   <button
                     class="btn btn-ghost btn-sm"
@@ -275,6 +279,7 @@ async function loadLog() {
               <td>${fmtTk(totalMealPaid)}</td>
               <td>${fmtTk(totalRentPaid)}</td>
               <td>${fmtTk(totalUtilPaid)}</td>
+              <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p) => s + (p.messCredit||0), 0)))}</td>
               <td><b class="${grandNetPayable > 0 ? 'net-neg' : grandNetPayable < 0 ? 'net-pos' : ''}">
                 ${grandNetPayable > 0 ? 'Pay ' + fmtTk(grandNetPayable) : grandNetPayable < 0 ? 'Get ' + fmtTk(Math.abs(grandNetPayable)) : '✓ Balanced'}
               </b></td>
@@ -284,7 +289,7 @@ async function loadLog() {
       </div>
 
       <div style="font-size:12px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        💡 Click <b>Details</b> on any member row to see a step-by-step calculation breakdown.
+        💡 Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">↩ Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable.
       </div>
     </div>
 
@@ -486,6 +491,16 @@ function showSettlementBreakdown(idx) {
       </div>
     `}
 
+    ${(p.messCredit||0) > 0 ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(52,152,219,.08);border:1px solid rgba(52,152,219,.3);border-radius:6px;margin-bottom:6px">
+        <div>
+          <div style="font-weight:600;color:var(--blue)">↩ Carry-forward credit</div>
+          <div style="font-size:11px;color:var(--text3)">Credit from last month's overpayment or Mess Owes balance</div>
+        </div>
+        <div style="font-weight:700;color:var(--blue);font-size:15px">− ${fmtTk(p.messCredit)}</div>
+      </div>
+    ` : ""}
+
     <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:8px;margin-top:10px;font-size:16px;font-weight:800">
       <span>Net Payable</span>
       <span style="color:${p.netPayable > 0 ? 'var(--red)' : p.netPayable < 0 ? 'var(--green)' : 'var(--text)'}">
@@ -494,7 +509,7 @@ function showSettlementBreakdown(idx) {
     </div>
 
     <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6;background:var(--bg3);padding:8px 12px;border-radius:6px">
-      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid || 0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)} = <b>${fmtTk(p.netPayable)}</b>
+      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid || 0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)}${(p.messCredit||0) > 0 ? ` − ${fmtTk(p.messCredit)} (carried fwd)` : ''} = <b>${fmtTk(p.netPayable)}</b>
     </div>
 
     <div class="modal-footer">

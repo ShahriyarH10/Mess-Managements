@@ -125,6 +125,9 @@ async function renderMyMeals(el) {
       }
     </div>
   </div>`;
+
+  // Auto-load today's existing meal data as soon as the section renders
+  fillMyMealFromDate();
 }
 
 async function fillMyMealFromDate() {
