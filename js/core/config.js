@@ -31,7 +31,7 @@ async function hashPassword(plain) {
 ═══════════════════════════════════════════ */
 const SUPERADMIN = {
   username: "superadmin",
-  // SHA-256 of "super@admin2025" — change this hash to change the password
+  // SHA-256 of "" — change this hash to change the password
   passwordHash: "7fb3ccf24ee474f31ef17a269c153be6f58febae8d39de86b4259227a01529d2",
   role: "superadmin",
 };
