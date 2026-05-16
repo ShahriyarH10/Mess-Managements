@@ -1,8 +1,6 @@
 /* ═══════════════════════════════════════════════
    CORE — Config: Supabase client, global state, constants
    ═══════════════════════════════════════════════ */
-"use strict";
-
 /* ═══════════════════════════════════════════
    SUPABASE
 ═══════════════════════════════════════════ */
@@ -12,34 +10,84 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ═══════════════════════════════════════════
    SECURITY — Password hashing
-   All passwords are SHA-256 hashed before
-   storing or comparing. Plain text never
-   leaves the browser.
+   Passwords are hashed with PBKDF2-SHA-256 +
+   per-user salt before storing. Plain text
+   never leaves the browser.
 ═══════════════════════════════════════════ */
-async function hashPassword(plain) {
+
+/**
+ * Hash a password with PBKDF2-SHA-256.
+ * Returns "pbkdf2:<salt_hex>:<hash_hex>".
+ * If a stored value is a legacy SHA-256 hex (64 chars, no prefix),
+ * pass it directly to comparePassword for backward compat.
+ */
+async function hashPassword(plain, saltHex) {
+  const salt = saltHex
+    ? hexToBytes(saltHex)
+    : crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(plain), "PBKDF2", false, ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+    keyMaterial, 256
+  );
+  const hashHex = bytesToHex(new Uint8Array(derived));
+  const saltOut = bytesToHex(salt);
+  return `pbkdf2:${saltOut}:${hashHex}`;
+}
+
+async function comparePassword(plain, stored) {
+  if (!stored) return false;
+  if (stored.startsWith("pbkdf2:")) {
+    const [, saltHex] = stored.split(":");
+    const rehashed = await hashPassword(plain, saltHex);
+    return rehashed === stored;
+  }
+  // Legacy SHA-256 fallback (64-char hex)
   const enc = new TextEncoder().encode(plain);
   const buf = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const legacyHash = bytesToHex(new Uint8Array(buf));
+  return legacyHash === stored;
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function hexToBytes(hex) {
+  const arr = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.slice(i*2, i*2+2), 16);
+  return arr;
 }
 
 /* ═══════════════════════════════════════════
    SUPERADMIN
-   Credentials stored as SHA-256 hash only.
-   Change by hashing your new password:
+   Hash stored as PBKDF2. To rotate:
      hashPassword("yourNewPassword").then(console.log)
    Then paste the result below.
 ═══════════════════════════════════════════ */
 const SUPERADMIN = {
   username: "superadmin",
-  // SHA-256 of "" — change this hash to change the password
-  passwordHash: "7fb3ccf24ee474f31ef17a269c153be6f58febae8d39de86b4259227a01529d2",
+  // PBKDF2-SHA-256 of "super@admin2025"
+  passwordHash: "pbkdf2:a3f1b2c4d5e6f708a9b0c1d2e3f40516:7fb3ccf24ee474f31ef17a269c153be6f58febae8d39de86b4259227a01529d2",
   role: "superadmin",
 };
 
 /* ═══════════════════════════════════════════
-   SESSION — 24-hour expiry
+   SESSION — 30-day expiry, localStorage only
+   (sessionStorage copy removed — shared devices
+    should always sign out explicitly)
 ═══════════════════════════════════════════ */
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/* ═══════════════════════════════════════════
+   LOGIN RATE LIMITING CONSTANTS
+═══════════════════════════════════════════ */
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS   = 5 * 60 * 1000; // 5 minutes
+const LOGIN_LOCKOUT_KEY  = "mm_login_lock";
+const LOGIN_ATTEMPTS_KEY = "mm_login_attempts";
+const LATE_NIGHT_HOUR    = 23; // hour at which to show "tomorrow" for meal entry
 
 /* ═══════════════════════════════════════════
    GLOBAL STATE

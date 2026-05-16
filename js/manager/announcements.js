@@ -135,7 +135,7 @@ function openAnnounceModal() {
 }
 
 async function postAnnounce() {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('postAnnounce')) return;
   const title  = cleanText(document.getElementById("an-title")?.value);
   const body   = cleanText(document.getElementById("an-body")?.value);
   const pinned = document.getElementById("an-pin")?.checked || false;
@@ -150,7 +150,7 @@ async function postAnnounce() {
 }
 
 async function deleteAnnounce(id) {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('deleteAnnounce')) return;
   showConfirm({ title: "Delete announcement?", body: "This announcement will be permanently removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDeleteAnnouncement(id); toast("Deleted"); navigate("announce"); }catch(e){ toast("Error","error"); } } }); return;
   try { await dbDeleteAnnouncement(id); toast("Deleted"); navigate("announce"); }
   catch(e) { toast("Error", "error"); }
@@ -189,7 +189,7 @@ function openChoreModal(id,existing) {
 }
 function openEditChoreModal(id) { dbGetChores().then(items=>{ const c=items.find(x=>x.id===id); if(c) openChoreModal(id,c); }); }
 async function saveChore(id) {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('saveChore')) return;
   const task=cleanText(document.getElementById("ch-task")?.value); if(!task){ toast("Task is required"); return; }
   const row={id:id||undefined,task,assignee:document.getElementById("ch-assignee")?.value||"",frequency:document.getElementById("ch-freq")?.value||"daily",status:document.getElementById("ch-status")?.value||"pending"};
   try{ await dbSaveChore(row); closeModal(); toast("Saved","success"); navigate("chores"); }catch(e){ toast("Error: "+e.message,"error"); }

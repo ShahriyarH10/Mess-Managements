@@ -159,7 +159,7 @@ async function loadUtilityGroup(type) {
 }
 
 async function saveUtilityGroup(type) {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('saveUtilityGroup')) return;
   const { month, year, key } = getUtilityGroupKey(type);
   const { data: rec } = await sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const bills = { ...(rec?.bills || {}) };
@@ -370,7 +370,7 @@ function markAllUtilPaid() {
 }
 
 async function saveUtilityPayments() {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('saveUtilityPayments')) return;
   const { month, year, key } = getPaymentKey();
   const { data: rec } = await sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const payments = {};

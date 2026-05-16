@@ -61,7 +61,7 @@ async function loadMealDate() {
   else { members.forEach(m=>{ mealDayVals[m.id]=0; mealNightVals[m.id]=0; }); buildMealGrid(); }
 }
 async function saveMeals() {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('saveMeals')) return;
   const date=document.getElementById("meal-date")?.value; if(!date){ toast("Select a date"); return; }
   const meals={};
   members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
@@ -117,7 +117,7 @@ async function loadBazarDate() {
 }
 function clearBazar() { members.forEach(m=>{ const e=document.getElementById("bz-"+m.id); if(e) e.value=""; }); updBazarSum(); }
 async function saveBazar() {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('saveBazar')) return;
   const date=document.getElementById("bazar-date")?.value; if(!date){ toast("Select a date"); return; }
   const bazar={}; members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
   try{ await dbUpsertBazar(date,bazar); toast("Bazar saved","success"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error: "+e.message,"error"); }

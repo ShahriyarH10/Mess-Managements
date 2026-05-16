@@ -87,7 +87,7 @@ function markAllRentPaid() {
 }
 
 async function saveRent() {
-  if (!requireManager(arguments.callee.name || 'fn')) return;
+  if (!requireManager('saveRent')) return;
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);
