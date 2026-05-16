@@ -73,7 +73,7 @@ async function loadMealsRecent() {
   const recent=all.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if(!recent.length){ wrap.innerHTML='<div class="empty">No meal entries yet</div>'; return; }
   wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${escapeHtml(m.name)}</th>`).join("")}<th>Total</th><th></th></tr></thead>
-  <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealTotalFromObj(r.meals||{},m.name); t+=v; return`<td>${v}</td>`; }).join(""); return`<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delMeal('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
+  <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealMemberTotal(r.meals||{},m.name); t+=v; return`<td>${v||"—"}</td>`; }).join(""); return`<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delMeal('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
 }
 async function loadManagerMealMonths() {
   const wrap=document.getElementById("manager-meal-months"); if(!wrap) return;
@@ -81,7 +81,7 @@ async function loadManagerMealMonths() {
   const keys=getMealMonthKeys(all);
   wrap.innerHTML=buildMealMonthButtons(keys,"openManagerMealMonth",all);
 }
-async function delMeal(id) { if(!confirm("Delete?")) return; try{ await dbDelete("meals",id); toast("Deleted"); loadMealsRecent(); loadManagerMealMonths(); }catch(e){ toast("Error","error"); } }
+async function delMeal(id) { showConfirm({ title: "Delete meal entry?", body: "This day's meal record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDelete("meals",id); toast("Deleted"); loadMealsRecent(); loadManagerMealMonths(); }catch(e){ toast("Error","error"); } } }); }
 
 /* ═══════════════════════════════════════════
    BAZAR ENTRY
@@ -242,4 +242,4 @@ async function openBazarMonth(key) {
   document.querySelector(".modal").classList.add("modal-wide");
   openModal();
 }
-async function delBazar(id) { if(!confirm("Delete?")) return; try{ await dbDelete("bazar",id); toast("Deleted"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error","error"); } }
+async function delBazar(id) { showConfirm({ title: "Delete bazar entry?", body: "This day's bazar record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDelete("bazar",id); toast("Deleted"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error","error"); } } }); }

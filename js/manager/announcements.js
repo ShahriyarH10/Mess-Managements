@@ -151,7 +151,7 @@ async function postAnnounce() {
 
 async function deleteAnnounce(id) {
   if (!requireManager(arguments.callee.name || 'fn')) return;
-  if (!confirm("Delete this announcement?")) return;
+  showConfirm({ title: "Delete announcement?", body: "This announcement will be permanently removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDeleteAnnouncement(id); toast("Deleted"); navigate("announce"); }catch(e){ toast("Error","error"); } } }); return;
   try { await dbDeleteAnnouncement(id); toast("Deleted"); navigate("announce"); }
   catch(e) { toast("Error", "error"); }
 }
@@ -194,4 +194,4 @@ async function saveChore(id) {
   const row={id:id||undefined,task,assignee:document.getElementById("ch-assignee")?.value||"",frequency:document.getElementById("ch-freq")?.value||"daily",status:document.getElementById("ch-status")?.value||"pending"};
   try{ await dbSaveChore(row); closeModal(); toast("Saved","success"); navigate("chores"); }catch(e){ toast("Error: "+e.message,"error"); }
 }
-async function deleteChore(id) { if (!requireManager("deleteChore")) return; if(!confirm("Delete?")) return; try{ await dbDeleteChore(id); toast("Deleted"); navigate("chores"); }catch(e){ toast("Error","error"); } }
+async function deleteChore(id) { if (!requireManager("deleteChore")) return; showConfirm({ title: "Delete chore?", body: "This chore assignment will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDeleteChore(id); toast("Deleted"); navigate("chores"); }catch(e){ toast("Error","error"); } } }); }

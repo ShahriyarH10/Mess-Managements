@@ -13,11 +13,16 @@ async function renderDashboard(el) {
   const mB = allBazar.filter(r => r.date.startsWith(key));
   let totalMeals=0, totalBazar=0;
   mM.forEach(r => {
-    members.forEach(m => {
-      const d = Number(r.meals[m.name+"_day"]  ?? 0);
-      const n = Number(r.meals[m.name+"_night"] ?? 0);
-      totalMeals += round2(d + n) || Number(r.meals[m.name] || 0);
-    });
+    const mObj = r.meals || {};
+    const keys = Object.keys(mObj);
+    const hasSplit = keys.some(k => k.endsWith("_day") || k.endsWith("_night"));
+    if (hasSplit) {
+      // Sum only _day and _night keys to avoid double-counting the legacy plain-name key
+      keys.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) totalMeals += Number(mObj[k]) || 0; });
+    } else {
+      // Legacy format: plain name keys only
+      Object.values(mObj).forEach(v => { totalMeals += Number(v) || 0; });
+    }
   });
   mB.forEach(r => Object.values(r.bazar||{}).forEach(v => totalBazar+=Number(v)));
   const mealRate = totalMeals > 0 ? round2(totalBazar/totalMeals) : 0;
@@ -42,11 +47,18 @@ async function renderDashboard(el) {
   let todayDayTotal=0, todayNightTotal=0;
   if (todayRec) {
     members.forEach(m => {
-      todayDayTotal   += Number(todayRec.meals[m.name+"_day"]   ?? todayRec.meals[m.name] ?? 0);
-      todayNightTotal += Number(todayRec.meals[m.name+"_night"] ?? 0);
+      const _dp = mealPartsFromObj(todayRec.meals||{}, m.name);
+      todayDayTotal   += _dp.day;
+      todayNightTotal += _dp.night;
     });
     todayDayTotal=round2(todayDayTotal); todayNightTotal=round2(todayNightTotal);
   }
+  // Onboarding checklist for new messes
+  const hasMembersAdded = members.length > 1; // more than just the manager
+  const hasMealsLogged  = mM.length > 0;
+  const hasUtilitySet   = !!utilRec;
+  const showOnboarding  = !hasMembersAdded || !hasMealsLogged || !hasUtilitySet;
+
   el.innerHTML = `
   <div class="topbar">
     <div><div class="page-title">Dashboard</div><div class="page-sub">${MONTHS[month]} ${year} — ${members.length} members</div></div>
@@ -56,6 +68,7 @@ async function renderDashboard(el) {
     </div>
   </div>
   <div class="content">
+    ${showOnboarding ? buildOnboardingChecklist(hasMembersAdded, hasMealsLogged, hasUtilitySet) : ""}
     <div class="stat-grid">
       <div class="stat-card" style="border-top:3px solid var(--accent);padding:16px 14px">
         <div class="stat-label" style="display:flex;align-items:center;gap:5px">🍽️ Total meals</div>
@@ -71,7 +84,7 @@ async function renderDashboard(el) {
       </div>
       <div class="stat-card" style="border-top:3px solid #a78bfa;padding:16px 14px">
         <div class="stat-label" style="display:flex;align-items:center;gap:5px">⚡ Utility</div>
-        <div class="stat-value" style="font-size:18px;margin-top:6px;color:#a78bfa;word-break:break-word">${fmtTk(round2(totalUtilPaid))}<span style="font-size:12px;color:var(--text3);font-weight:400">/${fmtTk(round2(totalUtil))}</span></div>
+        <div class="stat-value" style="font-size:18px;margin-top:6px;color:var(--purple);word-break:break-word">${fmtTk(round2(totalUtilPaid))}<span style="font-size:12px;color:var(--text3);font-weight:400">/${fmtTk(round2(totalUtil))}</span></div>
       </div>
       <div class="stat-card" style="border-top:3px solid var(--amber);padding:16px 14px">
         <div class="stat-label" style="display:flex;align-items:center;gap:5px">🏠 Rent</div>
@@ -92,9 +105,9 @@ async function renderDashboard(el) {
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         ${members.map(m => {
-          const d=Number(todayRec.meals[m.name+"_day"]??todayRec.meals[m.name]??0);
-          const n=Number(todayRec.meals[m.name+"_night"]??0);
-          const t=round2(d+n)||Number(todayRec.meals[m.name]||0);
+          const t=mealMemberTotal(todayRec.meals||{}, m.name);
+          const _parts=mealPartsFromObj(todayRec.meals||{}, m.name);
+          const d=_parts.day, n=_parts.night;
           return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
             <span style="font-size:13px;font-weight:500;color:${t>0?"var(--text)":"var(--text3)"}">${m.name}</span>
             ${d>0?`<span class="badge badge-blue">Day ${d}</span>`:""}

@@ -119,7 +119,7 @@ async function loadRentHistory() {
     const k = String(r.date || "").slice(0, 7);
     if (!k) return;
     let dayTotal = 0;
-    members.forEach(m => { dayTotal += mealTotalFromObj(r.meals || {}, m.name); });
+    dayTotal += mealRowTotal(r.meals || {});
     if (!mealsByKey[k]) mealsByKey[k] = { total: 0, days: 0 };
     if (dayTotal > 0) { mealsByKey[k].total += dayTotal; mealsByKey[k].days++; }
   });

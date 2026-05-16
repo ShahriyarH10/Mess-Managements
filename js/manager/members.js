@@ -28,7 +28,21 @@ async function doTransferRole() {
   const selected=document.querySelector('input[name="transfer-target"]:checked');
   if(!selected){ toast("Select a member to transfer to"); return; }
   const target=members.find(m=>m.id===selected.value); if(!target) return;
-  if(!confirm(`Transfer manager role to ${target.name}?`)) return;
+  showConfirm({
+    title: 'Transfer manager role?',
+    body: `Transfer management of this mess to ${escapeHtml(target.name)}? You will lose manager access immediately.`,
+    confirmLabel: 'Transfer role',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        const {error:e1}=await sb.from('members').update({role:'member'}).eq('id',currentUser.memberId); if(e1) throw e1;
+        const {error:e2}=await sb.from('members').update({role:'manager'}).eq('id',target.id); if(e2) throw e2;
+        toast(target.name+' is now the manager!','success');
+        currentUser.role='member'; saveSession(currentUser,currentMess);
+        members=await dbGetMembers(); buildNav(); updateSidebarUser(); navigate('my-dashboard');
+      } catch(e){ toast('Transfer failed: '+e.message,'error'); }
+    }
+  }); return;
   try {
     const {error:e1}=await sb.from("members").update({role:"member"}).eq("id",currentUser.memberId); if(e1) throw e1;
     const {error:e2}=await sb.from("members").update({role:"manager"}).eq("id",target.id); if(e2) throw e2;
@@ -134,7 +148,15 @@ async function updateMember(id) {
 async function deleteMember(id) {
   if (!requireManager("deleteMember")) return;
   const m=members.find(x=>x.id===id); if(!m) return;
-  if(!confirm(`Remove ${m.name}?`)) return;
+  showConfirm({
+    title: 'Remove member?',
+    body: `Remove ${escapeHtml(m.name)} from this mess? This action cannot be undone.`,
+    confirmLabel: 'Remove member',
+    danger: true,
+    onConfirm: async () => {
+      try{ await dbDeleteMember(id); members=await dbGetMembers(); toast(m.name+' removed'); renderMembersTable(); }catch(e){ toast('Error','error'); }
+    }
+  }); return;
   try{ await dbDeleteMember(id); members=await dbGetMembers(); toast(m.name+" removed"); renderMembersTable(); }catch(e){ toast("Error","error"); }
 }
 

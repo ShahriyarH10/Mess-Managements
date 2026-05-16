@@ -315,7 +315,7 @@ async function loadLog() {
                 ? mealRows.map(r => {
                     let total = 0;
                     const cells = members.map(m => {
-                      const v = mealTotalFromObj(r.meals || {}, m.name);
+                      const v = mealMemberTotal(r.meals || {}, m.name);
                       total += v;
                       return `<td class="${v > 0 ? "net-pos" : ""}">${v > 0 ? v : "—"}</td>`;
                     }).join("");

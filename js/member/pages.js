@@ -30,7 +30,7 @@ async function renderMyMeals(el) {
   const monthKeys = getMealMonthKeys(allMeals);
 
   const myRows = allMeals
-    .filter(r => mealTotalFromObj(r.meals || {}, member.name) > 0)
+    .filter(r => mealMemberTotal(r.meals || {}, member.name) > 0)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)))
     .slice(0, 20);
 

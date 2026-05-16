@@ -31,6 +31,7 @@
 .btn-lg{padding:12px 24px;font-size:15px;}
 .btn-icon{padding:6px;width:28px;height:28px;justify-content:center;}
 .btn:active{transform:scale(.97);}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;}
 
 /* ── Inputs ── */
 .field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px;}
@@ -58,6 +59,7 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .badge-red{background:var(--red-bg);color:var(--red);}
 .badge-amber{background:var(--accent-bg);color:var(--accent);}
 .badge-blue{background:var(--blue-bg);color:var(--blue);}
+.badge-purple{background:var(--purple-bg);color:var(--purple);}
 
 /* ── Notification Badge ── */
 .notif-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:99px;padding:0 5px;margin-left:auto;line-height:1;}
@@ -100,6 +102,12 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
 .modal.modal-wide{max-width:1200px;}
 
+/* ── Confirm Dialog ── */
+.confirm-dialog{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:28px 24px;width:100%;max-width:400px;animation:scaleIn .24s var(--ease-spring) both;}
+.confirm-title{font-size:16px;font-weight:600;margin-bottom:8px;}
+.confirm-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:22px;}
+.confirm-actions{display:flex;gap:8px;justify-content:flex-end;}
+
 /* ── Toast ── */
 #toast{position:fixed;bottom:22px;right:22px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);padding:9px 15px;border-radius:var(--radius-sm);font-size:13px;opacity:0;transform:translateY(10px);transition:all .25s;pointer-events:none;z-index:1000;max-width:300px;box-shadow:0 8px 32px var(--shadow);}
 #toast.show{opacity:1;transform:translateY(0);}
@@ -119,6 +127,7 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .net-pos{color:var(--green);}
 .net-neg{color:var(--red);}
 .info-banner{background:var(--blue-bg);border:1px solid rgba(91,155,213,.2);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--blue);display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.warn-banner{background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:14px;}
 .detail-section{margin-bottom:18px;}
 .detail-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;font-weight:500;display:flex;align-items:center;gap:8px;}
 .detail-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
@@ -128,7 +137,9 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .profile-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .22s var(--ease-spring);}
 .profile-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 6px 24px var(--shadow);}
 .profile-card.active{border-color:var(--accent);background:var(--accent-bg);}
-.my-stat-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+
+/* ── My stat rows ── */
+.my-stat-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .my-stat-row:last-child{border-bottom:none;}
 .my-stat-key{color:var(--text2);}
 .my-stat-val{font-weight:500;}
@@ -161,17 +172,16 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .meal-day-total{font-size:20px;font-weight:700;margin:5px 0 2px;line-height:1;}
 .meal-day-meta{font-size:10px;color:var(--text3);}
 .meal-cell-active{background:var(--green-bg);border-color:rgba(76,175,130,.28);}
+@media(max-width:720px){.meal-calendar{grid-template-columns:repeat(3,1fr)}.meal-day{min-height:70px}.grid-2{grid-template-columns:1fr!important}}
 
-/* Compact variant — used inside per-member calendar cards (Manager
-   Meal Month modal) so the 7×N grid fits within ~280px card width
-   without overflowing. */
+/* Compact variant */
 .mc-compact .meal-calendar{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;}
 .mc-compact .meal-day{padding:5px 4px;min-height:54px;border-radius:5px;text-align:center;}
 .mc-compact .meal-day-num{font-size:9px;letter-spacing:.3px;}
 .mc-compact .meal-day-total{font-size:14px;font-weight:700;margin:2px 0 1px;}
 .mc-compact .meal-day-meta{font-size:8px;line-height:1.2;letter-spacing:.2px;}
 
-/* D/N (day/night) split bar shown above each compact member calendar */
+/* D/N split bar */
 .dn-split-bar{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--bg3);margin:0 0 6px;}
 .dn-split-bar > .dn-d{background:var(--blue);height:100%;transition:width .35s;}
 .dn-split-bar > .dn-n{background:var(--accent);height:100%;transition:width .35s;}
@@ -179,44 +189,15 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .dn-split-row b.d-val{color:var(--blue);}
 .dn-split-row b.n-val{color:var(--accent);}
 .settlement-note{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--text2);margin-bottom:14px;}
-@media(max-width:720px){.meal-calendar{grid-template-columns:repeat(3,1fr)}.meal-day{min-height:70px}.grid-2{grid-template-columns:1fr!important}}
 
-/* ── Settlement breakdown improvements ── */
-.settlement-formula-box {
-  animation: fadeIn .3s ease;
-}
+/* ── Settlement formula ── */
+.settlement-formula-box{animation:fadeIn .3s ease;}
 
-.my-stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  gap: 8px;
-}
-.my-stat-row:last-child { border-bottom: none; }
-.my-stat-key {
-  font-size: 13px;
-  color: var(--text2);
-  flex: 1;
-}
-.my-stat-val {
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* Stat sub-label */
-.stat-sub {
-  font-size: 10px;
-  color: var(--text3);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-/* Better scroll table */
-.scroll-table { max-height: 300px; overflow-y: auto; }
-
-/* Net labels */
-.net-neg { color: var(--red) !important; }
-.net-pos { color: var(--green) !important; }
+/* ── Onboarding checklist ── */
+.onboard-wrap{background:var(--accent-bg);border:1px solid rgba(212,168,83,.2);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
+.onboard-title{font-family:var(--font-serif);font-size:17px;margin-bottom:4px;}
+.onboard-sub{font-size:12px;color:var(--text2);margin-bottom:14px;}
+.onboard-step{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(212,168,83,.12);font-size:13px;}
+.onboard-step:last-child{border-bottom:none;}
+.onboard-step-done{color:var(--green);}
+.onboard-step-todo{color:var(--text3);}

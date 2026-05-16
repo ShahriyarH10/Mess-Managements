@@ -11,7 +11,7 @@
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 
 /* ══════════════════════════════════════════════
-   RESPONSIVE
+   RESPONSIVE — Landing
 ══════════════════════════════════════════════ */
 @media(max-width:900px){
   .land-nav{padding:14px 20px;}
@@ -22,9 +22,26 @@
   .land-footer-links{justify-content:center;}
   .land-cta{padding:60px 20px;}
   .land-nav-links{display:none;}
+  /* Show hamburger on landing mobile */
+  .land-nav-hamburger{display:flex;}
 }
 
+/* Mobile landing nav drawer */
+.land-nav-hamburger{display:none;background:none;border:1px solid var(--border2);border-radius:var(--radius-sm);width:34px;height:34px;cursor:pointer;color:var(--text2);align-items:center;justify-content:center;transition:all .2s;margin-left:4px;}
+.land-nav-hamburger:hover{color:var(--accent);border-color:var(--accent);}
+.land-mobile-drawer{display:none;position:fixed;inset:0;z-index:200;}
+.land-mobile-drawer.open{display:block;}
+.land-mobile-drawer-bg{position:absolute;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);}
+.land-mobile-drawer-panel{position:absolute;top:0;right:0;width:260px;height:100%;background:var(--bg2);border-left:1px solid var(--border2);padding:24px 20px;display:flex;flex-direction:column;gap:4px;animation:slideFromRight .28s var(--ease-spring);}
+@keyframes slideFromRight{from{transform:translateX(100%);}to{transform:translateX(0);}}
+.land-drawer-close{align-self:flex-end;background:none;border:none;cursor:pointer;color:var(--text2);font-size:22px;padding:4px 8px;margin-bottom:12px;}
+.land-drawer-link{display:block;padding:12px 10px;font-size:15px;color:var(--text);border-radius:var(--radius-sm);transition:background .15s;}
+.land-drawer-link:hover{background:var(--bg3);text-decoration:none;}
+.land-drawer-divider{height:1px;background:var(--border);margin:8px 0;}
 
+/* ══════════════════════════════════════════════
+   RESPONSIVE — App
+══════════════════════════════════════════════ */
 @media(max-width:768px){
   .sidebar{display:none;}
   .mobile-topbar{display:flex;}
@@ -41,51 +58,24 @@
   .stat-card{padding:10px 11px;}
   .stat-value{font-size:18px;}
   .card{padding:14px 12px;}
-  .grid-2{grid-template-columns:1fr;}
+  .grid-2{grid-template-columns:1fr!important;}
 
-  /* Inline 2-column grids → single column on mobile.
-     Catches places that use inline `grid-template-columns:1fr 1fr`
-     or `repeat(2,1fr)` instead of the .grid-2 class. */
-  [style*="grid-template-columns:1fr 1fr"],
-  [style*="grid-template-columns: 1fr 1fr"],
-  [style*="grid-template-columns:repeat(2,1fr)"],
-  [style*="grid-template-columns: repeat(2,1fr)"]{
-    grid-template-columns:1fr !important;
-  }
-  /* 3-column inline grids → 2 columns */
-  [style*="grid-template-columns:1fr 1fr 1fr"],
-  [style*="grid-template-columns:repeat(3,1fr)"]{
-    grid-template-columns:repeat(2,1fr) !important;
-  }
-  /* Auto-fill grids: relax min so 1 card fits per row on small phones */
-  [style*="grid-template-columns:repeat(auto-fill,minmax(260px"],
-  [style*="grid-template-columns:repeat(auto-fill,minmax(220px"]{
-    grid-template-columns:1fr !important;
-  }
-
-  /* Profile detail header summary — wrap each badge onto its own line,
-     drop the awkward border-left dividers. */
-  .modal-content [style*="border-left:1px solid"]{
-    border-left:none !important;
-    padding-left:0 !important;
-  }
-
-  .meal-grid{grid-template-columns:repeat(2,1fr);}
-  .meal-cell{padding:10px;}
-  .meal-num-input{width:48px;font-size:13px;}
+  /* Toast above mobile nav */
+  #toast{bottom:calc(78px + env(safe-area-inset-bottom, 8px));right:12px;left:12px;max-width:none;text-align:center;}
 
   /* Modals: full-width on phones */
   .modal-bg{padding:8px;}
   .modal{padding:16px;max-height:94vh;border-radius:10px;}
   .modal.modal-wide{max-width:100%;}
   .modal-title{font-size:17px;}
+  .confirm-dialog{padding:20px 16px;}
 
-  /* Tables — keep readable while letting .tbl-wrap scroll horizontally */
+  /* Tables */
   .tbl-wrap{margin:6px -6px 0;width:calc(100% + 12px);padding:0 6px;-webkit-overflow-scrolling:touch;}
   .tbl-wrap table{font-size:12px;min-width:max-content;}
   .tbl-wrap th,.tbl-wrap td{padding:7px 8px;white-space:nowrap;}
 
-  /* Month selectors / date rows on small screens */
+  /* Month selectors */
   .month-sel{flex-wrap:wrap;gap:8px;}
   .month-sel label{font-size:12px;}
   .month-sel .input{flex:1;min-width:100px;}
@@ -94,25 +84,15 @@
 
   .auth-card{padding:24px 22px;}
 
-  /* Settlement formula info card */
-  .settlement-formula-box [style*="grid-template-columns:1fr 1fr"]{
-    grid-template-columns:1fr !important;
-  }
-
-  /* Bottom-aligned action rows */
-  [style*="justify-content:flex-end"]{justify-content:flex-start !important;}
-  [style*="margin-left:auto"]{margin-left:0 !important;}
-
-  /* Profile cards: ensure long names don't blow up the card */
+  /* Profile cards */
   .profile-card{padding:13px;}
 
-  /* Long pill rows in summary banners (Collect Payment etc.) */
-  #ut-summary-bar > div,
-  [id$="-summary-bar"] > div{
-    flex-direction:column !important;
-    align-items:flex-start !important;
-    gap:6px !important;
-  }
+  /* Summary bars */
+  #ut-summary-bar > div,[id$="-summary-bar"] > div{flex-direction:column!important;align-items:flex-start!important;gap:6px!important;}
+
+  /* How-it-works arrows — hide on mobile, layout stacks vertically */
+  .step-arrow{display:none;}
+  .steps{flex-direction:column;gap:20px;}
 }
 
 @media(max-width:480px){
@@ -124,11 +104,6 @@
   .stat-card{padding:9px 10px;}
   .stat-value{font-size:16px;}
   .stat-label{font-size:10px;}
-
-  /* Even auto-fill 180px+ → 1 col on tiny screens */
-  [style*="grid-template-columns:repeat(auto-fill,minmax(180px"]{
-    grid-template-columns:1fr !important;
-  }
 
   .topbar{padding:12px 12px 0;}
   .content{padding:12px 10px 32px;}
@@ -144,20 +119,16 @@
   .tbl-wrap table{font-size:11px;}
   .tbl-wrap th,.tbl-wrap td{padding:6px;}
 }
+
 @media(prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}
 }
 
-/* Tablet portrait (769–1024px) — sidebar still visible, but content density
-   must stay readable. Don't collapse 2-col grids; just ease padding/font. */
+/* Tablet portrait (769–1024px) */
 @media(min-width:769px) and (max-width:1024px){
   .sidebar{width:200px;}
   .content{padding:18px 16px 36px;}
   .stat-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
   .modal.modal-wide{max-width:96vw;}
-  .tbl-wrap table{font-size:13px;}
-
-  /* Heavy multi-column tables (Monthly Log) — let them scroll instead
-     of cramming. .tbl-wrap already has overflow-x:auto. */
-  .tbl-wrap table{min-width:max-content;}
+  .tbl-wrap table{font-size:13px;min-width:max-content;}
 }

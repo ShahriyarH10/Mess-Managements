@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   CORE — Helpers: utils, theme, session, modal, toast
+   CORE — Helpers: utils, theme, session, modal, toast, confirm
    ═══════════════════════════════════════════════ */
 const today      = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; };
 const thisMonth  = () => { const n = new Date(); return { month: n.getMonth(), year: n.getFullYear() }; };
@@ -30,6 +30,59 @@ function sanitize(v) {
 
 const cleanText = (v) => String(v ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim();
 
+/* ══════════════════════════════════════════════
+   MEAL TOTAL HELPERS  (single source of truth)
+   These never depend on the members[] array,
+   so they work even if names drift over time.
+══════════════════════════════════════════════ */
+
+/**
+ * Total meals in ONE meal-row object, regardless of member names.
+ * Handles both split format (_day/_night) and legacy (plain name).
+ */
+function mealRowTotal(mObj) {
+  if (!mObj) return 0;
+  const keys = Object.keys(mObj);
+  const hasSplit = keys.some(k => k.endsWith("_day") || k.endsWith("_night"));
+  if (hasSplit) {
+    return keys.reduce((s, k) =>
+      (k.endsWith("_day") || k.endsWith("_night")) ? s + (Number(mObj[k]) || 0) : s, 0);
+  }
+  return Object.values(mObj).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
+/**
+ * One specific member's meals from ONE meal-row object.
+ * Tries: exact name → _day+_night keys → case-insensitive → trimmed.
+ */
+function mealMemberTotal(mObj, memberName) {
+  if (!mObj || !memberName) return 0;
+  // Build base-name → total from the raw keys
+  const keys = Object.keys(mObj);
+  const hasSplit = keys.some(k => k.endsWith("_day") || k.endsWith("_night"));
+  const totals = {}; // baseName -> total
+  if (hasSplit) {
+    keys.forEach(k => {
+      if (k.endsWith("_day"))   { const b = k.slice(0,-4); totals[b] = (totals[b]||0) + (Number(mObj[k])||0); }
+      if (k.endsWith("_night")) { const b = k.slice(0,-6); totals[b] = (totals[b]||0) + (Number(mObj[k])||0); }
+    });
+  } else {
+    keys.forEach(k => { totals[k] = Number(mObj[k]) || 0; });
+  }
+  // Exact match
+  if (totals[memberName] != null) return round2(totals[memberName]);
+  // Case-insensitive
+  const lname = memberName.toLowerCase();
+  const ci = Object.keys(totals).find(k => k.toLowerCase() === lname);
+  if (ci) return round2(totals[ci]);
+  // Trimmed
+  const tname = memberName.trim();
+  const tr = Object.keys(totals).find(k => k.trim() === tname);
+  if (tr) return round2(totals[tr]);
+  return 0;
+}
+
+
 /* THEME */
 function loadTheme() {
   document.documentElement.setAttribute("data-theme", localStorage.getItem("mm_theme") || "dark");
@@ -41,26 +94,36 @@ function toggleTheme() {
 }
 function togglePw() {
   const i = document.getElementById("login-pass");
-  if (i) i.type = i.type === "password" ? "text" : "password";
+  if (i) {
+    const showing = i.type === "text";
+    i.type = showing ? "password" : "text";
+    const btn = i.parentElement.querySelector(".pw-eye");
+    if (btn) btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+  }
 }
 
-/* SESSION */
+/* LANDING PAGE MOBILE DRAWER */
+function openLandingDrawer() {
+  document.getElementById("land-mobile-drawer").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeLandingDrawer() {
+  document.getElementById("land-mobile-drawer").classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+/* SESSION — localStorage only (sessionStorage copy removed) */
 function saveSession(u, m) {
   currentUser = u; currentMess = m;
   const payload = { u, m, exp: Date.now() + SESSION_TTL_MS };
-  const s = JSON.stringify(payload);
-  localStorage.setItem("mm_session", s);
-  sessionStorage.setItem("mm_session", s);
+  localStorage.setItem("mm_session", JSON.stringify(payload));
 }
 function loadSession() {
   try {
-    const raw = localStorage.getItem("mm_session") || sessionStorage.getItem("mm_session");
+    const raw = localStorage.getItem("mm_session");
     if (!raw) return;
     const payload = JSON.parse(raw);
-    if (!payload.exp || Date.now() > payload.exp) {
-      clearSession();
-      return;
-    }
+    if (!payload.exp || Date.now() > payload.exp) { clearSession(); return; }
     if (payload.u) currentUser = payload.u;
     if (payload.m) currentMess = payload.m;
   } catch (e) { currentUser = null; currentMess = null; }
@@ -68,13 +131,12 @@ function loadSession() {
 function clearSession() {
   currentUser = null; currentMess = null; members = [];
   localStorage.removeItem("mm_session");
-  sessionStorage.removeItem("mm_session");
-  // Legacy keys cleanup
+  // Legacy key cleanup
   localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess");
-  sessionStorage.removeItem("mm_user"); sessionStorage.removeItem("mm_mess");
+  sessionStorage.clear();
 }
 
-/* ROLE GUARD — call at top of every manager-only write function */
+/* ROLE GUARD */
 function requireManager(fnName) {
   if (!currentUser) {
     console.warn(`[Security] ${fnName} blocked — not logged in`);
@@ -89,7 +151,7 @@ function requireManager(fnName) {
   return true;
 }
 
-/* MODAL & TOAST */
+/* MODAL */
 function openModal()  { document.getElementById("modal-bg").classList.add("open"); }
 function closeModal() {
   document.getElementById("modal-bg").classList.remove("open");
@@ -97,6 +159,7 @@ function closeModal() {
   if (m) m.classList.remove("modal-wide");
 }
 
+/* TOAST */
 let toastTimer;
 function toast(msg, type) {
   const el = document.getElementById("toast");
@@ -104,6 +167,24 @@ function toast(msg, type) {
   el.className = "show" + (type ? " " + type : "");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.className = "", 3200);
+}
+
+/* CONFIRM DIALOG — replaces native confirm() */
+function showConfirm({ title, body, confirmLabel = "Confirm", danger = false, onConfirm }) {
+  const bg = document.getElementById("confirm-bg");
+  const content = document.getElementById("confirm-content");
+  content.innerHTML = `
+    <div class="confirm-title">${escapeHtml(title)}</div>
+    <div class="confirm-body">${escapeHtml(body)}</div>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirm-ok-btn">${escapeHtml(confirmLabel)}</button>
+    </div>`;
+  document.getElementById("confirm-ok-btn").onclick = () => { closeConfirm(); onConfirm(); };
+  bg.classList.add("open");
+}
+function closeConfirm() {
+  document.getElementById("confirm-bg").classList.remove("open");
 }
 
 /* CALCULATION HELPERS */
@@ -118,9 +199,9 @@ function mealTotalFromObj(mealsObj, memberName) {
 }
 
 function mealPartsFromObj(mealsObj, memberName) {
-  const day = Number(mealsObj?.[memberName + "_day"] || 0);
+  const day   = Number(mealsObj?.[memberName + "_day"]   || 0);
   const night = Number(mealsObj?.[memberName + "_night"] || 0);
-  const legacy = Number(mealsObj?.[memberName] || 0);
+  const legacy= Number(mealsObj?.[memberName] || 0);
   const total = (mealsObj?.[memberName + "_day"] != null || mealsObj?.[memberName + "_night"] != null) ? round2(day + night) : legacy;
   return { day, night, total };
 }
@@ -147,7 +228,7 @@ function utilShareFromRecord(record, keys) {
   return members.length > 0 ? round2(utilTotalFromBills(record?.bills || {}, keys) / members.length) : 0;
 }
 
-/* Month navigation — single canonical definitions */
+/* Month navigation */
 function previousMonth(month, year) {
   month = Number(month); year = Number(year);
   if (month === 0) return { month: 11, year: year - 1, key: monthKey(year - 1, 11) };
@@ -178,157 +259,114 @@ function calcSettlementSourceKey(settlementMonth, settlementYear) {
 /*
   ╔══════════════════════════════════════════════════════════════════╗
   ║  SETTLEMENT FORMULA (single source of truth)                    ║
-  ║                                                                  ║
-  ║  For settlement month M (e.g. May 2026):                        ║
-  ║                                                                  ║
-  ║  POSTPAID — data from previous month (April 2026):              ║
-  ║    • Meal cost   = member meals × (total bazar / total meals)   ║
-  ║    • Khala share = April khala bill ÷ members                   ║
-  ║    • Other share = April other cost ÷ members                   ║
-  ║                                                                  ║
-  ║  PREPAID — data from current month (May 2026):                  ║
-  ║    • Room rent                                                   ║
-  ║    • Elec + Gas + WiFi share                                    ║
-  ║                                                                  ║
-  ║  CREDITS (deducted):                                            ║
-  ║    • Bazar credit  = member's own bazar spending (April)        ║
-  ║    • Utility paid  = advance utility payment (May record)       ║
-  ║                                                                  ║
-  ║  Net payable = meal cost + khala + other + rent + prepaid util  ║
-  ║              − bazar credit − utility paid                      ║
   ╚══════════════════════════════════════════════════════════════════╝
 */
 function calcSettlementTotals(allMeals, allBazar, sourceKey) {
   const mealRows  = (allMeals  || []).filter(r => String(r.date || "").startsWith(sourceKey));
   const bazarRows = (allBazar  || []).filter(r => String(r.date || "").startsWith(sourceKey));
-
-  const memberMeals = {};
-  const memberBazar = {};
+  const memberMeals = {}, memberBazar = {};
   members.forEach(m => { memberMeals[m.name] = 0; memberBazar[m.name] = 0; });
-
-  let totalMeals = 0;
-  let totalBazar = 0;
+  let totalMeals = 0, totalBazar = 0;
 
   mealRows.forEach(row => {
+    const mObj = row.meals || {};
+    const keys  = Object.keys(mObj);
+    const hasSplit = keys.some(k => k.endsWith("_day") || k.endsWith("_night"));
+
+    // ── Total meals: sum directly from keys (name-independent) ──
+    if (hasSplit) {
+      keys.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) totalMeals += Number(mObj[k]) || 0; });
+    } else {
+      Object.values(mObj).forEach(v => { totalMeals += Number(v) || 0; });
+    }
+
+    // ── Per-member meals: exact name match OR key-prefix match ──
+    // Build a name->total map from the raw keys in case member names
+    // don't exactly match (e.g. sanitization, renaming)
+    const keyMealTotals = {}; // "BaseName" -> total
+    if (hasSplit) {
+      keys.forEach(k => {
+        if (k.endsWith("_day")) {
+          const base = k.slice(0, -4);
+          keyMealTotals[base] = (keyMealTotals[base] || 0) + (Number(mObj[k]) || 0);
+        } else if (k.endsWith("_night")) {
+          const base = k.slice(0, -6);
+          keyMealTotals[base] = (keyMealTotals[base] || 0) + (Number(mObj[k]) || 0);
+        }
+      });
+    } else {
+      keys.forEach(k => { keyMealTotals[k] = Number(mObj[k]) || 0; });
+    }
     members.forEach(m => {
-      const v = mealTotalFromObj(row.meals || {}, m.name);
-      memberMeals[m.name] = round2(memberMeals[m.name] + v);
-      totalMeals += v;
+      // 1. Exact name match
+      let v = keyMealTotals[m.name];
+      // 2. Case-insensitive match
+      if (v == null) {
+        const lname = m.name.toLowerCase();
+        const found = Object.keys(keyMealTotals).find(k => k.toLowerCase() === lname);
+        if (found) v = keyMealTotals[found];
+      }
+      // 3. Trim-and-compare
+      if (v == null) {
+        const tname = m.name.trim();
+        const found = Object.keys(keyMealTotals).find(k => k.trim() === tname);
+        if (found) v = keyMealTotals[found];
+      }
+      memberMeals[m.name] = round2(memberMeals[m.name] + (v || 0));
     });
   });
 
   bazarRows.forEach(row => {
+    const bObj = row.bazar || {};
+    Object.values(bObj).forEach(v => { totalBazar += Number(v) || 0; });
     members.forEach(m => {
-      const v = Number((row.bazar || {})[m.name] || 0);
+      const v = Number(bObj[m.name] || 0);
       memberBazar[m.name] = round2(memberBazar[m.name] + v);
-      totalBazar += v;
     });
   });
 
   const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
-
-  return {
-    totalMeals: round2(totalMeals),
-    totalBazar: round2(totalBazar),
-    mealRate,
-    memberMeals,
-    memberBazar,
-  };
+  return { totalMeals: round2(totalMeals), totalBazar: round2(totalBazar), mealRate, memberMeals, memberBazar };
 }
 
-function calcMemberSettlement(
-  member,
-  allMeals,
-  allBazar,
-  currentRentRec,
-  currentUtilRec,
-  previousUtilRec,
-  settlementKey
-) {
+function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey) {
   const settlementMonth = monthIndexFromKey(settlementKey);
   const settlementYear  = yearFromKey(settlementKey);
   const sourceKey       = calcSettlementSourceKey(settlementMonth, settlementYear);
   const prevMonthInfo   = previousMonth(settlementMonth, settlementYear);
-
   const totals      = calcSettlementTotals(allMeals, allBazar, sourceKey);
   const memberMeals = round2(totals.memberMeals[member.name] || 0);
   const memberBazar = round2(totals.memberBazar[member.name] || 0);
   const mealCost    = round2(memberMeals * totals.mealRate);
-
-  const rentEntry    = currentRentRec?.entries?.find(e => e.name === member.name) || {};
-  const roomRent     = Number(rentEntry.rent || 0);
-  const roomRentPaid = Number(rentEntry.paid || 0);
-
-  const memberCount    = members.length || 1;
-  const prepaidTotal   = utilTotalFromBills(currentUtilRec?.bills || {}, UTIL_PREPAID_KEYS);
-  const prepaidUtility = round2(prepaidTotal / memberCount);
-
-  const khalaTotal      = Number(previousUtilRec?.bills?.khala || 0);
-  const otherTotal      = Number(previousUtilRec?.bills?.other || 0);
-  const khalaShare      = round2(khalaTotal / memberCount);
-  const otherShare      = round2(otherTotal / memberCount);
+  const rentEntry   = currentRentRec?.entries?.find(e => e.name === member.name) || {};
+  const roomRent    = Number(rentEntry.rent || 0);
+  const roomRentPaid= Number(rentEntry.paid || 0);
+  const memberCount = members.length || 1;
+  const prepaidTotal    = utilTotalFromBills(currentUtilRec?.bills || {}, UTIL_PREPAID_KEYS);
+  const prepaidUtility  = round2(prepaidTotal / memberCount);
+  const khalaTotal  = Number(previousUtilRec?.bills?.khala || 0);
+  const otherTotal  = Number(previousUtilRec?.bills?.other || 0);
+  const khalaShare  = round2(khalaTotal / memberCount);
+  const otherShare  = round2(otherTotal / memberCount);
   const postpaidUtility = round2(khalaShare + otherShare);
-
   const utilPayment = (currentUtilRec?.payments || {})[member.name] || {};
   const utilityPaid = Number(utilPayment.paid || 0);
-  // Cash collected against the meal portion (mealCost − bazarCredit). Stored
-  // alongside the utility payment record because utility_payments is the
-  // per-month settlement record. Default 0 for legacy data.
   const mealPaid    = Number(utilPayment.meal_paid || 0);
-
-  // Meal balance owed to the mess for this member: mealCost − bazarCredit.
-  // Positive → member owes; negative → member is owed back.
   const mealBalance = round2(mealCost - memberBazar);
-
-  // Carry-forward credit: combines two sources stored in THIS month's bills:
-  //   mess_credit   — from the Mess Owes drawdown (negative netPayable path)
-  //   change_credit — from overpayment change carry-forward
-  const bills = currentUtilRec?.bills || {};
-  const messCredit = round2(
+  const bills       = currentUtilRec?.bills || {};
+  const messCredit  = round2(
     Number((bills.mess_credit   || {})[member.name] || 0) +
     Number((bills.change_credit || {})[member.name] || 0)
   );
-
-  const totalPay   = round2(mealCost + roomRent + prepaidUtility + postpaidUtility);
-  // Deduct credits: bazar bought, utility paid, rent paid, meal_paid, and
-  // any carry-forward credit from the previous month.
-  const netPayable = round2(totalPay - memberBazar - utilityPaid - roomRentPaid - mealPaid - messCredit);
-
+  const totalPay    = round2(mealCost + roomRent + prepaidUtility + postpaidUtility);
+  const netPayable  = round2(totalPay - memberBazar - utilityPaid - roomRentPaid - mealPaid - messCredit);
   return {
-    memberName: member.name,
-    settlementKey,
-    sourceKey,
-    prevMonthInfo,
-
-    totalMeals: totals.totalMeals,
-    totalBazar: totals.totalBazar,
-    mealRate:   totals.mealRate,
-
-    memberMeals,
-    memberBazar,
-    mealCost,
-
-    roomRent,
-    roomRentPaid,
-
-    prepaidTotal,
-    prepaidUtility,
-    khalaTotal,
-    otherTotal,
-    khalaShare,
-    otherShare,
-    postpaidUtility,
-
-    utilityPaid,
-    utilityStatus: utilPayment.status || "unpaid",
-    rentStatus:    rentEntry.status || "unpaid",
-
-    mealBalance,
-    messCredit,
-    mealPaid,
-
-    totalPay,
-    netPayable,
+    memberName: member.name, settlementKey, sourceKey, prevMonthInfo,
+    totalMeals: totals.totalMeals, totalBazar: totals.totalBazar, mealRate: totals.mealRate,
+    memberMeals, memberBazar, mealCost, roomRent, roomRentPaid,
+    prepaidTotal, prepaidUtility, khalaTotal, otherTotal, khalaShare, otherShare, postpaidUtility,
+    utilityPaid, utilityStatus: utilPayment.status || "unpaid", rentStatus: rentEntry.status || "unpaid",
+    mealBalance, messCredit, mealPaid, totalPay, netPayable,
   };
 }
 
@@ -349,17 +387,11 @@ function getMealMonthKeys(allMeals) {
   return keys.slice(0, 12);
 }
 
-/* Grid of month-cards for meal history. Optionally pass `allMeals` to enrich
-   each card with month-level stats (total meals, active days, top eater).
-   Falls back to chip-style buttons when allMeals is absent. */
 function buildMealMonthButtons(keys, onClickName, allMeals) {
   if (!keys.length) return '<div class="empty" style="padding:18px">No meal months yet</div>';
-
   if (!allMeals) {
-    // Legacy fallback (no enrichment available)
     return `<div class="meal-month-list">${keys.map(k => `<button class="meal-month-chip" onclick="${onClickName}('${k}')"><span>${monthLabelFromKey(k)}</span><small>View history</small></button>`).join("")}</div>`;
   }
-
   return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
     ${keys.map(k => {
       const rows = (allMeals || []).filter(r => String(r.date || "").startsWith(k));
@@ -367,51 +399,24 @@ function buildMealMonthButtons(keys, onClickName, allMeals) {
       const perMember = {}; members.forEach(m => { perMember[m.name] = 0; });
       rows.forEach(r => {
         let dayTotal = 0;
-        members.forEach(m => {
-          const v = mealTotalFromObj(r.meals || {}, m.name);
-          perMember[m.name] += v; dayTotal += v;
-        });
+        members.forEach(m => { const v = mealMemberTotal(r.meals || {}, m.name); perMember[m.name] += v; }); dayTotal += mealRowTotal(r.meals || {});
         if (dayTotal > 0) activeDays++;
         total += dayTotal;
       });
       const top = Object.entries(perMember).sort((a, b) => b[1] - a[1])[0];
       const isTop = top && top[1] > 0;
       const avg = activeDays > 0 ? round2(total / activeDays) : 0;
-
-      return `
-        <button onclick="${onClickName}('${k}')" class="profile-card" style="
-          all:unset;cursor:pointer;
-          padding:13px 13px 11px;
-          border:1px solid var(--border);
-          border-radius:var(--radius);
-          background:var(--bg2);
-          display:flex;flex-direction:column;gap:8px;
-          transition:transform .15s, border-color .15s
-        " onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'"
-           onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-            <div style="font-family:var(--font-serif);font-size:15px;font-weight:700;line-height:1.1">
-              ${monthLabelFromKey(k)}
-            </div>
-            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${activeDays} day${activeDays===1?"":"s"}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-            <div style="background:var(--bg3);border-radius:5px;padding:6px 8px">
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">🍽 Meals</div>
-              <div style="font-size:15px;font-weight:700;margin-top:1px">${round2(total)}</div>
-            </div>
-            <div style="background:var(--bg3);border-radius:5px;padding:6px 8px">
-              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Avg/day</div>
-              <div style="font-size:15px;font-weight:700;margin-top:1px">${avg}</div>
-            </div>
-          </div>
-          ${isTop ? `
-            <div style="font-size:11px;color:var(--text2);line-height:1.3">
-              🥇 Top eater:&nbsp;<b style="color:var(--accent)">${top[0]}</b>
-              <span style="color:var(--text3)">· ${round2(top[1])} meals</span>
-            </div>
-          ` : `<div style="font-size:11px;color:var(--text3)">No meal data yet</div>`}
-        </button>`;
+      return `<button onclick="${onClickName}('${k}')" class="profile-card" style="all:unset;cursor:pointer;padding:13px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);display:flex;flex-direction:column;gap:8px;transition:transform .15s,border-color .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="font-family:var(--font-serif);font-size:15px;font-weight:700;line-height:1.1">${monthLabelFromKey(k)}</div>
+          <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${activeDays} day${activeDays===1?"":"s"}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:var(--bg3);border-radius:5px;padding:6px 8px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Meals</div><div style="font-size:15px;font-weight:700;margin-top:1px">${round2(total)}</div></div>
+          <div style="background:var(--bg3);border-radius:5px;padding:6px 8px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Avg/day</div><div style="font-size:15px;font-weight:700;margin-top:1px">${avg}</div></div>
+        </div>
+        ${isTop ? `<div style="font-size:11px;color:var(--text2)">Top: <b style="color:var(--accent)">${escapeHtml(top[0])}</b> <span style="color:var(--text3)">· ${round2(top[1])} meals</span></div>` : `<div style="font-size:11px;color:var(--text3)">No meal data yet</div>`}
+      </button>`;
     }).join("")}
   </div>`;
 }
@@ -428,25 +433,14 @@ function buildMemberMealCalendar(memberName, allMeals, key) {
   const cells = Array.from({ length: days }, (_, i) => {
     const day   = String(i + 1).padStart(2, "0");
     const entry = byDate[day] || { day: 0, night: 0, total: 0 };
-    if (entry.total > 0) {
-      active++;
-      total      += entry.total;
-      dayTotal   += entry.day;
-      nightTotal += entry.night;
-    }
+    if (entry.total > 0) { active++; total += entry.total; dayTotal += entry.day; nightTotal += entry.night; }
     return `<div class="meal-day ${entry.total > 0 ? "has-meal" : ""}">
       <div class="meal-day-num">${i + 1}</div>
       <div class="meal-day-total">${entry.total > 0 ? entry.total : "—"}</div>
       ${entry.total > 0 ? `<div class="meal-day-meta">D ${entry.day} · N ${entry.night}</div>` : `<div class="meal-day-meta">No meal</div>`}
     </div>`;
   }).join("");
-  return {
-    html: `<div class="meal-calendar">${cells}</div>`,
-    total: round2(total),
-    active,
-    dayTotal:   round2(dayTotal),
-    nightTotal: round2(nightTotal),
-  };
+  return { html: `<div class="meal-calendar">${cells}</div>`, total: round2(total), active, dayTotal: round2(dayTotal), nightTotal: round2(nightTotal) };
 }
 
 async function openMemberMealMonth(memberName, key) {
@@ -454,8 +448,8 @@ async function openMemberMealMonth(memberName, key) {
   const cal      = buildMemberMealCalendar(memberName, allMeals, key);
   const modal    = document.getElementById("modal-content");
   modal.innerHTML = `
-    <div class="modal-title">${memberName} — ${monthLabelFromKey(key)}</div>
-    <div class="modal-sub">Colored days mean this member has a meal entry on that date.</div>
+    <div class="modal-title">${escapeHtml(memberName)} — ${monthLabelFromKey(key)}</div>
+    <div class="modal-sub">Coloured days indicate a meal entry exists for that date.</div>
     <div class="stat-grid" style="margin-bottom:14px">
       <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${cal.total}</div></div>
       <div class="stat-card"><div class="stat-label">Meal days</div><div class="stat-value">${cal.active}</div></div>
@@ -469,71 +463,68 @@ async function openMemberMealMonth(memberName, key) {
 async function openManagerMealMonth(key) {
   const allMeals = await dbGetAll("meals");
   const monthLabel = monthLabelFromKey(key);
-
-  // Build per-member calendars + totals
-  const perMember = members.map(m => {
-    const cal = buildMemberMealCalendar(m.name, allMeals, key);
-    return { name: m.name, ...cal };
-  });
-
-  // Mess-wide stats
+  const perMember = members.map(m => { const cal = buildMemberMealCalendar(m.name, allMeals, key); return { name: m.name, ...cal }; });
   const grandMeals = round2(perMember.reduce((s, p) => s + p.total, 0));
-  const grandDays  = perMember.reduce((s, p) => Math.max(s, p.active), 0); // active member-day max as a hint
-
+  const grandDays  = perMember.reduce((s, p) => Math.max(s, p.active), 0);
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
     <div class="modal-title">All Members — ${monthLabel}</div>
-    <div class="modal-sub">Each member's monthly meal calendar. Highlighted days show meal entries with day/night split.</div>
-
+    <div class="modal-sub">Each member's monthly meal calendar with day/night split.</div>
     <div class="stat-grid" style="margin-bottom:16px">
       <div class="stat-card"><div class="stat-label">Total meals (mess)</div><div class="stat-value">${grandMeals}</div></div>
       <div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div>
       <div class="stat-card"><div class="stat-label">Most active days</div><div class="stat-value">${grandDays}</div></div>
     </div>
-
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
       ${perMember.map((p, i) => {
         const col = avatarCol(i);
         const dim = p.total === 0;
-        const dPct = p.total > 0 ? Math.round((p.dayTotal   / p.total) * 100) : 0;
+        const dPct = p.total > 0 ? Math.round((p.dayTotal / p.total) * 100) : 0;
         const nPct = p.total > 0 ? 100 - dPct : 0;
-        return `
-          <div class="card mc-compact" style="padding:14px;${dim ? 'opacity:.55' : ''};border-color:${p.total>0?'var(--accent)':'var(--border)'}">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-              <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${initials(p.name)}</div>
-              <div style="min-width:0;flex:1">
-                <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-                <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${monthLabel}</div>
-              </div>
+        return `<div class="card mc-compact" style="padding:14px;${dim ? "opacity:.55" : ""};border-color:${p.total>0?"var(--accent)":"var(--border)"}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${initials(p.name)}</div>
+            <div style="min-width:0;flex:1">
+              <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.name)}</div>
+              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${monthLabel}</div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-              <div class="stat-card" style="padding:8px 10px">
-                <div class="stat-label" style="font-size:10px">Total meals</div>
-                <div style="font-size:18px;font-weight:700;color:${p.total>0?'var(--green)':'var(--text3)'}">${p.total}</div>
-              </div>
-              <div class="stat-card" style="padding:8px 10px">
-                <div class="stat-label" style="font-size:10px">Meal days</div>
-                <div style="font-size:18px;font-weight:700">${p.active}</div>
-              </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div class="stat-card" style="padding:8px 10px"><div class="stat-label" style="font-size:10px">Total meals</div><div style="font-size:18px;font-weight:700;color:${p.total>0?"var(--green)":"var(--text3)"}">${p.total}</div></div>
+            <div class="stat-card" style="padding:8px 10px"><div class="stat-label" style="font-size:10px">Meal days</div><div style="font-size:18px;font-weight:700">${p.active}</div></div>
+          </div>
+          ${p.total > 0 ? `
+            <div class="dn-split-bar" title="Day vs Night">
+              <div class="dn-d" style="width:${dPct}%"></div>
+              <div class="dn-n" style="width:${nPct}%"></div>
             </div>
-
-            ${p.total > 0 ? `
-              <div class="dn-split-bar" title="Day vs Night meal split">
-                <div class="dn-d" style="width:${dPct}%"></div>
-                <div class="dn-n" style="width:${nPct}%"></div>
-              </div>
-              <div class="dn-split-row">
-                <span>☀ Day &nbsp;<b class="d-val">${p.dayTotal}</b> <span style="opacity:.6">(${dPct}%)</span></span>
-                <span>🌙 Night &nbsp;<b class="n-val">${p.nightTotal}</b> <span style="opacity:.6">(${nPct}%)</span></span>
-              </div>
-            ` : ""}
-
-            ${p.html}
-          </div>`;
+            <div class="dn-split-row">
+              <span>☀ Day&nbsp;<b class="d-val">${p.dayTotal}</b> <span style="opacity:.6">(${dPct}%)</span></span>
+              <span>🌙 Night&nbsp;<b class="n-val">${p.nightTotal}</b> <span style="opacity:.6">(${nPct}%)</span></span>
+            </div>` : ""}
+          ${p.html}
+        </div>`;
       }).join("")}
     </div>
-
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
   document.querySelector(".modal").classList.add("modal-wide");
   openModal();
+}
+
+/* ONBOARDING — shown when mess is new (no members besides admin, no meal data) */
+function buildOnboardingChecklist(hasMembersAdded, hasMealsLogged, hasUtilitySet) {
+  const step = (done, text, action) => `
+    <div class="onboard-step">
+      <span style="font-size:16px">${done ? "✅" : "⬜"}</span>
+      <span style="${done ? "color:var(--text3);text-decoration:line-through" : ""}">${text}</span>
+      ${!done && action ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="${action}">Go →</button>` : ""}
+    </div>`;
+  return `
+    <div class="onboard-wrap">
+      <div class="onboard-title">👋 Welcome to your new mess!</div>
+      <div class="onboard-sub">Complete these steps to get started.</div>
+      ${step(hasMembersAdded, "Add your first member", "navigate('members')")}
+      ${step(hasMealsLogged, "Log today's meals", "navigate('meals')")}
+      ${step(hasUtilitySet, "Set up this month's utility bills", "navigate('utility')")}
+    </div>`;
 }

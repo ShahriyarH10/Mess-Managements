@@ -35,11 +35,28 @@
       <button class="btn btn-ghost btn-sm" onclick="showLogin()">Sign in</button>
       <button class="btn btn-primary btn-sm" onclick="showCreateMess()">Create Mess</button>
     </div>
-    <button class="land-nav-theme" onclick="toggleTheme()">
+    <button class="land-nav-hamburger" onclick="openLandingDrawer()" aria-label="Open menu">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <button class="land-nav-theme" onclick="toggleTheme()" aria-label="Toggle theme">
       <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
   </nav>
+
+  <!-- MOBILE NAV DRAWER -->
+  <div class="land-mobile-drawer" id="land-mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu">
+    <div class="land-mobile-drawer-bg" onclick="closeLandingDrawer()"></div>
+    <div class="land-mobile-drawer-panel">
+      <button class="land-drawer-close" onclick="closeLandingDrawer()" aria-label="Close menu">×</button>
+      <a class="land-drawer-link" href="#features" onclick="closeLandingDrawer()">Features</a>
+      <a class="land-drawer-link" href="#how-it-works" onclick="closeLandingDrawer()">How it works</a>
+      <a class="land-drawer-link" href="#testimonials" onclick="closeLandingDrawer()">Reviews</a>
+      <div class="land-drawer-divider"></div>
+      <a class="land-drawer-link" href="#" onclick="closeLandingDrawer();showLogin()">Sign in</a>
+      <a class="land-drawer-link" href="#" style="color:var(--accent);font-weight:500" onclick="closeLandingDrawer();showCreateMess()">Create Mess →</a>
+    </div>
+  </div>
 
   <!-- HERO -->
   <section class="hero">
@@ -247,13 +264,14 @@
       <div class="field"><label>Password</label>
         <div class="pw-wrap">
           <input type="password" class="input" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
-          <button class="pw-eye" onclick="togglePw()" type="button">
+          <button class="pw-eye" onclick="togglePw()" type="button" aria-label="Toggle password visibility">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Sign in →</button>
       <div class="auth-hint">New here? <a href="#" onclick="showCreateMess()">Create a mess</a></div>
+      <div class="auth-hint" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
     </div>
     <button class="auth-theme-btn" onclick="toggleTheme()">
       <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
@@ -270,7 +288,7 @@
       <div class="sidebar-user" id="sa-sidebar-user"></div>
       <nav class="nav">
         <div class="nav-section">Management</div>
-        <button class="nav-item" onclick="saNavigate('messes')" data-sapage="messes"><?xml version="1.0"?><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="10" rx="1"/><path d="M5 3V2M11 3V2"/></svg>All Messes</button>
+        <button class="nav-item" onclick="saNavigate('messes')" data-sapage="messes"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="10" rx="1"/><path d="M5 3V2M11 3V2"/></svg>All Messes</button>
         <button class="nav-item" onclick="saNavigate('metrics')" data-sapage="metrics"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>Metrics</button>
       </nav>
       <div class="sidebar-footer">
@@ -323,8 +341,11 @@
 </div>
 
 <!-- TOAST & MODAL -->
-<div id="toast"></div>
-<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+<div id="toast" role="alert" aria-live="polite"></div>
+<div class="modal-bg" id="confirm-bg" role="dialog" aria-modal="true">
+  <div class="confirm-dialog" id="confirm-content"></div>
+</div>
+<div class="modal-bg" id="modal-bg" role="dialog" aria-modal="true" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal-content"></div>
 </div>
 

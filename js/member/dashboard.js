@@ -270,7 +270,7 @@ function buildMessSnapshotBlock(allM, allB, key) {
   members.forEach(m => { memMeals[m.name] = 0; memBazar[m.name] = 0; });
 
   mM.forEach(r => members.forEach(m => {
-    const v = mealTotalFromObj(r.meals || {}, m.name);
+    const v = mealMemberTotal(r.meals || {}, m.name);
     memMeals[m.name] += v;
     totalM += v;
   }));
@@ -341,7 +341,7 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
   members.forEach(m => { memMeals[m.name] = 0; memBazar[m.name] = 0; });
 
   mM.forEach(r => members.forEach(m => {
-    const v = mealTotalFromObj(r.meals || {}, m.name);
+    const v = mealMemberTotal(r.meals || {}, m.name);
     memMeals[m.name] += v;
     totalM += v;
   }));
@@ -546,7 +546,7 @@ async function loadMyProfile(member) {
 
   const periodLabel = { "1": "This month", "last": "Last month", "3": "Last 3 months", "6": "Last 6 months", "all": "All time" }[period] || "This month";
 
-  const allMealsTotal = meals.reduce((sum, row) => sum + members.reduce((a, m) => a + mealTotalFromObj(row.meals || {}, m.name), 0), 0);
+  const allMealsTotal = meals.reduce((sum, row) => sum + mealRowTotal(row.meals || {}), 0);
   const allBazarTotal = bazar.reduce((sum, row) => sum + Object.values(row.bazar || {}).reduce((a, v) => a + Number(v || 0), 0), 0);
   const mealShare  = allMealsTotal > 0 ? Math.round((s.totalMeals / allMealsTotal) * 100) : 0;
   const bazarShare = allBazarTotal > 0 ? Math.round((s.totalBazar / allBazarTotal) * 100) : 0;

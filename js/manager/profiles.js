@@ -62,8 +62,7 @@ function getMemberStats(member,meals,bazar,rent,utility=[]) {
   const byM={};
   const em=k=>{ byM[k]=byM[k]||{meals:0,bazar:0,rentPaid:0,utilityPaid:0}; };
   meals.forEach(r=>{
-    const d=Number(r.meals[member.name+"_day"]??0), n=Number(r.meals[member.name+"_night"]??0);
-    const v=round2(d+n)||Number(r.meals[member.name]||0);
+    const v=mealMemberTotal(r.meals||{}, member.name);
     tm+=v; if(v>0) ad++;
     const k=r.date.slice(0,7); em(k); byM[k].meals+=v;
   });
@@ -83,7 +82,12 @@ function getMemberStats(member,meals,bazar,rent,utility=[]) {
     ud += perHead; up += Number(p.paid || 0);
     em(r.month_key); byM[r.month_key].utilityPaid += Number(p.paid || 0);
   });
-  const allMealsTotal=meals.reduce((s,r)=>s+members.reduce((a,m)=>{ const d=Number(r.meals[m.name+"_day"]??0),n=Number(r.meals[m.name+"_night"]??0); return a+(round2(d+n)||Number(r.meals[m.name]||0)); },0),0);
+  const allMealsTotal=meals.reduce((s,r)=>{
+    const mObj=r.meals||{}; const keys=Object.keys(mObj);
+    const hasSplit=keys.some(k=>k.endsWith("_day")||k.endsWith("_night"));
+    if(hasSplit) return s+keys.reduce((a,k)=>(k.endsWith("_day")||k.endsWith("_night"))?a+(Number(mObj[k])||0):a,0);
+    return s+Object.values(mObj).reduce((a,v)=>a+(Number(v)||0),0);
+  },0);
   const allBazarTotal=bazar.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
   const mr=allMealsTotal>0?allBazarTotal/allMealsTotal:0;
   const mc=round2(tm*mr);
@@ -165,7 +169,7 @@ function buildWhatIOweHTML(
 
   prevMealRows.forEach(row => {
     members.forEach(m => {
-      const v = mealTotalFromObj(row.meals || {}, m.name);
+      const v = mealMemberTotal(row.meals || {}, m.name);
       allMealsTotal += v;
       if (m.name === member.name) myMeals += v;
     });
@@ -512,7 +516,12 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const rentBadge = fmtBal(rentNet, "+",   "−");
   const utilBadge = fmtBal(utilNet, "+",   "−");
 
-  const allMealsTotal=allM.reduce((s,r)=>s+members.reduce((a,m)=>{ const d=Number(r.meals[m.name+"_day"]??0),n=Number(r.meals[m.name+"_night"]??0); return a+(round2(d+n)||Number(r.meals[m.name]||0)); },0),0);
+  const allMealsTotal=allM.reduce((s,r)=>{
+    const mObj=r.meals||{}; const keys=Object.keys(mObj);
+    const hasSplit=keys.some(k=>k.endsWith("_day")||k.endsWith("_night"));
+    if(hasSplit) return s+keys.reduce((a,k)=>(k.endsWith("_day")||k.endsWith("_night"))?a+(Number(mObj[k])||0):a,0);
+    return s+Object.values(mObj).reduce((a,v)=>a+(Number(v)||0),0);
+  },0);
   const allBazarTotal=allB.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
   const mealShare=allMealsTotal>0?Math.round((s.totalMeals/allMealsTotal)*100):0;
   const bazarShare=allBazarTotal>0?Math.round((s.totalBazar/allBazarTotal)*100):0;
