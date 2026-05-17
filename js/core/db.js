@@ -1,7 +1,11 @@
 /* ═══════════════════════════════════════════════
    CORE — Database: all Supabase query functions
    ═══════════════════════════════════════════════ */
-const messId = () => currentMess?.id;
+const messId = () => {
+  const id = currentMess?.id;
+  if (!id) throw new Error("No mess loaded — please sign out and sign in again.");
+  return id;
+};
 
 async function dbGetAll(table) {
   const orderCol = table === "meals" || table === "bazar" ? "date"

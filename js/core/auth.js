@@ -89,7 +89,14 @@ async function doLogin() {
           await sb.from("members").update({ password: newHash }).eq("id", memberRow.id);
         }
         resetLoginAttempts();
-        saveSession({ name: memberRow.name, username: user, role: memberRow.role, memberId: memberRow.id }, memberRow.messes);
+        // Ensure mess object is populated — the join may return null if
+        // the foreign key isn't exposed in Supabase, so fetch it separately as fallback
+        let messObj = memberRow.messes;
+        if (!messObj && memberRow.mess_id) {
+          const { data: fetchedMess } = await sb.from("messes").select("*").eq("id", memberRow.mess_id).maybeSingle();
+          messObj = fetchedMess;
+        }
+        saveSession({ name: memberRow.name, username: user, role: memberRow.role, memberId: memberRow.id }, messObj);
         await bootApp(); return;
       }
     }

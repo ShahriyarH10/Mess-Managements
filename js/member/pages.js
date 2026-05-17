@@ -217,7 +217,8 @@ async function saveMyMealEntry() {
     );
 
     toast("Meal updated. Manager notified ✓", "success");
-    navigate("my-meals");
+    // Small delay before re-render so Supabase write propagates
+    setTimeout(() => navigate("my-meals"), 350);
   } catch (e) {
     toast("Error: " + e.message, "error");
   }
@@ -363,7 +364,7 @@ async function saveMyBazarEntry() {
     );
 
     toast("Bazar updated. Manager notified ✓", "success");
-    navigate("my-bazar");
+    setTimeout(() => navigate("my-bazar"), 350);
   } catch (e) {
     toast("Error: " + e.message, "error");
   }
@@ -741,7 +742,7 @@ async function saveMyPaymentEntry() {
     }
 
     toast("Payment saved. Manager notified ✓", "success");
-    navigate("my-payments");
+    setTimeout(() => navigate("my-payments"), 350);
   } catch (e) {
     toast("Error: " + e.message, "error");
   }
