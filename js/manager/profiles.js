@@ -557,18 +557,27 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const whatIOweHTML = buildWhatIOweHTML(member,allM,allB,currentRentRec,currentUtilRec,prevUtilRec,curM,curY);
 
   document.getElementById("modal-content").innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div class="avatar" style="width:50px;height:50px;font-size:16px;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${initials(member.name)}</div>
-        <div>
-          <div style="font-family:var(--font-serif);font-size:22px;font-weight:600">${member.name}</div>
-          <div style="font-size:12px;color:var(--text2);margin-top:3px">Room ${member.room||"—"} · @${member.username||"—"} · Joined: ${member.joined||"—"}</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
+        <div class="avatar" style="width:46px;height:46px;font-size:15px;flex-shrink:0;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${initials(member.name)}</div>
+        <div style="min-width:0">
+          <div style="font-family:var(--font-serif);font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${member.name}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Room ${member.room||"—"} · @${member.username||"—"} · Joined: ${member.joined||"—"}</div>
         </div>
       </div>
-      <div style="display:flex;gap:20px;flex-wrap:wrap">
-        <div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Meal pay/get</div><div style="font-size:18px;font-weight:700" class="${mealBadge.cls}">${mealBadge.html}</div></div>
-        <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)"><div style="font-size:11px;color:var(--text3)">Rent balance</div><div style="font-size:18px;font-weight:700" class="${rentBadge.cls}">${rentBadge.html}</div></div>
-        <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)"><div style="font-size:11px;color:var(--text3)">Utility balance</div><div style="font-size:18px;font-weight:700" class="${utilBadge.cls}">${utilBadge.html}</div></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;width:100%">
+        <div style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Meal pay/get</div>
+          <div style="font-size:16px;font-weight:700" class="${mealBadge.cls}">${mealBadge.html}</div>
+        </div>
+        <div style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Rent balance</div>
+          <div style="font-size:16px;font-weight:700" class="${rentBadge.cls}">${rentBadge.html}</div>
+        </div>
+        <div style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Utility balance</div>
+          <div style="font-size:16px;font-weight:700" class="${utilBadge.cls}">${utilBadge.html}</div>
+        </div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:18px">
@@ -581,7 +590,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
     <div class="detail-section"><div class="detail-section-title">Monthly meal history</div>
       ${r8.length?`<div class="hist-labels">${r8.map(k=>`<span>${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}</span>`).join("")}</div><div class="hist-wrap">${r8.map(k=>{const v=s.byMonth[k]?.meals||0;const h=Math.max(Math.round((v/maxM)*44),3);return`<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}: ${v}</div></div>`;}).join("")}</div>`:'<div style="color:var(--text3);font-size:13px">No history</div>'}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+    <div class="profile-detail-bottom-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
       ${recentMonthsHTML}
       ${whatIOweHTML}
     </div>

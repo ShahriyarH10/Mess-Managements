@@ -54,11 +54,29 @@
   .content{padding:14px 12px 32px;}
   .page-title{font-size:20px;}
   .page-sub{font-size:12px;}
-  .stat-grid{grid-template-columns:repeat(2,1fr);gap:7px;}
-  .stat-card{padding:10px 11px;}
+  /* Stat grid: 2 columns but allow cards enough height for sparklines */
+  .stat-grid{grid-template-columns:repeat(2,1fr);gap:7px;align-items:start;}
+  .stat-card{padding:10px 11px;height:auto;min-height:unset;}
   .stat-value{font-size:18px;}
+  /* Sparkline/chart inside stat cards: constrain so they don't overflow */
+  .stat-card svg{max-width:100%;height:28px!important;display:block;}
+  /* Sparkline stat cards: reduce font on mobile so values don't collide */
+  .stat-card.stat-card-sparkline .stat-value{font-size:16px;}
+  .stat-card.stat-card-sparkline{padding:10px 10px!important;}
   .card{padding:14px 12px;}
   .grid-2{grid-template-columns:1fr!important;}
+  /* Member meal totals + bazar contributors: stack vertically on mobile */
+  .member-dashboard-bottom-grid{grid-template-columns:1fr!important;}
+  /* Member meal totals table: make it full width and readable */
+  .member-dashboard-bottom-grid .tbl-wrap{margin:0;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .member-dashboard-bottom-grid table{font-size:12px;min-width:280px;}
+  .member-dashboard-bottom-grid th,.member-dashboard-bottom-grid td{padding:7px 8px;white-space:nowrap;}
+  /* Profile detail popup: stack Recent months + What I Owe vertically */
+  .profile-detail-bottom-grid{grid-template-columns:1fr!important;}
+  /* Recent months table in profile popup: scrollable on mobile */
+  .profile-detail-bottom-grid .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .profile-detail-bottom-grid table{font-size:12px;min-width:360px;}
+  .profile-detail-bottom-grid th,.profile-detail-bottom-grid td{padding:6px 8px;white-space:nowrap;}
 
   /* Toast above mobile nav */
   #toast{bottom:calc(78px + env(safe-area-inset-bottom, 8px));right:12px;left:12px;max-width:none;text-align:center;}
@@ -104,6 +122,9 @@
   .stat-card{padding:9px 10px;}
   .stat-value{font-size:16px;}
   .stat-label{font-size:10px;}
+  /* On very small screens, sparkline stat cards stack 1 column */
+  .stat-card.stat-card-sparkline .stat-value{font-size:14px;}
+  .stat-card.stat-card-sparkline{padding:9px 9px!important;}
 
   .topbar{padding:12px 12px 0;}
   .content{padding:12px 10px 32px;}

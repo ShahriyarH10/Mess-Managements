@@ -265,40 +265,154 @@ function buildMessSnapshotBlock(allM, allB, key) {
   const mB = (allB || []).filter(r => String(r.date || "").startsWith(key));
 
   let totalM = 0, totalB = 0;
-  const memMeals = {};
-  const memBazar = {};
+  const memMeals = {}, memBazar = {};
   members.forEach(m => { memMeals[m.name] = 0; memBazar[m.name] = 0; });
 
-  mM.forEach(r => members.forEach(m => {
-    const v = mealMemberTotal(r.meals || {}, m.name);
-    memMeals[m.name] += v;
-    totalM += v;
-  }));
-  mB.forEach(r => members.forEach(m => {
-    const v = Number((r.bazar || {})[m.name] || 0);
-    memBazar[m.name] += v;
-    totalB += v;
-  }));
+  // Total meals — key-based (name-independent)
+  mM.forEach(r => {
+    const mObj = r.meals || {}, keys = Object.keys(mObj);
+    const hasSplit = keys.some(k => k.endsWith("_day") || k.endsWith("_night"));
+    if (hasSplit) keys.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) totalM += Number(mObj[k]) || 0; });
+    else Object.values(mObj).forEach(v => { totalM += Number(v) || 0; });
+    // Per-member
+    members.forEach(m => { memMeals[m.name] += mealMemberTotal(mObj, m.name); });
+  });
+  mB.forEach(r => {
+    members.forEach(m => { const v = Number((r.bazar || {})[m.name] || 0); memBazar[m.name] += v; totalB += v; });
+  });
 
+  totalM = round2(totalM); totalB = round2(totalB);
   const mealRate = totalM > 0 ? round2(totalB / totalM) : 0;
+
+  // ── Sparkline: daily meals per day this month ──
+  const dayMeals = {}; // "DD" -> total
+  mM.forEach(r => {
+    const dd = String(r.date || "").slice(8, 10);
+    if (!dd) return;
+    const mObj = r.meals || {}, keys = Object.keys(mObj);
+    const hasSplit = keys.some(k => k.endsWith("_day") || k.endsWith("_night"));
+    let dayTotal = 0;
+    if (hasSplit) keys.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) dayTotal += Number(mObj[k]) || 0; });
+    else Object.values(mObj).forEach(v => { dayTotal += Number(v) || 0; });
+    dayMeals[dd] = (dayMeals[dd] || 0) + dayTotal;
+  });
+  const dayKeys = Object.keys(dayMeals).sort();
+  const maxDayMeal = Math.max(...Object.values(dayMeals), 1);
+
+  // ── Sparkline: cumulative bazar per day ──
+  const dayCumB = {}; // "DD" -> cumulative total up to that day
+  let runB = 0;
+  const bazarByDay = {};
+  mB.forEach(r => { const dd = String(r.date || "").slice(8, 10); if (dd) { bazarByDay[dd] = (bazarByDay[dd] || 0) + Object.values(r.bazar || {}).reduce((s, v) => s + (Number(v) || 0), 0); } });
+  Object.keys(bazarByDay).sort().forEach(dd => { runB += bazarByDay[dd]; dayCumB[dd] = runB; });
+  const bazarDayKeys = Object.keys(dayCumB).sort();
+  const maxCumB = Math.max(...Object.values(dayCumB), 1);
+
+  // ── Today's meal card (matches manager view exactly) ──
+  const now = new Date();
+  const isNextDay = now.getHours() >= 23;
+  const displayDate = isNextDay ? new Date(now.getTime() + 86400000) : now;
+  const displayStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth()+1).padStart(2,"0")}-${String(displayDate.getDate()).padStart(2,"0")}`;
+  const todayRec = allM.find(r => r.date === displayStr);
+  let todayDayTotal = 0, todayNightTotal = 0;
+  if (todayRec) {
+    members.forEach(m => {
+      const p = mealPartsFromObj(todayRec.meals || {}, m.name);
+      todayDayTotal   += p.day;
+      todayNightTotal += p.night;
+    });
+    todayDayTotal   = round2(todayDayTotal);
+    todayNightTotal = round2(todayNightTotal);
+  }
+
   const topB = Object.entries(memBazar).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const maxB = topB[0]?.[1] || 1;
 
+  // Build sparkline SVG (tiny bar chart)
+  function sparkBars(dayKs, dataObj, maxVal, color) {
+    if (!dayKs.length) return '<span style="color:var(--text3);font-size:11px">No data yet</span>';
+    const W = 160, H = 32, gap = 2;
+    const bw = Math.max(2, Math.floor((W - gap * (dayKs.length - 1)) / dayKs.length));
+    const bars = dayKs.map((dd, i) => {
+      const v = dataObj[dd] || 0;
+      const h = Math.max(2, Math.round((v / maxVal) * H));
+      const x = i * (bw + gap);
+      const y = H - h;
+      return `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="1" fill="${color}" opacity="${v > 0 ? 0.85 : 0.18}"/>`;
+    }).join("");
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">${bars}</svg>`;
+  }
+
   return `
-    <div class="stat-grid" style="margin-bottom:12px">
-      <div class="stat-card"><div class="stat-label">Total meals</div><div class="stat-value">${round2(totalM)}</div></div>
-      <div class="stat-card"><div class="stat-label">Meal rate</div><div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total bazar</div><div class="stat-value" style="font-size:17px">${fmtTk(totalB)}</div></div>
-      <div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div>
+    <!-- ── Stat cards with sparklines ── -->
+    <div class="stat-grid" style="margin-bottom:14px">
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--accent);padding:16px 14px">
+        <div class="stat-label" style="display:flex;align-items:center;gap:5px">🍽️ Total meals</div>
+        <div class="stat-value" style="font-size:22px;margin-top:6px;color:var(--accent)">${totalM}</div>
+        <div style="margin-top:8px;overflow:hidden">${sparkBars(dayKeys, dayMeals, maxDayMeal, "var(--accent)")}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">${mM.length} day${mM.length===1?"":"s"} logged</div>
+      </div>
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--blue);padding:16px 14px">
+        <div class="stat-label" style="display:flex;align-items:center;gap:5px">📊 Meal rate</div>
+        <div class="stat-value" style="font-size:20px;margin-top:6px;color:var(--blue)">${fmtTk(mealRate)}</div>
+        <div style="margin-top:8px">
+          ${totalM > 0 ? `
+            <div style="background:var(--blue-bg);border-radius:4px;overflow:hidden;height:8px;margin-bottom:4px">
+              <div style="width:${Math.min(100, Math.round((totalB / Math.max(totalB, 1)) * 100))}%;height:100%;background:var(--blue);border-radius:4px"></div>
+            </div>
+            <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmtTk(totalB)} ÷ ${totalM}</div>
+          ` : '<span style="font-size:10px;color:var(--text3)">No meals yet</span>'}
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Per meal cost</div>
+      </div>
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--green);padding:16px 14px">
+        <div class="stat-label" style="display:flex;align-items:center;gap:5px">🛒 Total bazar</div>
+        <div class="stat-value" style="font-size:20px;margin-top:6px;color:var(--green)">${fmtTk(totalB)}</div>
+        <div style="margin-top:8px;overflow:hidden">${sparkBars(bazarDayKeys, dayCumB, maxCumB, "var(--green)")}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Cumulative spending</div>
+      </div>
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--text3);padding:16px 14px">
+        <div class="stat-label" style="display:flex;align-items:center;gap:5px">👥 Members</div>
+        <div class="stat-value" style="font-size:22px;margin-top:6px">${members.length}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">in this mess</div>
+      </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <!-- ── Today's meals (identical to manager view) ── -->
+    ${todayRec ? `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">${isNextDay ? "Tomorrow's meals" : "Today's meals"} — ${displayStr}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
+        <div class="stat-card badge-blue"><div class="stat-label" style="color:var(--blue)">Day meals</div><div class="stat-value" style="color:var(--blue)">${todayDayTotal}</div></div>
+        <div class="stat-card badge-amber"><div class="stat-label" style="color:var(--amber)">Night meals</div><div class="stat-value" style="color:var(--amber)">${todayNightTotal}</div></div>
+        <div class="stat-card"><div class="stat-label">Total today</div><div class="stat-value">${round2(todayDayTotal + todayNightTotal)}</div></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${members.map(m => {
+          const t = mealMemberTotal(todayRec.meals || {}, m.name);
+          const _p = mealPartsFromObj(todayRec.meals || {}, m.name);
+          const d = _p.day, n = _p.night;
+          return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+            <span style="font-size:13px;font-weight:500;color:${t > 0 ? "var(--text)" : "var(--text3)"}">${escapeHtml(m.name)}</span>
+            ${d > 0 ? `<span class="badge badge-blue">Day ${d}</span>` : ""}
+            ${n > 0 ? `<span class="badge badge-amber">Night ${n}</span>` : ""}
+            ${t === 0 ? `<span class="badge badge-red">Absent</span>` : ""}
+          </div>`;
+        }).join("")}
+      </div>
+    </div>` : `
+    <div class="card" style="margin-bottom:14px;text-align:center;padding:24px">
+      <div style="color:var(--text3);font-size:13px">No meal entry for ${isNextDay ? "tomorrow" : "today"} yet</div>
+    </div>`}
+
+    <!-- ── Bazar contributors + Member meal totals ── -->
+    <div class="member-dashboard-bottom-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="card">
         <div class="card-title">🛒 Bazar contributors</div>
         ${topB.length && totalB > 0
           ? topB.map(([name, amt]) => `
               <div class="mini-bar">
-                <div class="mini-bar-label">${name}</div>
+                <div class="mini-bar-label">${escapeHtml(name)}</div>
                 <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt / maxB) * 100)}%"></div></div>
                 <div class="mini-bar-val">${fmtTk(amt)}</div>
               </div>`).join("")
@@ -308,13 +422,18 @@ function buildMessSnapshotBlock(allM, allB, key) {
         <div class="card-title">🍽 Member meal totals</div>
         ${members.length
           ? `<div class="tbl-wrap"><table>
-              <thead><tr><th>Member</th><th>Meals</th><th>Bazar</th><th>Meal cost</th><th>Balance</th></tr></thead>
+              <thead><tr><th>Member</th><th>Meals</th><th>Bazar</th><th>Balance</th></tr></thead>
               <tbody>${members.map(m => {
                 const myM = round2(memMeals[m.name] || 0);
                 const myB = round2(memBazar[m.name] || 0);
                 const mc  = round2(myM * mealRate);
                 const bal = round2(myB - mc);
-                return `<tr><td><b>${m.name}</b></td><td>${myM}</td><td style="color:var(--green)">${fmtTk(myB)}</td><td>${fmtTk(mc)}</td><td class="${bal>=0?"net-pos":"net-neg"}">${bal>=0?"Get "+fmtTk(bal):"Pay "+fmtTk(-bal)}</td></tr>`;
+                return `<tr>
+                  <td><b>${escapeHtml(m.name)}</b></td>
+                  <td>${myM}</td>
+                  <td style="color:var(--green)">${fmtTk(myB)}</td>
+                  <td class="${bal >= 0 ? "net-pos" : "net-neg"}">${bal >= 0 ? "Get " + fmtTk(bal) : "Pay " + fmtTk(-bal)}</td>
+                </tr>`;
               }).join("")}</tbody>
             </table></div>`
           : '<div class="empty">No members</div>'}
