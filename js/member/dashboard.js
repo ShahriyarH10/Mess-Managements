@@ -68,65 +68,210 @@ async function renderMyDashboard(el) {
     }).join("");
   }
 
-  const netColor = calc.netPayable > 0 ? "var(--red)" : calc.netPayable < 0 ? "var(--green)" : "var(--text)";
-  const netLabel = calc.netPayable > 0
+  const netColor  = calc.netPayable > 0 ? "var(--red)" : calc.netPayable < 0 ? "var(--green)" : "var(--text)";
+  const netBg     = calc.netPayable > 0 ? "var(--red-bg)" : calc.netPayable < 0 ? "var(--green-bg)" : "var(--bg3)";
+  const netBorder = calc.netPayable > 0 ? "rgba(224,82,82,.25)" : calc.netPayable < 0 ? "rgba(76,175,130,.25)" : "var(--border2)";
+  const netIcon   = calc.netPayable > 0 ? "⚠️" : calc.netPayable < 0 ? "💚" : "✅";
+  const netLabel  = calc.netPayable > 0
     ? "You Pay " + fmtTk(calc.netPayable)
     : calc.netPayable < 0
       ? "You Get " + fmtTk(Math.abs(calc.netPayable))
-      : "✓ Settled";
+      : "Settled";
+
+  // Charges breakdown for visual bar
+  const totalCharges = calc.totalPay || 1;
+  const mealPct    = Math.round((calc.mealCost       / totalCharges) * 100);
+  const rentPct    = Math.round((calc.roomRent        / totalCharges) * 100);
+  const utilPct    = Math.round((calc.prepaidUtility  / totalCharges) * 100);
+  const khalaPct   = Math.round(((calc.khalaShare + calc.otherShare) / totalCharges) * 100);
+
+  // My personal meal stats this month (current month, not prev)
+  const myCurrentMeals = (() => {
+    let total = 0;
+    const curMM = allMeals.filter(r => r.date.startsWith(key));
+    curMM.forEach(r => { total += mealMemberTotal(r.meals || {}, member.name); });
+    return round2(total);
+  })();
+  const myCurrentBazar = (() => {
+    let total = 0;
+    allBazar.filter(r => r.date.startsWith(key)).forEach(r => {
+      total += Number((r.bazar || {})[member.name] || 0);
+    });
+    return round2(total);
+  })();
+  // Current month mess-wide meal rate
+  const curMonthMealRate = (() => {
+    let totM = 0, totB = 0;
+    allMeals.filter(r => r.date.startsWith(key)).forEach(r => {
+      const mObj = r.meals || {}, ks = Object.keys(mObj);
+      const hasSplit = ks.some(k => k.endsWith("_day") || k.endsWith("_night"));
+      if (hasSplit) ks.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) totM += Number(mObj[k]) || 0; });
+      else Object.values(mObj).forEach(v => { totM += Number(v) || 0; });
+    });
+    allBazar.filter(r => r.date.startsWith(key)).forEach(r => {
+      Object.values(r.bazar || {}).forEach(v => { totB += Number(v) || 0; });
+    });
+    return totM > 0 ? round2(totB / totM) : 0;
+  })();
+  // Current month mess-wide totals for stat cards
+  let curMonthTotalMeals = 0, curMonthTotalBazar = 0;
+  allMeals.filter(r => r.date.startsWith(key)).forEach(r => {
+    const mObj = r.meals || {}, ks = Object.keys(mObj);
+    const hasSplit = ks.some(k => k.endsWith("_day") || k.endsWith("_night"));
+    if (hasSplit) ks.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) curMonthTotalMeals += Number(mObj[k]) || 0; });
+    else Object.values(mObj).forEach(v => { curMonthTotalMeals += Number(v) || 0; });
+  });
+  allBazar.filter(r => r.date.startsWith(key)).forEach(r => {
+    Object.values(r.bazar || {}).forEach(v => { curMonthTotalBazar += Number(v) || 0; });
+  });
+  curMonthTotalMeals = round2(curMonthTotalMeals);
+  curMonthTotalBazar = round2(curMonthTotalBazar);
+  const myTodayParts = todayRec ? mealPartsFromObj(todayRec.meals || {}, member.name) : { day: 0, night: 0 };
+
+  // Daily my-meals heatmap for current month
+  const now2 = new Date();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayDay2 = now2.getDate();
+  const myDayMeals = {};
+  allMeals.filter(r => r.date.startsWith(key)).forEach(r => {
+    const dd = parseInt(r.date.slice(8), 10);
+    myDayMeals[dd] = round2((myDayMeals[dd] || 0) + mealMemberTotal(r.meals || {}, member.name));
+  });
+  const myMaxDay = Math.max(...Object.values(myDayMeals), 1);
 
   el.innerHTML = `
   <div class="topbar">
     <div>
       <div class="page-title">My Dashboard</div>
-      <div class="page-sub">${MONTHS[month]} ${year} settlement</div>
+      <div class="page-sub">${member.name} · ${MONTHS[month]} ${year}</div>
     </div>
   </div>
   <div class="content">
 
-    <!-- Net due banner -->
-    <div style="
-      background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);
-      padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px
-    ">
-      <div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">
-          Net payable — ${MONTHS[month]} ${year}
+    <!-- ── Net payable hero card ── -->
+    <div style="background:${netBg};border:1px solid ${netBorder};border-radius:var(--radius);padding:18px 20px;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">
+            Net payable — ${MONTHS[month]} ${year}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="font-size:30px;font-weight:900;color:${netColor};line-height:1">${netIcon} ${netLabel}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">
+            Meals/bazar from ${MONTHS[prevInfo.month]} ${prevInfo.year} · Rent/utility from ${MONTHS[month]} ${year}
+          </div>
         </div>
-        <div style="font-size:28px;font-weight:900;color:${netColor}">${netLabel}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">
-          Using meals/bazar from ${MONTHS[prevInfo.month]} ${prevInfo.year} + rent/utility from ${MONTHS[month]} ${year}
+        <button class="btn btn-ghost btn-sm" onclick="showMySettlementBreakdown()" style="flex-shrink:0">📊 Breakdown</button>
+      </div>
+
+      <!-- Charges breakdown bar -->
+      ${calc.totalPay > 0 ? `
+      <div style="margin-top:14px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">Your charges this month</div>
+        <div style="display:flex;height:8px;border-radius:99px;overflow:hidden;gap:2px">
+          ${calc.mealCost      > 0 ? `<div style="flex:${mealPct};background:var(--accent);border-radius:2px" title="Meal cost ${fmtTk(calc.mealCost)}"></div>` : ""}
+          ${calc.roomRent      > 0 ? `<div style="flex:${rentPct};background:var(--amber);border-radius:2px" title="Rent ${fmtTk(calc.roomRent)}"></div>` : ""}
+          ${calc.prepaidUtility> 0 ? `<div style="flex:${utilPct};background:var(--purple);border-radius:2px" title="Utility ${fmtTk(calc.prepaidUtility)}"></div>` : ""}
+          ${(calc.khalaShare + calc.otherShare) > 0 ? `<div style="flex:${khalaPct};background:var(--blue);border-radius:2px" title="Khala+Other ${fmtTk(calc.khalaShare + calc.otherShare)}"></div>` : ""}
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+          ${calc.mealCost > 0       ? `<span style="font-size:10px;color:var(--accent)">🍽 Meal ${fmtTk(calc.mealCost)}</span>` : ""}
+          ${calc.roomRent > 0       ? `<span style="font-size:10px;color:var(--amber)">🏠 Rent ${fmtTk(calc.roomRent)}</span>` : ""}
+          ${calc.prepaidUtility > 0 ? `<span style="font-size:10px;color:var(--purple)">⚡ Util ${fmtTk(calc.prepaidUtility)}</span>` : ""}
+          ${(calc.khalaShare+calc.otherShare) > 0 ? `<span style="font-size:10px;color:var(--blue)">👩 Khala ${fmtTk(round2(calc.khalaShare+calc.otherShare))}</span>` : ""}
         </div>
       </div>
-      <button class="btn btn-ghost" onclick="showMySettlementBreakdown()" style="font-size:12px">
-        📊 See full breakdown
-      </button>
+      ` : ""}
+
+      <!-- Credits row -->
+      ${(calc.memberBazar + calc.utilityPaid + calc.roomRentPaid + calc.mealPaid) > 0 ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${netBorder};display:flex;gap:10px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text3)">Credits:</span>
+        ${calc.memberBazar  > 0 ? `<span style="font-size:10px;color:var(--green)">🛒 Bazar ${fmtTk(calc.memberBazar)}</span>` : ""}
+        ${calc.roomRentPaid > 0 ? `<span style="font-size:10px;color:var(--green)">🏠 Rent paid ${fmtTk(calc.roomRentPaid)}</span>` : ""}
+        ${calc.utilityPaid  > 0 ? `<span style="font-size:10px;color:var(--green)">⚡ Util paid ${fmtTk(calc.utilityPaid)}</span>` : ""}
+        ${calc.mealPaid     > 0 ? `<span style="font-size:10px;color:var(--green)">💵 Meal paid ${fmtTk(calc.mealPaid)}</span>` : ""}
+      </div>
+      ` : ""}
     </div>
 
-    <!-- Today's meals -->
+    <!-- ── Mess-wide stat cards ── -->
+    <div class="stat-grid" style="margin-bottom:14px">
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--accent);padding:14px">
+        <div class="stat-label">🍽️ Mess meals (${MONTHS[month].slice(0,3)})</div>
+        <div class="stat-value" style="font-size:22px;color:var(--accent);margin-top:6px">${curMonthTotalMeals}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">total this month</div>
+      </div>
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--blue);padding:14px">
+        <div class="stat-label">📊 Current meal rate</div>
+        <div class="stat-value" style="font-size:20px;color:var(--blue);margin-top:6px">${fmtTk(curMonthMealRate)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">per meal this month</div>
+      </div>
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--green);padding:14px">
+        <div class="stat-label">🛒 Total bazar</div>
+        <div class="stat-value" style="font-size:20px;color:var(--green);margin-top:6px">${fmtTk(curMonthTotalBazar)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">this month</div>
+      </div>
+      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--text3);padding:14px">
+        <div class="stat-label">👥 Members</div>
+        <div class="stat-value" style="font-size:22px;margin-top:6px">${members.length}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">in this mess</div>
+      </div>
+    </div>
+
+    <!-- ── My meal activity heatmap ── -->
     <div class="card" style="margin-bottom:14px">
-      <div class="card-title">${isNextDay ? "Tomorrow" : "Today"} — ${displayStr}</div>
+      <div class="card-title" style="margin-bottom:10px">📅 My meal activity — ${MONTHS[month]}</div>
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(daysInMonth,16)},1fr);gap:3px;margin-bottom:6px">
+        ${Array.from({length: daysInMonth}, (_, i) => {
+          const d = i + 1;
+          const v = myDayMeals[d] || 0;
+          const isToday = d === todayDay2;
+          const opacity = v === 0 ? 0.1 : 0.25 + (v / myMaxDay) * 0.75;
+          const bg = v === 0 ? "var(--bg4)" : `rgba(212,168,83,${opacity.toFixed(2)})`;
+          return `<div title="Day ${d}: ${v} meals" style="height:20px;border-radius:3px;background:${bg};border:${isToday ? "2px solid var(--accent)" : "1px solid transparent"};display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:${v>0?"var(--text)":"var(--text3)"};opacity:.7">${d}</span>
+          </div>`;
+        }).join("")}
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)">
+        <span>No meal</span>
+        ${[0.1,0.35,0.6,0.85,1].map(o=>`<div style="width:12px;height:8px;border-radius:2px;background:rgba(212,168,83,${o})"></div>`).join("")}
+        <span>High</span>
+        <span style="margin-left:auto">Today = outlined</span>
+      </div>
+    </div>
+
+    <!-- ── Today's meals ── -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+        <div class="card-title" style="margin-bottom:0">${isNextDay ? "Tomorrow" : "Today"} — ${displayStr}</div>
+        ${todayRec ? `
+          <div style="display:flex;gap:5px">
+            <span style="background:var(--blue-bg);color:var(--blue);padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600">☀ ${todayDay} day</span>
+            <span style="background:var(--accent-bg);color:var(--accent);padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600">🌙 ${todayNight} night</span>
+          </div>` : ""}
+      </div>
       ${todayRec ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:14px">
-          <div style="background:var(--blue-bg);border:1px solid rgba(91,155,213,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
-            <div style="font-size:11px;color:var(--blue);font-weight:600;margin-bottom:6px">Day</div>
-            <div style="font-size:20px;font-weight:700;color:var(--blue);line-height:1">${todayDay}</div>
-          </div>
-          <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.2);border-radius:var(--radius-sm);padding:14px;text-align:center">
-            <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px">Night</div>
-            <div style="font-size:20px;font-weight:700;color:var(--accent);line-height:1">${todayNight}</div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center">
-            <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">Total</div>
-            <div style="font-size:20px;font-weight:700;line-height:1">${round2(todayDay + todayNight)}</div>
+        <!-- My meal highlight -->
+        <div style="background:${myTodayParts.day+myTodayParts.night>0?"var(--accent-bg)":"var(--red-bg)"};border:1px solid ${myTodayParts.day+myTodayParts.night>0?"rgba(212,168,83,.2)":"rgba(224,82,82,.2)"};border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+          <div style="font-size:20px">${myTodayParts.day+myTodayParts.night>0?"🍽️":"😴"}</div>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:${myTodayParts.day+myTodayParts.night>0?"var(--accent)":"var(--red)"}">${myTodayParts.day+myTodayParts.night>0?"You are eating today":"You are absent today"}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">
+              ${myTodayParts.day>0?`☀ Day: ${myTodayParts.day}  `:""}${myTodayParts.night>0?`🌙 Night: ${myTodayParts.night}`:""}
+              ${myTodayParts.day+myTodayParts.night===0?"No meals recorded for you":""}
+            </div>
           </div>
         </div>
+        <!-- All members -->
         <div style="display:flex;flex-wrap:wrap;gap:7px">${memberBadgesHTML}</div>
-      ` : `<div class="empty" style="padding:20px">No meal entry today</div>`}
+      ` : `<div class="empty" style="padding:20px">No meal entry for ${isNextDay?"tomorrow":"today"} yet</div>`}
     </div>
 
     <!-- ── Embedded mess snapshot (current month) ── -->
-    ${buildMessSnapshotBlock(allMeals, allBazar, key)}
+    ${buildMessSnapshotBlock(allMeals, allBazar, key, member.name)}
   </div>`;
 
   // Store calc in window for breakdown modal
@@ -260,7 +405,7 @@ function showMySettlementBreakdown() {
    contributors, and member meal totals for the chosen month
    (uses *current* month data, not previous-month settlement basis).
    ═══════════════════════════════════════════════════════════════ */
-function buildMessSnapshotBlock(allM, allB, key) {
+function buildMessSnapshotBlock(allM, allB, key, myName) {
   const mM = (allM || []).filter(r => String(r.date || "").startsWith(key));
   const mB = (allB || []).filter(r => String(r.date || "").startsWith(key));
 
@@ -284,8 +429,8 @@ function buildMessSnapshotBlock(allM, allB, key) {
   totalM = round2(totalM); totalB = round2(totalB);
   const mealRate = totalM > 0 ? round2(totalB / totalM) : 0;
 
-  // ── Sparkline: daily meals per day this month ──
-  const dayMeals = {}; // "DD" -> total
+  // Sparkline data
+  const dayMeals = {};
   mM.forEach(r => {
     const dd = String(r.date || "").slice(8, 10);
     if (!dd) return;
@@ -299,36 +444,23 @@ function buildMessSnapshotBlock(allM, allB, key) {
   const dayKeys = Object.keys(dayMeals).sort();
   const maxDayMeal = Math.max(...Object.values(dayMeals), 1);
 
-  // ── Sparkline: cumulative bazar per day ──
-  const dayCumB = {}; // "DD" -> cumulative total up to that day
-  let runB = 0;
+  // Cumulative bazar per day sparkline
   const bazarByDay = {};
-  mB.forEach(r => { const dd = String(r.date || "").slice(8, 10); if (dd) { bazarByDay[dd] = (bazarByDay[dd] || 0) + Object.values(r.bazar || {}).reduce((s, v) => s + (Number(v) || 0), 0); } });
+  mB.forEach(r => {
+    const dd = String(r.date || "").slice(8, 10);
+    if (dd) bazarByDay[dd] = (bazarByDay[dd] || 0) + Object.values(r.bazar || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+  });
+  let runB = 0;
+  const dayCumB = {};
   Object.keys(bazarByDay).sort().forEach(dd => { runB += bazarByDay[dd]; dayCumB[dd] = runB; });
   const bazarDayKeys = Object.keys(dayCumB).sort();
   const maxCumB = Math.max(...Object.values(dayCumB), 1);
 
-  // ── Today's meal card (matches manager view exactly) ──
-  const now = new Date();
-  const isNextDay = now.getHours() >= 23;
-  const displayDate = isNextDay ? new Date(now.getTime() + 86400000) : now;
-  const displayStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth()+1).padStart(2,"0")}-${String(displayDate.getDate()).padStart(2,"0")}`;
-  const todayRec = allM.find(r => r.date === displayStr);
-  let todayDayTotal = 0, todayNightTotal = 0;
-  if (todayRec) {
-    members.forEach(m => {
-      const p = mealPartsFromObj(todayRec.meals || {}, m.name);
-      todayDayTotal   += p.day;
-      todayNightTotal += p.night;
-    });
-    todayDayTotal   = round2(todayDayTotal);
-    todayNightTotal = round2(todayNightTotal);
-  }
-
-  const topB = Object.entries(memBazar).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const topB = Object.entries(memBazar).sort((a, b) => b[1] - a[1]).filter(([,v]) => v > 0).slice(0, 6);
   const maxB = topB[0]?.[1] || 1;
+  const maxMemMeal = Math.max(...Object.values(memMeals), 1);
 
-  // Build sparkline SVG (tiny bar chart)
+  // Sparkline SVG
   function sparkBars(dayKs, dataObj, maxVal, color) {
     if (!dayKs.length) return '<span style="color:var(--text3);font-size:11px">No data yet</span>';
     const W = 160, H = 32, gap = 2;
@@ -336,109 +468,73 @@ function buildMessSnapshotBlock(allM, allB, key) {
     const bars = dayKs.map((dd, i) => {
       const v = dataObj[dd] || 0;
       const h = Math.max(2, Math.round((v / maxVal) * H));
-      const x = i * (bw + gap);
-      const y = H - h;
+      const x = i * (bw + gap), y = H - h;
       return `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="1" fill="${color}" opacity="${v > 0 ? 0.85 : 0.18}"/>`;
     }).join("");
     return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;overflow:visible">${bars}</svg>`;
   }
 
   return `
-    <!-- ── Stat cards with sparklines ── -->
-    <div class="stat-grid" style="margin-bottom:14px">
-      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--accent);padding:16px 14px">
-        <div class="stat-label" style="display:flex;align-items:center;gap:5px">🍽️ Total meals</div>
-        <div class="stat-value" style="font-size:22px;margin-top:6px;color:var(--accent)">${totalM}</div>
-        <div style="margin-top:8px;overflow:hidden">${sparkBars(dayKeys, dayMeals, maxDayMeal, "var(--accent)")}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">${mM.length} day${mM.length===1?"":"s"} logged</div>
-      </div>
-      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--blue);padding:16px 14px">
-        <div class="stat-label" style="display:flex;align-items:center;gap:5px">📊 Meal rate</div>
-        <div class="stat-value" style="font-size:20px;margin-top:6px;color:var(--blue)">${fmtTk(mealRate)}</div>
-        <div style="margin-top:8px">
-          ${totalM > 0 ? `
-            <div style="background:var(--blue-bg);border-radius:4px;overflow:hidden;height:8px;margin-bottom:4px">
-              <div style="width:${Math.min(100, Math.round((totalB / Math.max(totalB, 1)) * 100))}%;height:100%;background:var(--blue);border-radius:4px"></div>
-            </div>
-            <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmtTk(totalB)} ÷ ${totalM}</div>
-          ` : '<span style="font-size:10px;color:var(--text3)">No meals yet</span>'}
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">Per meal cost</div>
-      </div>
-      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--green);padding:16px 14px">
-        <div class="stat-label" style="display:flex;align-items:center;gap:5px">🛒 Total bazar</div>
-        <div class="stat-value" style="font-size:20px;margin-top:6px;color:var(--green)">${fmtTk(totalB)}</div>
-        <div style="margin-top:8px;overflow:hidden">${sparkBars(bazarDayKeys, dayCumB, maxCumB, "var(--green)")}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:3px">Cumulative spending</div>
-      </div>
-      <div class="stat-card stat-card-sparkline" style="border-top:3px solid var(--text3);padding:16px 14px">
-        <div class="stat-label" style="display:flex;align-items:center;gap:5px">👥 Members</div>
-        <div class="stat-value" style="font-size:22px;margin-top:6px">${members.length}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:6px">in this mess</div>
-      </div>
-    </div>
-
-    <!-- ── Today's meals (identical to manager view) ── -->
-    ${todayRec ? `
+    <!-- ── Member meal comparison ── -->
+    ${members.length > 0 && totalM > 0 ? `
     <div class="card" style="margin-bottom:14px">
-      <div class="card-title">${isNextDay ? "Tomorrow's meals" : "Today's meals"} — ${displayStr}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
-        <div class="stat-card badge-blue"><div class="stat-label" style="color:var(--blue)">Day meals</div><div class="stat-value" style="color:var(--blue)">${todayDayTotal}</div></div>
-        <div class="stat-card badge-amber"><div class="stat-label" style="color:var(--amber)">Night meals</div><div class="stat-value" style="color:var(--amber)">${todayNightTotal}</div></div>
-        <div class="stat-card"><div class="stat-label">Total today</div><div class="stat-value">${round2(todayDayTotal + todayNightTotal)}</div></div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${members.map(m => {
-          const t = mealMemberTotal(todayRec.meals || {}, m.name);
-          const _p = mealPartsFromObj(todayRec.meals || {}, m.name);
-          const d = _p.day, n = _p.night;
-          return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
-            <span style="font-size:13px;font-weight:500;color:${t > 0 ? "var(--text)" : "var(--text3)"}">${escapeHtml(m.name)}</span>
-            ${d > 0 ? `<span class="badge badge-blue">Day ${d}</span>` : ""}
-            ${n > 0 ? `<span class="badge badge-amber">Night ${n}</span>` : ""}
-            ${t === 0 ? `<span class="badge badge-red">Absent</span>` : ""}
+      <div class="card-title">👥 Who ate how much — ${MONTHS[monthIndexFromKey(key)]}</div>
+      <div style="display:grid;gap:8px">
+        ${members.map((m, i) => {
+          const v = round2(memMeals[m.name] || 0);
+          const baz = round2(memBazar[m.name] || 0);
+          const pct = Math.round((v / maxMemMeal) * 100);
+          const col = avatarCol(i);
+          const isMe = myName && m.name === myName;
+          const mealCost2 = round2(v * mealRate);
+          const balance = round2(baz - mealCost2);
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);background:${isMe?"var(--accent-bg)":"transparent"};border:1px solid ${isMe?"rgba(212,168,83,.2)":"transparent"}">
+            <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${initials(m.name)}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;gap:4px">
+                <span style="font-size:12px;font-weight:${isMe?"700":"500"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isMe?"var(--accent)":"var(--text)"}">${escapeHtml(m.name)}${isMe?" (You)":""}</span>
+                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                  <span style="font-size:12px;font-weight:600">${v} meals</span>
+                  ${baz > 0 ? `<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:1px 6px;border-radius:99px">${fmtTk(baz)}</span>` : ""}
+                  ${balance !== 0 ? `<span style="font-size:10px;background:${balance>0?"var(--green-bg)":"var(--red-bg)"};color:${balance>0?"var(--green)":"var(--red)"};padding:1px 6px;border-radius:99px">${balance>0?"Get":"Pay"} ${fmtTk(Math.abs(balance))}</span>` : `<span style="font-size:10px;background:var(--bg3);color:var(--text3);padding:1px 6px;border-radius:99px">Settled</span>`}
+                </div>
+              </div>
+              <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:${isMe?"var(--accent)":col.fg};border-radius:99px;opacity:${isMe?1:0.7};transition:width .8s var(--ease-spring)"></div>
+              </div>
+            </div>
           </div>`;
         }).join("")}
       </div>
-    </div>` : `
-    <div class="card" style="margin-bottom:14px;text-align:center;padding:24px">
-      <div style="color:var(--text3);font-size:13px">No meal entry for ${isNextDay ? "tomorrow" : "today"} yet</div>
-    </div>`}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);display:flex;gap:12px;flex-wrap:wrap">
+        <span>Bar = meals eaten · Green pill = bazar · Balance based on current rate ${fmtTk(mealRate)}/meal</span>
+      </div>
+    </div>` : ""}
 
-    <!-- ── Bazar contributors + Member meal totals ── -->
-    <div class="member-dashboard-bottom-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="card">
-        <div class="card-title">🛒 Bazar contributors</div>
-        ${topB.length && totalB > 0
-          ? topB.map(([name, amt]) => `
-              <div class="mini-bar">
-                <div class="mini-bar-label">${escapeHtml(name)}</div>
-                <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.round((amt / maxB) * 100)}%"></div></div>
-                <div class="mini-bar-val">${fmtTk(amt)}</div>
-              </div>`).join("")
-          : '<div class="empty">No bazar data this month</div>'}
-      </div>
-      <div class="card">
-        <div class="card-title">🍽 Member meal totals</div>
-        ${members.length
-          ? `<div class="tbl-wrap"><table>
-              <thead><tr><th>Member</th><th>Meals</th><th>Bazar</th><th>Balance</th></tr></thead>
-              <tbody>${members.map(m => {
-                const myM = round2(memMeals[m.name] || 0);
-                const myB = round2(memBazar[m.name] || 0);
-                const mc  = round2(myM * mealRate);
-                const bal = round2(myB - mc);
-                return `<tr>
-                  <td><b>${escapeHtml(m.name)}</b></td>
-                  <td>${myM}</td>
-                  <td style="color:var(--green)">${fmtTk(myB)}</td>
-                  <td class="${bal >= 0 ? "net-pos" : "net-neg"}">${bal >= 0 ? "Get " + fmtTk(bal) : "Pay " + fmtTk(-bal)}</td>
-                </tr>`;
-              }).join("")}</tbody>
-            </table></div>`
-          : '<div class="empty">No members</div>'}
-      </div>
-    </div>`;
+    <!-- ── Bazar contributors ── -->
+    ${topB.length > 0 ? `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">🛒 Bazar contributors — ${MONTHS[monthIndexFromKey(key)]}</div>
+      ${topB.map(([name, amt], i) => {
+        const pct = Math.round((amt / maxB) * 100);
+        const col = avatarCol(members.findIndex(m => m.name === name));
+        const isMe = myName && name === myName;
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;padding:4px 6px;border-radius:var(--radius-sm);background:${isMe?"var(--green-bg)":"transparent"}">
+          <div style="width:26px;height:26px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${initials(name)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+              <span style="font-size:12px;font-weight:${isMe?"700":"500"};color:${isMe?"var(--green)":"var(--text)"}">${escapeHtml(name)}${isMe?" (You)":""}</span>
+              <span style="font-size:12px;font-weight:600;color:var(--green)">${fmtTk(amt)}</span>
+            </div>
+            <div style="height:5px;background:var(--bg4);border-radius:99px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:${isMe?"var(--green)":col.fg};border-radius:99px;opacity:.85;transition:width .8s var(--ease-spring)"></div>
+            </div>
+          </div>
+          <span style="font-size:10px;color:var(--text3);width:26px;text-align:right">${pct}%</span>
+        </div>`;
+      }).join("")}
+    </div>` : ""}
+  `;
 }
 
 /* ═══════════════════════════════════════════════════════════════

@@ -201,3 +201,7 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .onboard-step:last-child{border-bottom:none;}
 .onboard-step-done{color:var(--green);}
 .onboard-step-todo{color:var(--text3);}
+
+/* ── Manager dashboard enhanced stat cards ── */
+.dash-stat{transition:transform .2s var(--ease-spring),box-shadow .2s;}
+.dash-stat:hover{transform:translateY(-3px);box-shadow:0 8px 24px var(--shadow);}
