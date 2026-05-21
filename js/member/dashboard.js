@@ -876,7 +876,7 @@ async function loadMyProfile(member) {
       ` : `<div style="color:var(--text3);font-size:13px">No history</div>`}
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+    <div class="profile-detail-bottom-grid" style="display:grid;gap:12px;margin-top:14px">
       ${recentMonthsHTML}
       ${whatIOweHTML}
     </div>

@@ -139,10 +139,10 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .profile-card.active{border-color:var(--accent);background:var(--accent-bg);}
 
 /* ── My stat rows ── */
-.my-stat-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.my-stat-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .my-stat-row:last-child{border-bottom:none;}
-.my-stat-key{color:var(--text2);}
-.my-stat-val{font-weight:500;}
+.my-stat-key{color:var(--text2);flex:1;min-width:0;}
+.my-stat-val{font-weight:500;flex-shrink:0;text-align:right;white-space:nowrap;}
 
 /* ── Announcements & Chores ── */
 .announce-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:8px;transition:border-color .15s;}
@@ -193,7 +193,9 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 /* ── Settlement formula ── */
 .settlement-formula-box{animation:fadeIn .3s ease;}
 
-/* ── Onboarding checklist ── */
+/* ── Profile detail bottom grid (Recent months + What I Owe) ── */
+.profile-detail-bottom-grid{grid-template-columns:1fr 1fr;}
+
 .onboard-wrap{background:var(--accent-bg);border:1px solid rgba(212,168,83,.2);border-radius:var(--radius);padding:20px;margin-bottom:16px;}
 .onboard-title{font-family:var(--font-serif);font-size:17px;margin-bottom:4px;}
 .onboard-sub{font-size:12px;color:var(--text2);margin-bottom:14px;}

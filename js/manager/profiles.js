@@ -318,18 +318,18 @@ function buildWhatIOweHTML(
         ${myUtilActualPaid > 0 || utilFullyPaid ? `
         <div style="background:rgba(39,174,96,.07);border:1px solid rgba(39,174,96,.25);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px">
           <div style="font-weight:700;color:var(--green);margin-bottom:4px">💳 Utility payment record</div>
-          <div style="display:flex;justify-content:space-between">
-            <span style="color:var(--text2)">Total utility due (Elec+Gas+WiFi+Khala+Other)</span>
-            <span style="font-weight:600">${fmtTk(totalUtilDue)}</span>
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span style="color:var(--text2);flex:1;min-width:0">Total utility due (Elec+Gas+WiFi+Khala+Other)</span>
+            <span style="font-weight:600;flex-shrink:0;white-space:nowrap">${fmtTk(totalUtilDue)}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-top:3px">
-            <span style="color:var(--green)">Paid</span>
-            <span style="font-weight:700;color:var(--green)">${fmtTk(myUtilActualPaid)}</span>
+          <div style="display:flex;justify-content:space-between;gap:8px;margin-top:3px">
+            <span style="color:var(--green);flex:1">Paid</span>
+            <span style="font-weight:700;color:var(--green);flex-shrink:0;white-space:nowrap">${fmtTk(myUtilActualPaid)}</span>
           </div>
           ${myUtilActualPaid < totalUtilDue ? `
-          <div style="display:flex;justify-content:space-between;margin-top:3px">
-            <span style="color:var(--red)">Remaining</span>
-            <span style="font-weight:700;color:var(--red)">${fmtTk(round2(totalUtilDue - myUtilActualPaid))}</span>
+          <div style="display:flex;justify-content:space-between;gap:8px;margin-top:3px">
+            <span style="color:var(--red);flex:1">Remaining</span>
+            <span style="font-weight:700;color:var(--red);flex-shrink:0;white-space:nowrap">${fmtTk(round2(totalUtilDue - myUtilActualPaid))}</span>
           </div>` : ""}
         </div>
         ` : ""}
@@ -380,9 +380,9 @@ function buildWhatIOweHTML(
           : ""
         }
 
-        <div class="my-stat-row" style="font-size:15px;border-top:1px solid var(--border);margin-top:4px;padding-top:8px;background:var(--accent-bg);border-radius:6px;padding:10px;margin-top:8px">
-          <span style="font-weight:700">Net payable</span>
-          <span style="font-weight:800;color:${netTotal > 0 ? "var(--red)" : netTotal < 0 ? "var(--green)" : "var(--text)"}">
+        <div class="my-stat-row" style="font-size:15px;border-top:1px solid var(--border);margin-top:4px;background:var(--accent-bg);border-radius:6px;padding:10px;margin-top:8px;border-bottom:none">
+          <span style="font-weight:700;flex:1">Net payable</span>
+          <span style="font-weight:800;flex-shrink:0;white-space:nowrap;color:${netTotal > 0 ? "var(--red)" : netTotal < 0 ? "var(--green)" : "var(--text)"}">
             ${netTotal > 0 ? "Pay " + fmtTk(netTotal) : netTotal < 0 ? "Get " + fmtTk(Math.abs(netTotal)) : "✓ Settled"}
           </span>
         </div>
@@ -590,7 +590,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
     <div class="detail-section"><div class="detail-section-title">Monthly meal history</div>
       ${r8.length?`<div class="hist-labels">${r8.map(k=>`<span>${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}</span>`).join("")}</div><div class="hist-wrap">${r8.map(k=>{const v=s.byMonth[k]?.meals||0;const h=Math.max(Math.round((v/maxM)*44),3);return`<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}: ${v}</div></div>`;}).join("")}</div>`:'<div style="color:var(--text3);font-size:13px">No history</div>'}
     </div>
-    <div class="profile-detail-bottom-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+    <div class="profile-detail-bottom-grid" style="display:grid;gap:12px;margin-top:14px">
       ${recentMonthsHTML}
       ${whatIOweHTML}
     </div>

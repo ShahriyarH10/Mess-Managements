@@ -77,6 +77,10 @@
   .profile-detail-bottom-grid .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .profile-detail-bottom-grid table{font-size:12px;min-width:360px;}
   .profile-detail-bottom-grid th,.profile-detail-bottom-grid td{padding:6px 8px;white-space:nowrap;}
+  /* What I Owe card: ensure it's full width and rows don't overlap */
+  .profile-detail-bottom-grid .card{width:100%;box-sizing:border-box;}
+  .my-stat-row{font-size:12px;gap:8px;}
+  .my-stat-val{min-width:60px;}
 
   /* Toast above mobile nav */
   #toast{bottom:calc(78px + env(safe-area-inset-bottom, 8px));right:12px;left:12px;max-width:none;text-align:center;}
@@ -139,6 +143,10 @@
 
   .tbl-wrap table{font-size:11px;}
   .tbl-wrap th,.tbl-wrap td{padding:6px;}
+
+  /* What I Owe: tighter rows on very small screens */
+  .my-stat-row{font-size:12px;padding:7px 0;gap:6px;}
+  .my-stat-val{font-size:12px;}
 }
 
 @media(prefers-reduced-motion:reduce){
