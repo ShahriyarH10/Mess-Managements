@@ -148,7 +148,7 @@ function updUtilityPreview() {
 
 async function loadUtilityGroup(type) {
   const { key } = getUtilityGroupKey(type);
-  const { data: rec } = await sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+  const { data: rec } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const bills = rec?.bills || {};
   if (type === "prepaid") {
     ["elec", "gas", "wifi"].forEach(k => { const i = document.getElementById("ut-" + k); if (i) i.value = bills[k] || ""; });
@@ -161,7 +161,7 @@ async function loadUtilityGroup(type) {
 async function saveUtilityGroup(type) {
   if (!requireManager('saveUtilityGroup')) return;
   const { month, year, key } = getUtilityGroupKey(type);
-  const { data: rec } = await sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+  const { data: rec } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const bills = { ...(rec?.bills || {}) };
   if (type === "prepaid") {
     bills.elec = parseFloat(document.getElementById("ut-elec")?.value || 0);
@@ -322,8 +322,8 @@ async function loadUtilityPayments() {
   const prev = previousMonthFromKey(key);
 
   const [currentRes, previousRes] = await Promise.all([
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
   ]);
 
   const currentUtilRec  = currentRes.data;
@@ -372,7 +372,7 @@ function markAllUtilPaid() {
 async function saveUtilityPayments() {
   if (!requireManager('saveUtilityPayments')) return;
   const { month, year, key } = getPaymentKey();
-  const { data: rec } = await sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+  const { data: rec } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const payments = {};
   members.forEach(m => {
     payments[m.name] = {
@@ -393,7 +393,7 @@ async function loadUtilHistory() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
 
-  const { data: all } = await sb.from("utility_payments").select("*").eq("mess_id", messId()).order("month_key", { ascending: false });
+  const { data: all } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).order("month_key", { ascending: false });
   if (!all?.length) { wrap.innerHTML = '<div class="empty">No utility records yet</div>'; return; }
 
   const map = {};

@@ -37,7 +37,7 @@ async function loadAnnouncements(isAdmin) {
   const list = document.getElementById("announce-list");
   if (!list) return;
   try {
-    const { data, error } = await sb.from("announcements").select("*").eq("mess_id", messId())
+    const { data, error } = await getClient().from("announcements").select("*").eq("mess_id", messId())
       .order("pinned", { ascending: false }).order("created_at", { ascending: false });
     if (error) throw error;
     const items = data || [];

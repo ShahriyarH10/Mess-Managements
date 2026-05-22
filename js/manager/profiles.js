@@ -33,9 +33,9 @@ async function loadProfiles() {
   const prevKey = monthKey(prevY, prevM);
   const [allMeals,allBazar,allRent,{data:allUtil},curUtilRes,prevUtilRes] = await Promise.all([
     dbGetAll("meals"), dbGetAll("bazar"), dbGetAll("rent"),
-    sb.from("utility_payments").select("*").eq("mess_id",messId()),
-    sb.from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id",messId()),
+    getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
   ]);
   buildProfileCards(allMeals,allBazar,allRent,allUtil||[],curUtilRes.data,prevUtilRes.data);
   if (selectedProfileId) showProfileDetail(selectedProfileId,allMeals,allBazar,allRent,allUtil||[],null,curUtilRes.data,prevUtilRes.data,curM,curY);
@@ -481,10 +481,10 @@ async function selectProfile(id) {
   const prevKey = monthKey(prevY, prevM);
   const [allM,allB,allR,{data:allU},rentRes,curUtilRes,prevUtilRes] = await Promise.all([
     dbGetAll("meals"), dbGetAll("bazar"), dbGetAll("rent"),
-    sb.from("utility_payments").select("*").eq("mess_id",messId()),
+    getClient().from("utility_payments").select("*").eq("mess_id",messId()),
     dbGetMonth("rent", key),
-    sb.from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
   ]);
   showProfileDetail(id,allM,allB,allR,allU||[],rentRes,curUtilRes.data,prevUtilRes.data,curM,curY);
 }

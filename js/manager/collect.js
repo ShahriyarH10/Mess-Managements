@@ -102,10 +102,10 @@ async function loadCollectMonth() {
   const [allMeals, allBazar, utilCurR, utilPrevR, rentR, utilNextR] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
-    sb.from("rent").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", next.key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
+    getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", next.key).maybeSingle(),
   ]);
 
   const utilRec     = utilCurR.data  || null;
@@ -418,7 +418,7 @@ async function saveChangeRow(memberId) {
 
   try {
     const nm = ctx.nextMonth;
-    const { data: latestNext } = await sb.from("utility_payments")
+    const { data: latestNext } = await getClient().from("utility_payments")
       .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
 
     const nextBills    = { ...(latestNext?.bills    || {}) };
@@ -436,7 +436,7 @@ async function saveChangeRow(memberId) {
     await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
 
     // Clear pending_change from current month bills — it's now resolved
-    const { data: curUtil } = await sb.from("utility_payments")
+    const { data: curUtil } = await getClient().from("utility_payments")
       .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
     const curBills    = { ...(curUtil?.bills    || {}) };
     const curPayments = curUtil?.payments || {};
@@ -769,7 +769,7 @@ async function saveCreditRow(memberId) {
   try {
     // Load the NEXT month's utility record fresh (avoid stale data)
     const nm = ctx.nextMonth;
-    const { data: latestNext } = await sb.from("utility_payments")
+    const { data: latestNext } = await getClient().from("utility_payments")
       .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
 
     const nextBills    = { ...(latestNext?.bills    || {}) };
@@ -874,7 +874,7 @@ async function saveCollectRow(memberId) {
   try {
     /* ── 1) Update utility_payments — utility paid + meal_paid both live here ── */
     if (allocUtil > 0 || allocMeal > 0) {
-      const { data: latestUtil } = await sb.from("utility_payments")
+      const { data: latestUtil } = await getClient().from("utility_payments")
         .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
       const bills    = latestUtil?.bills    || {};
       const payments = { ...(latestUtil?.payments || {}) };
@@ -895,7 +895,7 @@ async function saveCollectRow(memberId) {
 
     /* ── 2) Update rent ─────────────────────────────────────────── */
     if (allocRent > 0) {
-      const { data: latestRent } = await sb.from("rent")
+      const { data: latestRent } = await getClient().from("rent")
         .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
       const existing = latestRent?.entries || [];
       const entries = members.map(mm => {
@@ -960,7 +960,7 @@ async function saveCollectRow(memberId) {
 
       // Persist to current month's bills.pending_change so it survives reload
       try {
-        const { data: freshUtil } = await sb.from("utility_payments")
+        const { data: freshUtil } = await getClient().from("utility_payments")
           .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
         const freshBills    = { ...(freshUtil?.bills    || {}) };
         const freshPayments = freshUtil?.payments || {};

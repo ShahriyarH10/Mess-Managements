@@ -113,9 +113,9 @@ function closeLandingDrawer() {
 }
 
 /* SESSION — localStorage only (sessionStorage copy removed) */
-function saveSession(u, m) {
+function saveSession(u, m, jwt = null) {
   currentUser = u; currentMess = m;
-  const payload = { u, m, exp: Date.now() + SESSION_TTL_MS };
+  const payload = { u, m, jwt, exp: Date.now() + SESSION_TTL_MS };
   localStorage.setItem("mm_session", JSON.stringify(payload));
 }
 function loadSession() {

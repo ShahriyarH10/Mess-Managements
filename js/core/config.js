@@ -6,7 +6,29 @@
 ═══════════════════════════════════════════ */
 const SUPABASE_URL = "https://lrzotklutnyzcadutgwf.supabase.co";
 const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb";
+
+// Anon client — used ONLY during login and mess creation (before JWT exists)
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Returns a mess-scoped authenticated client using the signed session JWT.
+// Falls back to anon client if no token (during login flow).
+function getClient() {
+  const token = _getSessionToken();
+  if (!token) return sb;
+  return supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false },
+  });
+}
+
+function _getSessionToken() {
+  try {
+    const raw = localStorage.getItem("mm_session");
+    if (!raw) return null;
+    const payload = JSON.parse(raw);
+    return payload.jwt || null;
+  } catch { return null; }
+}
 
 /* ═══════════════════════════════════════════
    SECURITY — Password hashing

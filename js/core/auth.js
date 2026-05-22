@@ -8,6 +8,28 @@ function showLogin()      { showScreen("login-screen"); }
 function showCreateMess() { showScreen("create-mess-screen"); }
 
 /* ═══════════════════════════════════════════
+   JWT SIGNING — calls Edge Function to get
+   a mess-scoped JWT for RLS
+═══════════════════════════════════════════ */
+async function signSessionJWT(memberId, messId, role) {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/functions/v1/sign-session-jwt`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, messId, role }),
+      }
+    );
+    const data = await res.json();
+    return data.token || null;
+  } catch (e) {
+    console.error("[Auth] JWT signing failed:", e);
+    return null; // app still works, just without RLS enforcement
+  }
+}
+
+/* ═══════════════════════════════════════════
    CREATE MESS
 ═══════════════════════════════════════════ */
 async function doCreateMess() {
@@ -32,7 +54,8 @@ async function doCreateMess() {
     const { data: member, error: memErr } = await sb.from("members").insert({ mess_id: mess.id, name: myName, username, password: hashedPw, role: "manager" }).select().single();
     if (memErr) throw memErr;
     toast("Mess created! Signing you in…", "success");
-    saveSession({ name: myName, username, role: "manager", memberId: member.id }, mess);
+    const jwt = await signSessionJWT(member.id, mess.id, "manager");
+    saveSession({ name: myName, username, role: "manager", memberId: member.id }, mess, jwt);
     await bootApp();
   } catch (e) {
     showCreateError("Failed to create mess: " + (e.message || "Unknown error"));
@@ -89,14 +112,15 @@ async function doLogin() {
           await sb.from("members").update({ password: newHash }).eq("id", memberRow.id);
         }
         resetLoginAttempts();
-        // Ensure mess object is populated — the join may return null if
-        // the foreign key isn't exposed in Supabase, so fetch it separately as fallback
+        // Ensure mess object is populated
         let messObj = memberRow.messes;
         if (!messObj && memberRow.mess_id) {
           const { data: fetchedMess } = await sb.from("messes").select("*").eq("id", memberRow.mess_id).maybeSingle();
           messObj = fetchedMess;
         }
-        saveSession({ name: memberRow.name, username: user, role: memberRow.role, memberId: memberRow.id }, messObj);
+        // Get a signed JWT with mess_id claim for RLS
+        const jwt = await signSessionJWT(memberRow.id, memberRow.mess_id, memberRow.role);
+        saveSession({ name: memberRow.name, username: user, role: memberRow.role, memberId: memberRow.id }, messObj, jwt);
         await bootApp(); return;
       }
     }
@@ -147,14 +171,14 @@ async function renderSAPage(page) {
   else if (page === "metrics") await renderSAMetrics(main);
 }
 async function renderSAMesses(main) {
-  const { data: messes } = await sb.from("messes").select("*").order("created_at", { ascending: false });
+  const { data: messes } = await getClient().from("messes").select("*").order("created_at", { ascending: false });
   main.innerHTML = `<div class="topbar"><div><div class="page-title">All Messes</div><div class="page-sub">${(messes||[]).length} messes registered</div></div></div>
   <div class="content"><div class="card"><div class="tbl-wrap"><table>
     <thead><tr><th>Mess Name</th><th>Location</th><th>Created</th><th>Members</th><th></th></tr></thead>
     <tbody id="sa-messes-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
   </table></div></div></div>`;
   if (!messes?.length) { document.getElementById("sa-messes-tbody").innerHTML = '<tr><td colspan="5" class="empty">No messes yet</td></tr>'; return; }
-  const { data: memCounts } = await sb.from("members").select("mess_id");
+  const { data: memCounts } = await getClient().from("members").select("mess_id");
   const countMap = {};
   (memCounts||[]).forEach(m => { countMap[m.mess_id] = (countMap[m.mess_id]||0)+1; });
   document.getElementById("sa-messes-tbody").innerHTML = messes.map(m => `<tr>
@@ -175,9 +199,9 @@ async function saDeleteMess(id) {
     onConfirm: async () => {
       try {
         for (const t of ["meals","bazar","rent","utility_payments","members","announcements","chores"]) {
-          await sb.from(t).delete().eq("mess_id", id);
+          await getClient().from(t).delete().eq("mess_id", id);
         }
-        await sb.from("messes").delete().eq("id", id);
+        await getClient().from("messes").delete().eq("id", id);
         toast("Mess deleted"); renderSAPage("messes");
       } catch (e) { toast("Delete failed: " + e.message, "error"); }
     }
@@ -185,8 +209,8 @@ async function saDeleteMess(id) {
 }
 async function renderSAMetrics(main) {
   const [{ data: messes }, { data: mems }] = await Promise.all([
-    sb.from("messes").select("id,name,created_at"),
-    sb.from("members").select("mess_id"),
+    getClient().from("messes").select("id,name,created_at"),
+    getClient().from("members").select("mess_id"),
   ]);
   const totalMesses = messes?.length||0, totalMembers = mems?.length||0;
   const today30 = new Date(Date.now()-30*24*3600*1000).toISOString();
@@ -212,7 +236,7 @@ async function bootApp() {
   updateSidebarUser();
   updateMessBranding();
   await checkDB();
-  navigate(currentUser.role === "manager" ? "dashboard" : "my-dashboard");
+  navigate(currentUser.role === "manager" || currentUser.role === "sub_manager" ? "dashboard" : "my-dashboard");
 }
 
 function updateMessBranding() {
@@ -224,7 +248,7 @@ function updateMessBranding() {
 
 async function checkDB() {
   try {
-    await sb.from("messes").select("id",{count:"exact",head:true});
+    await getClient().from("messes").select("id",{count:"exact",head:true});
     const dot = document.getElementById("db-dot");
     const lbl = document.getElementById("db-label");
     if(dot){ dot.style.background="var(--green)"; dot.classList.add("live"); }

@@ -34,15 +34,34 @@ async function renderMyMeals(el) {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)))
     .slice(0, 20);
 
+  const dt = today();
+
+  // Load upcoming absences for this member
+  const upcoming = await (async () => {
+    try {
+      const { data } = await getClient().from("meal_attendance")
+        .select("*")
+        .eq("mess_id", messId())
+        .eq("member_id", member.id)
+        .gte("date", dt)
+        .order("date", { ascending: true })
+        .limit(30);
+      return (data || []).filter(a => !a.day_meal || !a.night_meal);
+    } catch { return []; }
+  })();
+
+  window._attMemberId = member.id;
+
   el.innerHTML = `
   <div class="topbar">
     <div>
-      <div class="page-title">Meal Entry</div>
-      <div class="page-sub">Update your own meal count directly</div>
+      <div class="page-title">Meal Log</div>
+      <div class="page-sub">Mark absences & update your meal count</div>
     </div>
   </div>
 
   <div class="content">
+
     <div class="grid-2" style="align-items:start;margin-bottom:14px">
       <div class="card">
         <div class="card-title">My meal entry</div>
@@ -53,7 +72,7 @@ async function renderMyMeals(el) {
 
         <div class="date-row">
           <label>Date</label>
-          <input type="date" class="input" id="my-meal-date" value="${today()}" style="width:170px" onchange="fillMyMealFromDate()"/>
+          <input type="date" class="input" id="my-meal-date" value="${dt}" style="width:170px" onchange="fillMyMealFromDate()"/>
           <button class="btn btn-ghost btn-sm" onclick="fillMyMealFromDate()">Load</button>
         </div>
 
@@ -62,7 +81,6 @@ async function renderMyMeals(el) {
             <label>Day meals</label>
             <input type="number" class="input" id="my-meal-day" min="0" max="4" step="0.5" value="0"/>
           </div>
-
           <div class="field">
             <label>Night meals</label>
             <input type="number" class="input" id="my-meal-night" min="0" max="4" step="0.5" value="0"/>
@@ -79,50 +97,61 @@ async function renderMyMeals(el) {
 
       <div class="card">
         <div class="card-title">Month history</div>
-
         <div class="modal-sub" style="margin-bottom:12px">
-          Click a month, like April 2026 or May 2026, to open your colored meal calendar.
+          Click a month to open your colored meal calendar.
         </div>
-
         ${buildMealMonthButtons(monthKeys, "openMyMealMonth", allMeals)}
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">My saved meal entries</div>
+    <!-- ── Absence + Upcoming side by side ── -->
+    <div class="grid-2" style="align-items:start">
 
-      ${
-        myRows.length === 0
-          ? `<div class="empty">No meal entries yet</div>`
-          : `<div class="tbl-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Day</th>
-                    <th>Night</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px">🗓️ Mark Absence</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="field" style="margin:0">
+            <label>From date</label>
+            <input type="date" class="input" id="abs-from" value="${dt}" min="${dt}"/>
+          </div>
+          <div class="field" style="margin:0">
+            <label>To date</label>
+            <input type="date" class="input" id="abs-to" value="${dt}" min="${dt}"/>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border)">
+            <input type="checkbox" id="abs-skip-day" checked style="width:16px;height:16px"> ☀ Skip day
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border)">
+            <input type="checkbox" id="abs-skip-night" checked style="width:16px;height:16px"> 🌙 Skip night
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn btn-primary" onclick="markAbsenceRange()" style="flex:1;justify-content:center">✗ Mark Absent</button>
+          <button class="btn btn-ghost" onclick="clearAbsenceRange()" style="flex:1;justify-content:center">✓ Present</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">Mark a date range absent at once. Manager sees this on the Attendance Board.</div>
+      </div>
 
-                <tbody>
-                  ${
-                    myRows.map(r => {
-                      const p = mealPartsFromObj(r.meals || {}, member.name);
+      <div class="card" id="upcoming-absences">
+        <div class="card-title" style="margin-bottom:8px">📋 Upcoming Absences</div>
+        ${upcoming.length ? `
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${upcoming.map(a => {
+              const skipDay = !a.day_meal, skipNight = !a.night_meal;
+              return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--red-bg);border:1px solid rgba(224,82,82,.2);border-radius:var(--radius-sm)">
+                <div style="min-width:0">
+                  <div style="font-size:13px;font-weight:600">${a.date}</div>
+                  <div style="font-size:11px;color:var(--text3)">${skipDay && skipNight ? "All meals off" : skipDay ? "☀ Day off" : "🌙 Night off"}</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="cancelAbsence('${a.id}')" style="flex-shrink:0">✕</button>
+              </div>`;
+            }).join("")}
+          </div>
+        ` : '<div style="font-size:13px;color:var(--text3)">No upcoming absences — you\'re eating all meals! 🍽️</div>'}
+      </div>
 
-                      return `
-                      <tr>
-                        <td><b>${r.date}</b></td>
-                        <td>${p.day > 0 ? `<span class="badge badge-blue">${p.day}</span>` : "—"}</td>
-                        <td>${p.night > 0 ? `<span class="badge badge-amber">${p.night}</span>` : "—"}</td>
-                        <td><b>${p.total}</b></td>
-                      </tr>`;
-                    }).join("")
-                  }
-                </tbody>
-              </table>
-            </div>`
-      }
     </div>
   </div>`;
 

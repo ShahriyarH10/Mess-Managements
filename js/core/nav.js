@@ -17,6 +17,13 @@ const IC = {
   logout:  `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6"/></svg>`,
   moon:    `<svg class="nav-icon moon-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 10.5A5.5 5.5 0 015.5 3 6 6 0 1013 10.5z"/></svg>`,
   sun:     `<svg class="nav-icon sun-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M13 3l-1.5 1.5M4.5 11.5L3 13"/></svg>`,
+  chart:   `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l3-4 3 2 3-5 3 3"/><path d="M2 14h12"/></svg>`,
+  export:  `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v8M5 6l3 3 3-3"/><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>`,
+  audit:   `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>`,
+  attend:  `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11" rx="1"/><path d="M5 1v3M11 1v3M2 7h12M6 11l1.5 1.5L11 9"/></svg>`,
+  rules:   `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 6h6M5 9h4M5 12h3"/></svg>`,
+  broadcast:`<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8c0 0 3-5 7-5s7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>`,
+  roles:   `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2"/><circle cx="11" cy="5" r="2"/><path d="M1 13c0-2.2 1.8-4 4-4"/><path d="M8 13c0-2.2 1.8-4 4-4s4 1.8 4 4"/><path d="M7 9h2"/></svg>`,
 };
 
 const MANAGER_NAV = [
@@ -30,15 +37,21 @@ const MANAGER_NAV = [
   { page:"utility",       label:"Utility Entry",   icon:IC.util },
   { page:"rent",          label:"Room Rent",       icon:IC.rent },
   { page:"collect",       label:"Collect Payment", icon:IC.bazar },
+  { page:"attendance",    label:"Absence Calendar",icon:IC.attend },
 
   { section:"Reports" },
   { page:"log",           label:"Monthly Log",     icon:IC.log },
+  { page:"rate-chart",    label:"Meal Rate Chart", icon:IC.chart },
+  { page:"audit-log",     label:"Audit Log",       icon:IC.audit },
 
   { section:"Mess" },
   { page:"announce",      label:"Announcements",   icon:IC.announce },
+  { page:"broadcasts",    label:"Broadcasts",      icon:IC.broadcast },
+  { page:"mess-rules",    label:"Mess Rules",      icon:IC.rules },
   { page:"chores",        label:"Chore Roster",    icon:IC.chores },
   { page:"notifications", label:"Notifications",   icon:IC.bell },
   { page:"members",       label:"Members",         icon:IC.members },
+  { page:"manager-roles", label:"Manager Roles",   icon:IC.roles },
   { page:"transfer",      label:"Transfer Role",   icon:IC.transfer },
 
   { section:"Account" },
@@ -57,6 +70,7 @@ const MEMBER_NAV = [
   { page:"mess-overview", label:"Mess Overview",  icon:IC.log },
   { page:"my-announce",   label:"Announcements",  icon:IC.announce },
   { page:"my-chores",     label:"Chore Roster",   icon:IC.chores },
+  { page:"my-rules",      label:"Mess Info",      icon:IC.rules },
 ];
 
 /* ═══════════════════════════════════════════
@@ -67,12 +81,19 @@ const MEMBER_NAV = [
 ═══════════════════════════════════════════ */
 function buildNav() {
   const isManager = currentUser.role === "manager";
-  const nav = isManager ? MANAGER_NAV : MEMBER_NAV;
+  const isSubMgr  = currentUser.role === "sub_manager";
+  const nav = (isManager || isSubMgr) ? MANAGER_NAV : MEMBER_NAV;
+
+  // Filter out pages sub_manager can't access
+  const subMgrBlocked = ["members","transfer","manager-roles"];
+  const filteredNav = isSubMgr
+    ? nav.filter(i => !i.page || !subMgrBlocked.includes(i.page))
+    : nav;
 
   /* Sidebar */
   let sidebarHTML = "";
 
-  for (const i of nav) {
+  for (const i of filteredNav) {
     if (i.section) {
       sidebarHTML += '<div class="nav-section">' + i.section + '</div>';
     } else {
@@ -114,11 +135,11 @@ function buildNav() {
 
   const mainPages = isManager ? managerMainPages : memberMainPages;
 
-  const mobileMainItems = nav.filter(i =>
+  const mobileMainItems = filteredNav.filter(i =>
     !i.section && mainPages.includes(i.page)
   );
 
-  const mobileMoreItems = nav.filter(i =>
+  const mobileMoreItems = filteredNav.filter(i =>
     !i.section && !mainPages.includes(i.page)
   );
 
@@ -322,10 +343,13 @@ function updateSidebarUser() {
   if (!currentUser) return;
 
   const isManager = currentUser.role === "manager";
+  const isSubMgr  = currentUser.role === "sub_manager";
   const idx = members.findIndex(m => m.id === currentUser.memberId);
   const col = isManager
     ? { bg:"#2a2218", fg:"#d4a853" }
-    : avatarCol(idx);
+    : isSubMgr
+      ? { bg:"#1a2a3a", fg:"#5b9bd5" }
+      : avatarCol(idx);
 
   document.getElementById("sidebar-user").innerHTML = `
     <div class="su-avatar" style="background:${col.bg};color:${col.fg}">
@@ -334,7 +358,7 @@ function updateSidebarUser() {
 
     <div class="su-info">
       <div class="su-name">${currentUser.name}</div>
-      <div class="su-role">${isManager ? "👑 Manager" : "Member"}</div>
+      <div class="su-role">${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"}</div>
     </div>`;
 
   const mob = document.getElementById("mob-user-badge");
@@ -383,24 +407,25 @@ async function renderPage(page) {
 
   const main = document.getElementById("main-content");
   const isManager = currentUser.role === "manager";
+  const isSubMgr  = currentUser.role === "sub_manager";
 
-  const managerOnly = [
-    "dashboard",
-    "profiles",
-    "meals",
-    "bazar",
-    "utility",
-    "rent",
-    "collect",
-    "log",
-    "members",
-    "announce",
-    "chores",
-    "transfer",
-    "notifications",
+  // Pages only full manager can access
+  const fullManagerOnly = [
+    "members", "transfer", "manager-roles",
   ];
 
-  if (!isManager && managerOnly.includes(page)) {
+  // Pages manager OR sub_manager can access
+  const managerOrSubOnly = [
+    "dashboard", "profiles", "meals", "bazar", "utility", "rent",
+    "collect", "log", "announce", "chores", "notifications",
+    "attendance", "rate-chart", "audit-log",
+    "broadcasts", "mess-rules",
+  ];
+
+  if (!isManager && fullManagerOnly.includes(page)) {
+    page = isSubMgr ? "dashboard" : "my-dashboard";
+  }
+  if (!isManager && !isSubMgr && managerOrSubOnly.includes(page)) {
     page = "my-dashboard";
   }
 
@@ -428,6 +453,15 @@ async function renderPage(page) {
       case "transfer":       await renderTransferRole(div);           break;
       case "notifications":  await renderNotifications(div);          break;
 
+      // ── New manager pages ──
+      case "attendance":     await renderAttendanceBoard(div);        break;
+      case "rate-chart":     await renderMealRateChart(div);          break;
+      case "audit-log":      await renderAuditLog(div);               break;
+      case "broadcasts":     await renderBroadcasts(div);             break;
+      case "mess-rules":     await renderMessRules(div, true);        break;
+      case "manager-roles":  await renderManagerRoles(div);           break;
+
+      // ── Member pages ──
       case "my-profile":     await renderMyProfile(div);              break;
       case "my-dashboard":   await renderMyDashboard(div);            break;
       case "my-meals":       await renderMyMeals(div);                break;
@@ -436,6 +470,9 @@ async function renderPage(page) {
       case "mess-overview":  await renderMessOverview(div);           break;
       case "my-announce":    await renderAnnouncements(div, false);   break;
       case "my-chores":      await renderChores(div, false);          break;
+
+      // ── New member pages ──
+      case "my-rules":       await renderMessRules(div, false);       break;
 
       default:
         div.innerHTML = '<div class="content"><div class="empty">Page not found</div></div>';

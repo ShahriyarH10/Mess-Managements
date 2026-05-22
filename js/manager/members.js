@@ -35,8 +35,8 @@ async function doTransferRole() {
     danger: true,
     onConfirm: async () => {
       try {
-        const {error:e1}=await sb.from('members').update({role:'member'}).eq('id',currentUser.memberId); if(e1) throw e1;
-        const {error:e2}=await sb.from('members').update({role:'manager'}).eq('id',target.id); if(e2) throw e2;
+        const {error:e1}=await getClient().from('members').update({role:'member'}).eq('id',currentUser.memberId); if(e1) throw e1;
+        const {error:e2}=await getClient().from('members').update({role:'manager'}).eq('id',target.id); if(e2) throw e2;
         toast(target.name+' is now the manager!','success');
         currentUser.role='member'; saveSession(currentUser,currentMess);
         members=await dbGetMembers(); buildNav(); updateSidebarUser(); navigate('my-dashboard');
@@ -44,8 +44,8 @@ async function doTransferRole() {
     }
   }); return;
   try {
-    const {error:e1}=await sb.from("members").update({role:"member"}).eq("id",currentUser.memberId); if(e1) throw e1;
-    const {error:e2}=await sb.from("members").update({role:"manager"}).eq("id",target.id); if(e2) throw e2;
+    const {error:e1}=await getClient().from("members").update({role:"member"}).eq("id",currentUser.memberId); if(e1) throw e1;
+    const {error:e2}=await getClient().from("members").update({role:"manager"}).eq("id",target.id); if(e2) throw e2;
     toast(`${target.name} is now the manager!`,"success");
     currentUser.role="member"; saveSession(currentUser,currentMess);
     members=await dbGetMembers(); buildNav(); updateSidebarUser(); navigate("my-dashboard");
@@ -126,7 +126,7 @@ async function addMember() {
   if(members.find(m=>m.username===d.username)){ toast("Username taken"); return; }
   try{
     d.password = await hashPassword(d.password);
-    await dbSaveMember(d); members=await dbGetMembers(); closeModal(); toast(d.name+" added","success"); renderMembersTable();
+    await dbSaveMember(d); await logAudit("create","member",d.name,`Member "${d.name}" added`); members=await dbGetMembers(); closeModal(); toast(d.name+" added","success"); renderMembersTable();
   }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function updateMember(id) {
@@ -142,7 +142,7 @@ async function updateMember(id) {
       // Left blank — keep existing password unchanged
       delete d.password;
     }
-    await dbSaveMember(d); members=await dbGetMembers(); closeModal(); toast("Updated","success"); renderMembersTable();
+    await dbSaveMember(d); await logAudit("update","member",d.name,`Member "${d.name}" updated`); members=await dbGetMembers(); closeModal(); toast("Updated","success"); renderMembersTable();
   }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function deleteMember(id) {
@@ -154,7 +154,7 @@ async function deleteMember(id) {
     confirmLabel: 'Remove member',
     danger: true,
     onConfirm: async () => {
-      try{ await dbDeleteMember(id); members=await dbGetMembers(); toast(m.name+' removed'); renderMembersTable(); }catch(e){ toast('Error','error'); }
+      try{ await dbDeleteMember(id); await logAudit("delete","member",m.name,`Member "${m.name}" removed`); members=await dbGetMembers(); toast(m.name+' removed'); renderMembersTable(); }catch(e){ toast('Error','error'); }
     }
   }); return;
   try{ await dbDeleteMember(id); members=await dbGetMembers(); toast(m.name+" removed"); renderMembersTable(); }catch(e){ toast("Error","error"); }
@@ -206,7 +206,7 @@ async function doManagerResetPassword(memberId, memberName) {
 
   try {
     const newHash = await hashPassword(newPw);
-    const { error } = await sb.from("members").update({ password: newHash }).eq("id", memberId);
+    const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId);
     if (error) throw error;
     closeModal();
     toast(`Password reset for ${memberName} ✓`, "success");

@@ -7,8 +7,8 @@ async function renderDashboard(el) {
   const prevInfo = previousMonth(month, year);
   const [allMeals, allBazar, rentRec, utilRes, prevUtilRes] = await Promise.all([
     dbGetAll("meals"), dbGetAll("bazar"), dbGetMonth("rent", key),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevInfo.key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevInfo.key).maybeSingle(),
   ]);
   const utilRec = utilRes.data;
 

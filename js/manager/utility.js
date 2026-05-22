@@ -28,7 +28,7 @@ async function loadRentMonth() {
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);
-  const {data:rec}=await sb.from("rent").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle();
+  const {data:rec}=await getClient().from("rent").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle();
   const tbody=document.getElementById("rent-tbody"); if(!tbody) return;
   tbody.innerHTML=members.map(m=>{
     const e=rec?.entries?.find(x=>x.name===m.name)||{};
@@ -107,7 +107,7 @@ async function loadRentHistory() {
   wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
 
   const [{ data: all }, allMeals] = await Promise.all([
-    sb.from("rent").select("*").eq("mess_id", messId()).order("month_key", { ascending: false }),
+    getClient().from("rent").select("*").eq("mess_id", messId()).order("month_key", { ascending: false }),
     dbGetAll("meals"),
   ]);
 

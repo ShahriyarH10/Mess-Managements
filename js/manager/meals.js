@@ -56,7 +56,7 @@ function setAllMeals(target,v) {
 }
 async function loadMealDate() {
   const date=document.getElementById("meal-date")?.value; if(!date) return;
-  const {data:rec}=await sb.from("meals").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
+  const {data:rec}=await getClient().from("meals").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
   if(rec){ members.forEach(m=>{ mealDayVals[m.id]=Number(rec.meals[m.name+"_day"]??rec.meals[m.name]??0); mealNightVals[m.id]=Number(rec.meals[m.name+"_night"]??0); }); buildMealGrid(); toast("Loaded entry for "+date); }
   else { members.forEach(m=>{ mealDayVals[m.id]=0; mealNightVals[m.id]=0; }); buildMealGrid(); }
 }
@@ -65,7 +65,7 @@ async function saveMeals() {
   const date=document.getElementById("meal-date")?.value; if(!date){ toast("Select a date"); return; }
   const meals={};
   members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
-  try { await dbUpsertMeals(date,meals); toast("Meals saved","success"); loadMealsRecent(); loadManagerMealMonths(); } catch(e){ toast("Save failed: "+e.message,"error"); }
+  try { await dbUpsertMeals(date,meals); await logAudit("update","meal",date,`Meals saved for ${date}`); toast("Meals saved","success"); loadMealsRecent(); loadManagerMealMonths(); } catch(e){ toast("Save failed: "+e.message,"error"); }
 }
 async function loadMealsRecent() {
   const wrap=document.getElementById("meals-tbl"); if(!wrap) return;
@@ -112,7 +112,7 @@ function buildBazarGrid() {
 function updBazarSum() { let b=0; members.forEach(m=>{ b+=parseFloat(document.getElementById("bz-"+m.id)?.value||0); }); const bt=document.getElementById("bazar-tot"); if(bt) bt.textContent=fmtTk(b); }
 async function loadBazarDate() {
   const date=document.getElementById("bazar-date")?.value; if(!date) return;
-  const {data:rec}=await sb.from("bazar").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
+  const {data:rec}=await getClient().from("bazar").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
   if(rec){ members.forEach(m=>{ const e=document.getElementById("bz-"+m.id); if(e) e.value=rec.bazar[m.name]??0; }); updBazarSum(); toast("Loaded"); }
 }
 function clearBazar() { members.forEach(m=>{ const e=document.getElementById("bz-"+m.id); if(e) e.value=""; }); updBazarSum(); }
@@ -120,7 +120,7 @@ async function saveBazar() {
   if (!requireManager('saveBazar')) return;
   const date=document.getElementById("bazar-date")?.value; if(!date){ toast("Select a date"); return; }
   const bazar={}; members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
-  try{ await dbUpsertBazar(date,bazar); toast("Bazar saved","success"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error: "+e.message,"error"); }
+  try{ await dbUpsertBazar(date,bazar); await logAudit("update","bazar",date,`Bazar saved for ${date}`); toast("Bazar saved","success"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function loadBazarRecent() {
   const wrap=document.getElementById("bazar-tbl"); if(!wrap) return;

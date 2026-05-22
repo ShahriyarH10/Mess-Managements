@@ -27,10 +27,10 @@ async function renderMyDashboard(el) {
     dbGetAll("meals"),
     dbGetAll("bazar"),
     dbGetAll("rent"),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()),
     dbGetMonth("rent", key),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevKey).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevKey).maybeSingle(),
   ]);
 
   const utilRec     = curUtilRes.data;
@@ -77,6 +77,22 @@ async function renderMyDashboard(el) {
     : calc.netPayable < 0
       ? "You Get " + fmtTk(Math.abs(calc.netPayable))
       : "Settled";
+
+  // Load broadcasts
+  let broadcastBanner = "";
+  try {
+    const bcs = await dbGetBroadcasts();
+    if (bcs.length) {
+      broadcastBanner = bcs.map(b => {
+        const isUrgent = b.priority === "urgent";
+        return `<div style="background:${isUrgent ? "var(--red-bg)" : "var(--accent-bg)"};border:1px solid ${isUrgent ? "rgba(224,82,82,.25)" : "rgba(212,168,83,.2)"};border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px;flex-shrink:0">${isUrgent ? "🔴" : "📢"}</span>
+          <div><div style="font-size:13px;color:var(--text);line-height:1.5">${escapeHtml(b.message)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${escapeHtml(b.author)}</div></div>
+        </div>`;
+      }).join("");
+    }
+  } catch (_) {}
+
 
   // Charges breakdown for visual bar
   const totalCharges = calc.totalPay || 1;
@@ -147,6 +163,7 @@ async function renderMyDashboard(el) {
     </div>
   </div>
   <div class="content">
+    ${broadcastBanner}
 
     <!-- ── Net payable hero card ── -->
     <div style="background:${netBg};border:1px solid ${netBorder};border-radius:var(--radius);padding:18px 20px;margin-bottom:14px">
@@ -697,7 +714,7 @@ async function loadMessOverview() {
     dbGetAll("meals"),
     dbGetAll("bazar"),
     dbGetAll("rent"),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()),
   ]);
   body.innerHTML = buildMessOverviewBlock(allM, allB, allR, allU || [], key, { hideHeading: true });
 }
@@ -739,10 +756,10 @@ async function loadMyProfile(member) {
 
   const [allM, allB, allR, { data: allU }, profRentRes, profCurUtilRes, profPrevUtilRes] = await Promise.all([
     dbGetAll("meals"), dbGetAll("bazar"), dbGetAll("rent"),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()),
     dbGetMonth("rent", curKey),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", curKey).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", curKey).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
   ]);
 
   const curUtilRec  = profCurUtilRes.data;
@@ -929,7 +946,7 @@ async function doChangePassword(memberId) {
   try {
     // Verify current password against DB
     const currentHash = await hashPassword(currentPw);
-    const { data: member } = await sb.from("members").select("id, password")
+    const { data: member } = await getClient().from("members").select("id, password")
       .eq("id", memberId).maybeSingle();
 
     if (!member) return showErr("Incorrect password. Please try again.");
@@ -941,7 +958,7 @@ async function doChangePassword(memberId) {
 
     // Save new hashed password
     const newHash = await hashPassword(newPw);
-    const { error } = await sb.from("members").update({ password: newHash }).eq("id", memberId);
+    const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId);
     if (error) throw error;
 
     closeModal();

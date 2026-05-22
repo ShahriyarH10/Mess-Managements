@@ -56,6 +56,7 @@ function renderLog(el) {
           ${opts.yearOptions}
         </select>
         <button class="btn btn-primary" onclick="loadLog()">Generate Report</button>
+        <button class="btn btn-ghost" onclick="doExportReport()">🖨️ Print PDF</button>
       </div>
 
       <div id="log-content">
@@ -88,8 +89,8 @@ async function loadLog() {
     dbGetAll("meals"),
     dbGetAll("bazar"),
     dbGetMonth("rent", settlementKey),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
   ]);
 
   const currentUtilRec  = currentUtilRes.data;
@@ -519,4 +520,431 @@ function showSettlementBreakdown(idx) {
 
   document.querySelector(".modal").classList.remove("modal-wide");
   openModal();
+}
+
+
+/* ═══════════════════════════════════════════
+   PRINT SETTLEMENT — HTML print, landscape
+   Page 1: exact same settlement table as screen
+   Page 2+: one receipt card per member
+═══════════════════════════════════════════ */
+async function doExportReport() {
+  const monthEl = document.getElementById("log-month");
+  const yearEl  = document.getElementById("log-year");
+  if (!monthEl || !yearEl) { toast("Select a month first", "error"); return; }
+
+  const month         = parseInt(monthEl.value);
+  const year          = parseInt(yearEl.value);
+  const settlementKey = monthKey(year, month);
+  const prev          = previousMonth(month, year);
+  const sourceKey     = prev.key;
+
+  const btn = document.activeElement;
+  if (btn) { btn.disabled = true; btn.textContent = "Preparing..."; }
+
+  try {
+    const [allMeals, allBazar, currentRentRec, currentUtilRes, previousUtilRes] = await Promise.all([
+      dbGetAll("meals"), dbGetAll("bazar"), dbGetMonth("rent", settlementKey),
+      getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
+      getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
+    ]);
+
+    const currentUtilRec  = currentUtilRes.data;
+    const previousUtilRec = previousUtilRes.data;
+
+    const payData = members.map(m =>
+      calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey)
+    );
+
+    const totalMeals    = round2(payData[0]?.totalMeals || 0);
+    const totalBazar    = round2(payData[0]?.totalBazar  || 0);
+    const mealRate      = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
+    const prepaidTotal  = utilTotalFromBills(currentUtilRec?.bills || {}, UTIL_PREPAID_KEYS);
+    const elecAmt       = Number(currentUtilRec?.bills?.elec  || 0);
+    const gasAmt        = Number(currentUtilRec?.bills?.gas   || 0);
+    const wifiAmt       = Number(currentUtilRec?.bills?.wifi  || 0);
+    const khalaTotal    = Number(previousUtilRec?.bills?.khala || 0);
+    const otherTotal    = Number(previousUtilRec?.bills?.other || 0);
+    const postpaidTotal = round2(khalaTotal + otherTotal);
+    const prepaidShare  = members.length > 0 ? round2(prepaidTotal / members.length) : 0;
+    const grandNet      = round2(payData.reduce((s,p) => s + p.netPayable, 0));
+    const totalMealCost = round2(payData.reduce((s,p) => s + p.mealCost, 0));
+    const totalRent     = round2(payData.reduce((s,p) => s + p.roomRent, 0));
+    const totalUtilPaid = round2(payData.reduce((s,p) => s + p.utilityPaid, 0));
+    const totalRentPaid = round2(payData.reduce((s,p) => s + p.roomRentPaid, 0));
+    const totalMealPaid = round2(payData.reduce((s,p) => s + (p.mealPaid||0), 0));
+    const totalCarried  = round2(payData.reduce((s,p) => s + (p.messCredit||0), 0));
+
+    const messName    = currentMess?.name || "Mess";
+    const managerName = members.find(m => m.role === "manager")?.name || currentUser?.name || "";
+    const genDate     = new Date().toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", hour12:true });
+    const receiptNo   = "SET-" + year + String(month+1).padStart(2,"0") + "-" + String(Date.now()).slice(-4);
+
+    function fP(v) { return "৳" + Number(v).toLocaleString("en-IN", { minimumFractionDigits:0, maximumFractionDigits:2 }); }
+    function eh(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+    /* ── Settlement table rows ── */
+    const tableRows = payData.map(p => {
+      const net = p.netPayable;
+      const netColor = net > 0 ? "#c0392b" : net < 0 ? "#27ae60" : "#888";
+      const netHtml  = net > 0 ? `Pay ${fP(net)}` : net < 0 ? `Get ${fP(Math.abs(net))}` : "&#10003; Settled";
+      const rentBg   = p.rentStatus === "paid" ? "#e8f8f0" : p.rentStatus === "partial" ? "#fff8e8" : "#fdf0f0";
+      const rentCol  = p.rentStatus === "paid" ? "#27ae60" : p.rentStatus === "partial" ? "#e67e22" : "#c0392b";
+      const rentTxt  = p.rentStatus === "paid" ? "&#10003;" : p.rentStatus === "partial" ? "~" : "&#10007;";
+      const utilBg   = p.utilityStatus === "paid" ? "#e8f8f0" : p.utilityStatus === "partial" ? "#fff8e8" : "#fdf0f0";
+      const utilCol  = p.utilityStatus === "paid" ? "#27ae60" : p.utilityStatus === "partial" ? "#e67e22" : "#c0392b";
+      const utilTxt  = p.utilityStatus === "paid" ? "&#10003;" : p.utilityStatus === "partial" ? "~" : "&#10007;";
+      return `<tr>
+        <td>
+          <b>${eh(p.memberName)}</b>
+          <div style="display:flex;gap:4px;margin-top:3px">
+            <span style="font-size:9px;padding:1px 6px;border-radius:10px;background:${rentBg};color:${rentCol};border:1px solid ${rentCol}">rent ${rentTxt}</span>
+            <span style="font-size:9px;padding:1px 6px;border-radius:10px;background:${utilBg};color:${utilCol};border:1px solid ${utilCol}">util ${utilTxt}</span>
+          </div>
+        </td>
+        <td class="num">
+          <b>${p.memberMeals}</b>
+          <div class="sub">${p.memberMeals} &times; ${fP(p.mealRate)}</div>
+        </td>
+        <td class="num red">${fP(p.mealCost)}</td>
+        <td class="num red">${fP(p.khalaShare)}</td>
+        <td class="num red">${fP(p.otherShare)}</td>
+        <td class="num blue">
+          ${fP(p.prepaidUtility)}
+          <div class="sub">${fP(p.prepaidTotal)} &divide; ${members.length}</div>
+        </td>
+        <td class="num blue">${fP(p.roomRent)}</td>
+        <td class="num green">${fP(p.memberBazar)}</td>
+        <td class="num ${(p.mealPaid||0)>0?"green":"muted"}">${(p.mealPaid||0)>0?fP(p.mealPaid):fP(0)}</td>
+        <td class="num ${p.roomRentPaid>0?"green":"muted"}">${p.roomRentPaid>0?fP(p.roomRentPaid):fP(0)}</td>
+        <td class="num ${p.utilityPaid>0?"green":"muted"}">${p.utilityPaid>0?fP(p.utilityPaid):fP(0)}</td>
+        <td class="num ${(p.messCredit||0)>0?"blue":"muted"}">${(p.messCredit||0)>0?"&#8629; "+fP(p.messCredit):"&mdash;"}</td>
+        <td class="num net-cell"><b style="color:${netColor};font-size:13px">${netHtml}</b></td>
+      </tr>`;
+    }).join("");
+
+    /* ── Totals footer ── */
+    const grandColor = grandNet > 0 ? "#c0392b" : grandNet < 0 ? "#27ae60" : "#888";
+    const grandHtml  = grandNet > 0 ? `Pay ${fP(grandNet)}` : grandNet < 0 ? `Get ${fP(Math.abs(grandNet))}` : "&#10003; Balanced";
+    const totalsRow  = `<tr class="totals-row">
+      <td><b>Total</b></td>
+      <td class="num"><b>${totalMeals}</b></td>
+      <td class="num">${fP(totalMealCost)}</td>
+      <td class="num">${fP(khalaTotal)}</td>
+      <td class="num">${fP(otherTotal)}</td>
+      <td class="num">${fP(prepaidTotal)}</td>
+      <td class="num">${fP(totalRent)}</td>
+      <td class="num">${fP(totalBazar)}</td>
+      <td class="num">${fP(totalMealPaid)}</td>
+      <td class="num">${fP(totalRentPaid)}</td>
+      <td class="num">${fP(totalUtilPaid)}</td>
+      <td class="num" style="color:#5b9bd5">${fP(totalCarried)}</td>
+      <td class="num net-cell"><b style="color:${grandColor}">${grandHtml}</b></td>
+    </tr>`;
+
+    /* ── Member receipt cards (page-break separated) ── */
+    const memberCards = payData.map(p => {
+      const net      = p.netPayable;
+      const netColor = net > 0 ? "#c0392b" : net < 0 ? "#27ae60" : "#888";
+      const netLabel = net > 0 ? `Pay ${fP(net)}` : net < 0 ? `Get ${fP(Math.abs(net))}` : "&#10003; Settled";
+      const netBg    = net > 0 ? "#fdf0f0" : net < 0 ? "#e8f8f0" : "#f7f7f7";
+      const netBdr   = net > 0 ? "#f5c6c6" : net < 0 ? "#b2dfce" : "#ddd";
+      const rentCol  = p.rentStatus === "paid" ? "#27ae60" : p.rentStatus === "partial" ? "#e67e22" : "#c0392b";
+      const utilCol  = p.utilityStatus === "paid" ? "#27ae60" : p.utilityStatus === "partial" ? "#e67e22" : "#c0392b";
+
+      return `
+      <div class="member-card">
+        <div class="card-header">
+          <div>
+            <div class="card-name">${eh(p.memberName)}</div>
+            <div class="card-badges">
+              <span style="color:${rentCol};border-color:${rentCol}" class="cbadge">Rent: ${p.rentStatus==="paid"?"Paid":p.rentStatus==="partial"?"Partial":"Unpaid"}</span>
+              <span style="color:${utilCol};border-color:${utilCol}" class="cbadge">Utility: ${p.utilityStatus==="paid"?"Paid":p.utilityStatus==="partial"?"Partial":"Unpaid"}</span>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:.5px">Net Payable</div>
+            <div style="font-size:20px;font-weight:800;color:${netColor}">${netLabel}</div>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="card-col">
+            <div class="card-section-lbl" style="color:#c0392b">&#9679; Postpaid — ${MONTHS[prev.month]} ${prev.year}</div>
+            <div class="card-row"><span>Meals consumed</span><span class="card-val">${p.memberMeals} meals</span></div>
+            <div class="card-row"><span>Meal rate</span><span class="card-val">${fP(p.mealRate)} / meal</span></div>
+            <div class="card-row"><span>Meal cost (${p.memberMeals} &times; ${fP(p.mealRate)})</span><span class="card-val red">${fP(p.mealCost)}</span></div>
+            ${p.khalaShare > 0 ? `<div class="card-row"><span>Khala share (${fP(p.khalaTotal)} &divide; ${members.length})</span><span class="card-val red">${fP(p.khalaShare)}</span></div>` : ""}
+            ${p.otherShare > 0 ? `<div class="card-row"><span>Other share (${fP(p.otherTotal)} &divide; ${members.length})</span><span class="card-val red">${fP(p.otherShare)}</span></div>` : ""}
+          </div>
+
+          <div class="card-col">
+            <div class="card-section-lbl" style="color:#2980b9">&#9679; Prepaid — ${MONTHS[month]} ${year}</div>
+            <div class="card-row"><span>Room rent</span><span class="card-val blue">${fP(p.roomRent)}</span></div>
+            ${p.prepaidUtility > 0 ? `<div class="card-row"><span>Utility share (${fP(p.prepaidTotal)} &divide; ${members.length})</span><span class="card-val blue">${fP(p.prepaidUtility)}</span></div>` : ""}
+            <div class="card-row total-row"><span><b>Total charges</b></span><span class="card-val"><b>${fP(p.totalPay)}</b></span></div>
+
+            <div class="card-section-lbl" style="color:#27ae60;margin-top:10px">&#10003; Credits</div>
+            <div class="card-row"><span>Bazar contributed</span><span class="card-val green">- ${fP(p.memberBazar)}</span></div>
+            ${p.roomRentPaid  > 0 ? `<div class="card-row"><span>Rent paid</span><span class="card-val green">- ${fP(p.roomRentPaid)}</span></div>` : ""}
+            ${p.utilityPaid   > 0 ? `<div class="card-row"><span>Utility paid</span><span class="card-val green">- ${fP(p.utilityPaid)}</span></div>` : ""}
+            ${(p.mealPaid||0) > 0 ? `<div class="card-row"><span>Meal cash paid</span><span class="card-val green">- ${fP(p.mealPaid)}</span></div>` : ""}
+            ${(p.messCredit||0) > 0 ? `<div class="card-row"><span>&#8629; Carried forward</span><span class="card-val blue">- ${fP(p.messCredit)}</span></div>` : ""}
+          </div>
+        </div>
+
+        <div class="card-net" style="background:${netBg};border-color:${netBdr}">
+          <span>Net Payable — ${eh(p.memberName)}</span>
+          <span style="color:${netColor};font-size:18px;font-weight:800">${netLabel}</span>
+        </div>
+      </div>`;
+    }).join("");
+
+    /* ── Full HTML ── */
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Settlement — ${eh(messName)} — ${MONTHS[month]} ${year}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#222;font-size:11px;}
+
+    /* ── Page 1: table layout ── */
+    .page1{padding:12px 14px;}
+
+    /* Header — payment receipt style */
+    .head{text-align:center;padding-bottom:14px;border-bottom:2px dashed #ccc;margin-bottom:12px;}
+    .head-icon{font-size:30px;line-height:1;margin-bottom:5px;}
+    .head-name{font-size:20px;font-weight:800;letter-spacing:.3px;color:#111;}
+    .head-sub{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.9px;margin-top:3px;}
+    .head-period{font-size:13px;font-weight:700;color:#b8914a;margin-top:6px;}
+    .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 12px;background:#f7f7f7;border:1px solid #eee;border-radius:8px;padding:8px 12px;margin-bottom:10px;}
+    .ml{display:flex;flex-direction:column;gap:1px;}
+    .ml-lbl{font-size:8px;text-transform:uppercase;letter-spacing:.6px;color:#999;}
+    .ml-val{font-size:11px;font-weight:600;color:#222;}
+
+    /* Summary stat cards — light style */
+    .stat-row{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px;}
+    .stat{background:#f7f7f7;border:1px solid #eee;border-radius:7px;padding:8px 10px;}
+    .stat.blue{border-top:2px solid #5b9bd5;background:#f0f5fd;}
+    .stat.red{border-top:2px solid #e05252;background:#fdf5f5;}
+    .stat.plain{border-top:2px solid #ccc;}
+    .stat-lbl{font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:#999;margin-bottom:4px;}
+    .stat-val{font-size:13px;font-weight:700;color:#222;}
+    .stat-sub{font-size:8px;color:#aaa;margin-top:2px;}
+
+    /* Settlement table */
+    .tbl-wrap{overflow:hidden;border-radius:8px;border:1px solid #ddd;}
+    table{width:100%;border-collapse:collapse;font-size:10px;}
+    th{padding:5px 5px;text-align:left;font-size:8.5px;font-weight:700;letter-spacing:.4px;white-space:nowrap;}
+    td{padding:5px 5px;border-bottom:1px solid #f0f0f0;vertical-align:top;}
+    tr:last-child td{border-bottom:none;}
+    .num{text-align:right;}
+    .sub{font-size:8px;color:#999;margin-top:1px;}
+    .red{color:#c0392b;}
+    .blue{color:#2980b9;}
+    .green{color:#27ae60;}
+    .muted{color:#bbb;}
+    .net-cell{min-width:80px;}
+    .thead-group th{padding:4px 5px;font-size:8px;}
+    .th-postpaid{background:#fff0f0;color:#c0392b;border-bottom:2px solid #e05252;}
+    .th-prepaid{background:#f0f5fd;color:#2980b9;border-bottom:2px solid #5b9bd5;}
+    .th-credits{background:#f0faf5;color:#27ae60;border-bottom:2px solid #4caf82;}
+    .th-plain{background:#f7f7f7;color:#555;border-bottom:2px solid #ccc;}
+    .totals-row td{background:#f7f7f7;font-weight:700;border-top:2px solid #ddd;}
+    .legend{display:flex;gap:14px;font-size:9px;color:#888;margin-top:8px;}
+    .legend span{display:flex;align-items:center;gap:4px;}
+    .dot{width:8px;height:8px;border-radius:2px;display:inline-block;}
+
+    /* ── Page break before cards ── */
+    .page-break{page-break-before:always;}
+
+    /* ── Member receipt cards ── */
+    .cards-page{padding:12px 14px;}
+    .cards-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px dashed #ccc;}
+    .cards-title{font-size:14px;font-weight:800;}
+    .cards-meta{font-size:10px;color:#888;}
+    .member-card{border:1px solid #ddd;border-radius:10px;overflow:hidden;margin-bottom:14px;page-break-inside:avoid;}
+    .card-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#f7f7f7;border-bottom:1px solid #eee;}
+    .card-name{font-size:15px;font-weight:800;color:#111;}
+    .card-badges{display:flex;gap:5px;margin-top:4px;}
+    .cbadge{font-size:8.5px;font-weight:700;padding:2px 7px;border-radius:20px;border:1px solid;text-transform:uppercase;letter-spacing:.4px;}
+    .card-body{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #eee;}
+    .card-col{padding:10px 14px;}
+    .card-col:first-child{border-right:1px solid #eee;}
+    .card-section-lbl{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee;}
+    .card-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;color:#555;}
+    .card-val{font-weight:600;font-size:12px;color:#222;}
+    .card-val.red{color:#c0392b;}
+    .card-val.blue{color:#2980b9;}
+    .card-val.green{color:#27ae60;}
+    .total-row{border-top:1px solid #eee;margin-top:4px;padding-top:5px !important;}
+    .card-net{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:2px solid;}
+
+    @media print {
+      body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .stat{background:#f0f0f0 !important;-webkit-print-color-adjust:exact;}
+      .totals-row td{background:#f7f7f7 !important;}
+      @page{margin:6mm;size:A4 landscape;}
+      @page :first{size:A4 landscape;}
+      .page-break{page-break-before:always;}
+      .member-card{page-break-inside:avoid;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ PAGE 1: Settlement Table ══ -->
+<div class="page1">
+
+  <div class="head">
+    <div class="head-icon">🏠</div>
+    <div class="head-name">${eh(messName)}</div>
+    <div class="head-sub">Monthly Settlement Statement</div>
+    <div class="head-period">${MONTHS[month]} ${year} &nbsp;&mdash;&nbsp; Meal &amp; Bazar data from ${MONTHS[prev.month]} ${prev.year}</div>
+  </div>
+
+  <div class="meta">
+    <div class="ml"><span class="ml-lbl">Document No.</span><span class="ml-val" style="font-family:monospace">${receiptNo}</span></div>
+    <div class="ml"><span class="ml-lbl">Generated</span><span class="ml-val">${genDate}</span></div>
+    <div class="ml"><span class="ml-lbl">Manager</span><span class="ml-val">${eh(managerName)}</span></div>
+    <div class="ml"><span class="ml-lbl">Members</span><span class="ml-val">${members.length} members</span></div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat plain">
+      <div class="stat-lbl">Total meals (${MONTHS[prev.month].slice(0,3)})</div>
+      <div class="stat-val">${totalMeals}</div>
+    </div>
+    <div class="stat plain">
+      <div class="stat-lbl">Meal rate</div>
+      <div class="stat-val">${fP(mealRate)}</div>
+      <div class="stat-sub">${fP(totalBazar)} &divide; ${totalMeals} meals</div>
+    </div>
+    <div class="stat plain">
+      <div class="stat-lbl">Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
+      <div class="stat-val">${fP(totalBazar)}</div>
+    </div>
+    <div class="stat blue">
+      <div class="stat-lbl">Prepaid bills (${MONTHS[month].slice(0,3)})</div>
+      <div class="stat-val" style="color:#5b9bd5">${fP(prepaidTotal)}</div>
+      <div class="stat-sub">Elec ${fP(elecAmt)} + Gas ${fP(gasAmt)} + WiFi ${fP(wifiAmt)}</div>
+    </div>
+    <div class="stat red">
+      <div class="stat-lbl">Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
+      <div class="stat-val" style="color:#e05252">${fP(postpaidTotal)}</div>
+      <div class="stat-sub">Khala ${fP(khalaTotal)} + Other ${fP(otherTotal)}</div>
+    </div>
+    <div class="stat plain">
+      <div class="stat-lbl">Prepaid per member</div>
+      <div class="stat-val">${fP(prepaidShare)}</div>
+      <div class="stat-sub">${fP(prepaidTotal)} &divide; ${members.length} members</div>
+    </div>
+  </div>
+
+  <div style="font-size:11px;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+    <span>MEMBER SETTLEMENT &mdash; ${MONTHS[month].toUpperCase()} ${year}</span>
+    <span class="legend">
+      <span><span class="dot" style="background:#e05252"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
+      <span><span class="dot" style="background:#5b9bd5"></span>Prepaid for ${MONTHS[month]} ${year}</span>
+      <span><span class="dot" style="background:#4caf82"></span>Credits</span>
+    </span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr class="thead-group">
+          <th class="th-plain" rowspan="2">MEMBER</th>
+          <th class="th-plain" rowspan="2" style="text-align:right">MEALS<br><span style="font-weight:400">${MONTHS[prev.month].slice(0,3)}</span></th>
+          <th class="th-postpaid" colspan="3">&#9679; POSTPAID &mdash; ${MONTHS[prev.month].slice(0,3).toUpperCase()} ${prev.year}</th>
+          <th class="th-prepaid"  colspan="2">&#9679; PREPAID &mdash; ${MONTHS[month].slice(0,3).toUpperCase()} ${year}</th>
+          <th class="th-credits"  colspan="5">&#10003; CREDITS</th>
+          <th class="th-plain" rowspan="2" style="text-align:right">NET</th>
+        </tr>
+        <tr class="thead-group">
+          <th class="th-postpaid" style="text-align:right">MEAL COST</th>
+          <th class="th-postpaid" style="text-align:right">KHALA</th>
+          <th class="th-postpaid" style="text-align:right">OTHER</th>
+          <th class="th-prepaid"  style="text-align:right">UTIL SHARE</th>
+          <th class="th-prepaid"  style="text-align:right">RENT</th>
+          <th class="th-credits"  style="text-align:right">BAZAR PAID</th>
+          <th class="th-credits"  style="text-align:right">MEAL PAID</th>
+          <th class="th-credits"  style="text-align:right">RENT PAID</th>
+          <th class="th-credits"  style="text-align:right">UTIL PAID</th>
+          <th class="th-credits"  style="text-align:right">&#8629; CARRIED FWD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+      </tbody>
+      <tfoot>
+        ${totalsRow}
+      </tfoot>
+    </table>
+  </div>
+
+  <div style="font-size:9px;color:#888;margin-top:8px">
+    &#128161; Click <b>Details</b> on any row for a step-by-step breakdown.
+    <b style="color:#5b9bd5">&#8629; Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance &mdash; reduces this month's net payable.
+  </div>
+
+</div>
+
+<!-- ══ PAGE 2+: Member Receipt Cards ══ -->
+<div class="page-break"></div>
+<div class="cards-page">
+
+  <div class="cards-header">
+    <div>
+      <div class="cards-title">${eh(messName)} &mdash; Individual Settlement Receipts</div>
+      <div class="cards-meta">${MONTHS[month]} ${year} &nbsp;|&nbsp; ${payData.length} members &nbsp;|&nbsp; Ref: ${receiptNo}</div>
+    </div>
+    <div class="cards-meta" style="text-align:right">${genDate}<br>Manager: ${eh(managerName)}</div>
+  </div>
+
+  ${memberCards}
+
+</div>
+
+</body>
+</html>`;
+
+    /* ── Print using same iframe pattern as payment receipt ── */
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    let w, frame;
+
+    if (isSafari) {
+      w = window.open("", "_blank", "width=900,height=700");
+      if (!w) { toast("Pop-up blocked — allow pop-ups to print", "error"); return; }
+    } else {
+      frame = document.getElementById("_settle-print-frame");
+      if (frame) frame.remove();
+      frame = document.createElement("iframe");
+      frame.id = "_settle-print-frame";
+      frame.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+      document.body.appendChild(frame);
+      w = frame.contentWindow;
+    }
+
+    w.document.write(html);
+    w.document.close();
+
+    if (isSafari) {
+      setTimeout(() => { w.focus(); w.print(); }, 300);
+    } else {
+      frame.onload = function() {
+        setTimeout(() => { w.focus(); w.print(); }, 300);
+      };
+    }
+
+    toast("Print dialog opening...", "success");
+
+  } catch(e) {
+    console.error("Print error:", e);
+    toast("Print failed: " + e.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "🖨️ Print PDF"; }
+  }
 }
