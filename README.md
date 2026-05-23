@@ -1,4 +1,4 @@
-# MessManager v7 🏠
+# MessManager v6 🏠
 
 A production-ready mess management web app for shared housing (mess/hostel) in Bangladesh. Handles meals, bazar, rent, utility bills, member settlements, and monthly accounting — all from a single-page web app backed by Supabase.
 
@@ -359,4 +359,4 @@ In `index.html`, find all instances of the `M` monogram inside `.land-logo-icon`
 
 ---
 
-Built with ❤️ · MessManager v7 · 2026
+Built with ❤️ · MessManager v6 · 2026

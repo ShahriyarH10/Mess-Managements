@@ -10,9 +10,18 @@ const messId = () => {
 async function dbGetAll(table) {
   const orderCol = table === "meals" || table === "bazar" ? "date"
     : table === "rent" ? "month_key" : "created_at";
-  const { data, error } = await getClient().from(table).select("*").eq("mess_id", messId()).order(orderCol);
-  if (error) throw error;
-  return sanitize(data || []);
+  // Supabase caps at 1000 rows by default — paginate to get everything
+  const PAGE = 1000;
+  let all = [], from = 0, done = false;
+  while (!done) {
+    const { data, error } = await getClient().from(table).select("*")
+      .eq("mess_id", messId()).order(orderCol).range(from, from + PAGE - 1);
+    if (error) throw error;
+    all = all.concat(data || []);
+    if (!data || data.length < PAGE) done = true;
+    else from += PAGE;
+  }
+  return sanitize(all);
 }
 
 async function dbGetMonth(table, key) {

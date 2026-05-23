@@ -79,3 +79,7 @@ create policy "allow_anon_all" on broadcasts       for all using (true) with che
 -- ── 6. Indexes ─────────────────────────────────────────
 create index if not exists idx_attend_member on meal_attendance(member_id, date);
 create index if not exists idx_broadcast_exp on broadcasts(mess_id, expires_at);
+
+-- ── Add pinned column to broadcasts (run if already deployed) ──
+alter table if exists broadcasts add column if not exists pinned boolean default false;
+create index if not exists idx_broadcast_pinned on broadcasts(mess_id, pinned desc, created_at desc);

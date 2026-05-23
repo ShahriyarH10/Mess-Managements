@@ -5,7 +5,7 @@
    MEAL ENTRY
 ═══════════════════════════════════════════ */
 const mealDayVals={}, mealNightVals={};
-function renderMeals(el) {
+async function renderMeals(el) {
   el.innerHTML=`
   <div class="topbar"><div><div class="page-title">Meal Entry</div><div class="page-sub">Log day & night meals per member</div></div></div>
   <div class="content">
@@ -32,16 +32,23 @@ function renderMeals(el) {
     </div>
   </div>`;
   members.forEach(m=>{ mealDayVals[m.id]=0; mealNightVals[m.id]=0; });
-  buildMealGrid(); loadMealDate(); loadMealsRecent(); loadManagerMealMonths();
+  window._absentDay = {}; window._absentNight = {};
+  await loadMealDate(); loadMealsRecent(); loadManagerMealMonths();
 }
 function buildMealGrid() {
   const g=document.getElementById("meal-grid"); if(!g) return;
-  g.innerHTML=members.map(m=>`
-    <div class="meal-cell">
-      <div class="meal-cell-name">${m.name}</div>
-      <div class="meal-cell-row"><span class="meal-cell-label">Day</span><input type="number" class="meal-num-input" id="md-${m.id}" min="0" max="4" step="0.5" value="${mealDayVals[m.id]??0}" oninput="updMealSum()"/></div>
-      <div class="meal-cell-row"><span class="meal-cell-label">Night</span><input type="number" class="meal-num-input" id="mn-${m.id}" min="0" max="4" step="0.5" value="${mealNightVals[m.id]??0}" oninput="updMealSum()"/></div>
-    </div>`).join("");
+  const abDay   = window._absentDay   || {};
+  const abNight = window._absentNight || {};
+  g.innerHTML=members.map(m=>{
+    const dayAbsent   = abDay[m.id];
+    const nightAbsent = abNight[m.id];
+    return `
+    <div class="meal-cell" style="${(dayAbsent && nightAbsent) ? "opacity:.6;" : ""}">
+      <div class="meal-cell-name">${escapeHtml(m.name)}${(dayAbsent||nightAbsent) ? `<span style="font-size:9px;color:var(--red);margin-left:5px;background:var(--red-bg);padding:1px 5px;border-radius:99px">absent</span>` : ""}</div>
+      <div class="meal-cell-row"><span class="meal-cell-label">Day</span><input type="number" class="meal-num-input" id="md-${m.id}" min="0" max="4" step="0.5" value="${mealDayVals[m.id]??0}" ${dayAbsent?"style='border-color:var(--red-bg);background:var(--red-bg)'"  :""} oninput="updMealSum()"/></div>
+      <div class="meal-cell-row"><span class="meal-cell-label">Night</span><input type="number" class="meal-num-input" id="mn-${m.id}" min="0" max="4" step="0.5" value="${mealNightVals[m.id]??0}" ${nightAbsent?"style='border-color:var(--red-bg);background:var(--red-bg)'" :""} oninput="updMealSum()"/></div>
+    </div>`;
+  }).join("");
   updMealSum();
 }
 function updMealSum() {
@@ -56,9 +63,39 @@ function setAllMeals(target,v) {
 }
 async function loadMealDate() {
   const date=document.getElementById("meal-date")?.value; if(!date) return;
+
+  // Always clear absent flags first — prevents stale flags from previous date
+  window._absentDay   = {};
+  window._absentNight = {};
+
+  // Always fetch attendance for this date to show absent badges
+  try {
+    const attRows = await dbGetAttendance(date);
+    attRows.forEach(a => {
+      const m = members.find(x => x.id === a.member_id);
+      if (!m) return;
+      if (!a.day_meal)   window._absentDay[m.id]   = true;
+      if (!a.night_meal) window._absentNight[m.id] = true;
+    });
+  } catch(_) {}
+
   const {data:rec}=await getClient().from("meals").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
-  if(rec){ members.forEach(m=>{ mealDayVals[m.id]=Number(rec.meals[m.name+"_day"]??rec.meals[m.name]??0); mealNightVals[m.id]=Number(rec.meals[m.name+"_night"]??0); }); buildMealGrid(); toast("Loaded entry for "+date); }
-  else { members.forEach(m=>{ mealDayVals[m.id]=0; mealNightVals[m.id]=0; }); buildMealGrid(); }
+  if(rec){
+    // Load existing values — absence badges show but values are not overridden
+    members.forEach(m=>{
+      mealDayVals[m.id]   = Number(rec.meals[m.name+"_day"]  ?? rec.meals[m.name] ?? 0);
+      mealNightVals[m.id] = Number(rec.meals[m.name+"_night"] ?? 0);
+    });
+    buildMealGrid();
+    toast("Loaded entry for "+date);
+  } else {
+    // New date — pre-fill absent members with 0
+    members.forEach(m=>{
+      mealDayVals[m.id]   = window._absentDay[m.id]   ? 0 : (mealDayVals[m.id]   ?? 0);
+      mealNightVals[m.id] = window._absentNight[m.id] ? 0 : (mealNightVals[m.id] ?? 0);
+    });
+    buildMealGrid();
+  }
 }
 async function saveMeals() {
   if (!requireManager('saveMeals')) return;

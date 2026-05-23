@@ -147,7 +147,6 @@ async function renderDashboard(el) {
       <div class="page-sub">${MONTHS[month]} ${year} — ${members.length} member${members.length === 1 ? "" : "s"}</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" onclick="navigate('announce')">📢 Post notice</button>
       <button class="btn btn-primary btn-sm" onclick="navigate('meals')">+ Meal</button>
     </div>
   </div>

@@ -370,7 +370,7 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
   };
 }
 
-function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 3, yearsForward = 2) {
+function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForward = 5) {
   const now   = new Date();
   const start = now.getFullYear() - yearsBack;
   const end   = now.getFullYear() + yearsForward;

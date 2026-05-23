@@ -151,7 +151,13 @@ function showLoginError(msg) {
   const el = document.getElementById("login-error");
   el.style.display = "block"; el.textContent = msg;
 }
-function doLogout() { clearSession(); showLanding(); }
+function doLogout() {
+  if (typeof closeMobileMore === "function") closeMobileMore();
+  const drawer = document.getElementById("mobile-nav-drawer");
+  if (drawer) drawer.classList.remove("open");
+  clearSession();
+  showLanding();
+}
 
 /* ═══════════════════════════════════════════
    SUPERADMIN
@@ -235,14 +241,14 @@ async function bootApp() {
   buildNav();
   updateSidebarUser();
   updateMessBranding();
-  await checkDB();
+  checkDB(); // non-blocking — don't await, let it update the dot in background
   navigate(currentUser.role === "manager" || currentUser.role === "sub_manager" ? "dashboard" : "my-dashboard");
 }
 
 function updateMessBranding() {
-  const n = currentMess?.name||"MessManager", l = currentMess?.location||"Dhaka · 2025";
+  const n = currentMess?.name||"MessManager", l = currentMess?.location||"";
   const el1=document.getElementById("app-mess-name"), el2=document.getElementById("app-mess-location"), el3=document.getElementById("mob-mess-name");
-  if(el1) el1.textContent=n; if(el2) el2.textContent=l; if(el3) el3.textContent=n;
+  if(el1) el1.textContent=n; if(el2) el2.textContent=l||""; if(el3) el3.textContent=n;
   const li=document.getElementById("app-logo-icon"); if(li) li.textContent=(n[0]||"M").toUpperCase();
 }
 

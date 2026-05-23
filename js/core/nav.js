@@ -45,7 +45,6 @@ const MANAGER_NAV = [
   { page:"audit-log",     label:"Audit Log",       icon:IC.audit },
 
   { section:"Mess" },
-  { page:"announce",      label:"Announcements",   icon:IC.announce },
   { page:"broadcasts",    label:"Broadcasts",      icon:IC.broadcast },
   { page:"mess-rules",    label:"Mess Rules",      icon:IC.rules },
   { page:"chores",        label:"Chore Roster",    icon:IC.chores },
@@ -68,7 +67,6 @@ const MEMBER_NAV = [
   { page:"my-bazar",      label:"Bazar Log",      icon:IC.bazar },
   { page:"my-payments",   label:"Utility/Rent",   icon:IC.rent },
   { page:"mess-overview", label:"Mess Overview",  icon:IC.log },
-  { page:"my-announce",   label:"Announcements",  icon:IC.announce },
   { page:"my-chores",     label:"Chore Roster",   icon:IC.chores },
   { page:"my-rules",      label:"Mess Info",      icon:IC.rules },
 ];
@@ -417,7 +415,7 @@ async function renderPage(page) {
   // Pages manager OR sub_manager can access
   const managerOrSubOnly = [
     "dashboard", "profiles", "meals", "bazar", "utility", "rent",
-    "collect", "log", "announce", "chores", "notifications",
+    "collect", "log", "chores", "notifications",
     "attendance", "rate-chart", "audit-log",
     "broadcasts", "mess-rules",
   ];
@@ -448,7 +446,6 @@ async function renderPage(page) {
       case "collect":        await renderCollect(div);                break;
       case "log":                  renderLog(div);                    break;
       case "members":              renderMembers(div);                break;
-      case "announce":       await renderAnnouncements(div, true);    break;
       case "chores":         await renderChores(div, true);           break;
       case "transfer":       await renderTransferRole(div);           break;
       case "notifications":  await renderNotifications(div);          break;
@@ -468,7 +465,6 @@ async function renderPage(page) {
       case "my-bazar":       await renderMyBazar(div);                break;
       case "my-payments":    await renderMyPayments(div);             break;
       case "mess-overview":  await renderMessOverview(div);           break;
-      case "my-announce":    await renderAnnouncements(div, false);   break;
       case "my-chores":      await renderChores(div, false);          break;
 
       // ── New member pages ──
