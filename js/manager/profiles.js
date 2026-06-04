@@ -155,74 +155,47 @@ function buildWhatIOweHTML(
   const { month: tm, year: ty } = thisMonth();
   const month = curM !== undefined ? curM : tm;
   const year  = curY !== undefined ? curY : ty;
-
   const currentKey = monthKey(year, month);
   const prevMonth  = month === 0 ? 11 : month - 1;
   const prevYear   = month === 0 ? year - 1 : year;
-  const prevKey    = monthKey(prevYear, prevMonth);
+  const prevLabel  = `${MONTHS[prevMonth]} ${prevYear}`;
+  const curLabel   = `${MONTHS[month]} ${year}`;
 
-  // ── Postpaid: meals & bazar from PREVIOUS month ──
-  const prevMealRows  = (allMeals  || []).filter(r => String(r.date || "").startsWith(prevKey));
-  const prevBazarRows = (allBazar  || []).filter(r => String(r.date || "").startsWith(prevKey));
+  // ── Use the canonical settlement calc (single source of truth, same as Monthly Log) ──
+  const p = calcMemberSettlement(
+    member, allMeals, allBazar,
+    currentRentRec, currentUtilRec, prevUtilRec,
+    currentKey
+  );
 
-  let myMeals = 0, myBazar = 0, allMealsTotal = 0, allBazarTotal = 0;
+  const {
+    mealCost, memberBazar, mealRate, memberMeals,
+    totalMeals: allMealsTotal, totalBazar: allBazarTotal,
+    khalaShare, otherShare, khalaTotal, otherTotal,
+    prepaidUtility: prepaidShare, prepaidTotal,
+    roomRent: myRentDue, roomRentPaid: myRentPaid,
+    utilityPaid: myUtilActualPaid, mealPaid: myMealPaid,
+    utilityStatus, rentStatus,
+    messCredit,
+    netPayable,
+  } = p;
 
-  prevMealRows.forEach(row => {
-    members.forEach(m => {
-      const v = mealMemberTotal(row.meals || {}, m.name);
-      allMealsTotal += v;
-      if (m.name === member.name) myMeals += v;
-    });
-  });
+  const currentBills  = currentUtilRec?.bills || {};
+  const elecAmt = Number(currentBills.elec || 0);
+  const gasAmt  = Number(currentBills.gas  || 0);
+  const wifiAmt = Number(currentBills.wifi || 0);
 
-  prevBazarRows.forEach(row => {
-    members.forEach(m => {
-      const amount = Number((row.bazar || {})[m.name] || 0);
-      allBazarTotal += amount;
-      if (m.name === member.name) myBazar += amount;
-    });
-  });
-
-  const mealRate = allMealsTotal > 0 ? round2(allBazarTotal / allMealsTotal) : 0;
-  const mealCost = round2(myMeals * mealRate);
-
-  // ── Previous month postpaid utility ──
-  const prevBills  = prevUtilRec?.bills || {};
-  const khalaShare = members.length > 0 ? round2(Number(prevBills.khala || 0) / members.length) : 0;
-  const otherShare = members.length > 0 ? round2(Number(prevBills.other || 0) / members.length) : 0;
-
-  // ── Current month prepaid utility ──
-  const currentBills = currentUtilRec?.bills || {};
-  const totalPrepaid = ["elec", "wifi", "gas"].reduce((sum, k) => sum + Number(currentBills[k] || 0), 0);
-  const prepaidShare = members.length > 0 ? round2(totalPrepaid / members.length) : 0;
-  const elecAmt      = Number(currentBills.elec  || 0);
-  const gasAmt       = Number(currentBills.gas   || 0);
-  const wifiAmt      = Number(currentBills.wifi  || 0);
-
-  // ── Current month rent ──
-  const myRe         = currentRentRec?.entries?.find(e => e.name === member.name) || {};
-  const myRentDue    = Number(myRe.rent || 0);
-
-  // ── Credits ──
-  const myUtilPay         = (currentUtilRec?.payments || {})[member.name] || {};
-  const myUtilActualPaid  = Number(myUtilPay.paid || 0);
-  const myMealPaid        = Number(myUtilPay.meal_paid || 0);
-  const myRentPaid        = Number(myRe.paid || 0);
-
-  // ── Utility payment covers BOTH prepaid (Elec/Gas/WiFi) and postpaid (Khala/Other) ──
-  // A single payment record in currentUtilRec.payments tracks the total amount paid.
   const totalUtilDue     = round2(prepaidShare + khalaShare + otherShare);
-  const utilPaidStatus   = myUtilPay.status || "unpaid"; // "paid" | "partial" | "unpaid"
-  const utilFullyPaid    = utilPaidStatus === "paid";
-  const utilPartiallyPaid= utilPaidStatus === "partial";
+  const utilFullyPaid    = utilityStatus === "paid";
+  const utilPartiallyPaid= utilityStatus === "partial";
   const utilStatusLabel  = utilFullyPaid ? "✅ Paid" : utilPartiallyPaid ? "⚠️ Partial" : "⏳ Not paid yet";
   const utilStatusColor  = utilFullyPaid ? "var(--green)" : utilPartiallyPaid ? "var(--amber)" : "var(--text)";
 
   const totalBeforeCredit = round2(mealCost + khalaShare + otherShare + myRentDue + prepaidShare);
-  const netTotal          = round2(totalBeforeCredit - myBazar - myRentPaid - myUtilActualPaid - myMealPaid);
 
-  const prevLabel = `${MONTHS[prevMonth]} ${prevYear}`;
-  const curLabel  = `${MONTHS[month]} ${year}`;
+  // Carry-forward credit breakdown (for tooltip)
+  const rawMessCredit   = Number((currentBills.mess_credit   || {})[member.name] || 0);
+  const rawChangeCredit = Number((currentBills.change_credit || {})[member.name] || 0);
 
   return `
     <div class="card" style="padding:16px">
@@ -236,7 +209,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           🍽️ Meal cost
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${round2(myMeals)} meals × ${fmtTk(mealRate)}
+            ${round2(memberMeals)} meals × ${fmtTk(mealRate)}
           </span>
           <span style="font-size:10px;color:var(--text3);display:block">
             Rate = ${fmtTk(allBazarTotal)} ÷ ${round2(allMealsTotal)} total meals
@@ -249,7 +222,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           👩 Khala bill
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${fmtTk(Number(prevBills.khala || 0))} ÷ ${members.length} members
+            ${fmtTk(Number(khalaTotal))} ÷ ${members.length} members
           </span>
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
@@ -262,7 +235,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           📦 Other cost
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${fmtTk(Number(prevBills.other || 0))} ÷ ${members.length} members
+            ${fmtTk(Number(otherTotal))} ÷ ${members.length} members
           </span>
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
@@ -284,11 +257,11 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           🏠 Rent
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${myRe.status === "paid" ? "✅ Paid" : myRe.status === "partial" ? "⚠️ Partial" : "⏳ Not paid yet"}
+            ${rentStatus === "paid" ? "✅ Paid" : rentStatus === "partial" ? "⚠️ Partial" : "⏳ Not paid yet"}
           </span>
         </span>
-        <span class="my-stat-val" style="color:${myRe.status === "paid" ? "var(--green)" : "var(--text)"}">
-          ${fmtTk(myRentDue)} ${myRe.status === "paid" ? "✓" : ""}
+        <span class="my-stat-val" style="color:${rentStatus === "paid" ? "var(--green)" : "var(--text)"}">
+          ${fmtTk(myRentDue)} ${rentStatus === "paid" ? "✓" : ""}
         </span>
       </div>
 
@@ -296,7 +269,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           ⚡ Utility share (Elec+Gas+WiFi)
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${fmtTk(totalPrepaid)} ÷ ${members.length} members
+            ${fmtTk(prepaidTotal)} ÷ ${members.length} members
           </span>
           <span style="font-size:10px;color:var(--text3);display:block">
             Elec ${fmtTk(elecAmt)} + Gas ${fmtTk(gasAmt)} + WiFi ${fmtTk(wifiAmt)}
@@ -344,7 +317,7 @@ function buildWhatIOweHTML(
             − Bazar credit
             <span style="font-size:10px;color:var(--text3);display:block">Groceries you bought in ${prevLabel}</span>
           </span>
-          <span class="my-stat-val" style="color:var(--green)">${fmtTk(myBazar)}</span>
+          <span class="my-stat-val" style="color:var(--green)">${fmtTk(memberBazar)}</span>
         </div>
 
         ${myRentPaid > 0
@@ -380,11 +353,30 @@ function buildWhatIOweHTML(
           : ""
         }
 
+        ${messCredit > 0
+          ? `<div class="my-stat-row" style="background:rgba(52,152,219,.07);border:1px solid rgba(52,152,219,.25);border-radius:6px;padding:8px 10px;margin-top:4px">
+              <span class="my-stat-key" style="color:var(--blue)">
+                ↩ Carry-forward credit
+                <span style="font-size:10px;color:var(--text3);display:block">Applied from last month's overpayment or Mess Owes balance</span>
+                ${rawMessCredit > 0   ? `<span style="font-size:10px;color:var(--text3);display:block">Overpayment credit: ${fmtTk(rawMessCredit)}</span>` : ""}
+                ${rawChangeCredit > 0 ? `<span style="font-size:10px;color:var(--text3);display:block">Change/Mess Owes credit: ${fmtTk(rawChangeCredit)}</span>` : ""}
+              </span>
+              <span class="my-stat-val" style="color:var(--blue);font-weight:800">− ${fmtTk(messCredit)}</span>
+            </div>`
+          : `<div style="font-size:11px;color:var(--text3);padding:6px 0;margin-top:2px">
+              ↩ No carry-forward credit this month
+            </div>`
+        }
+
         <div class="my-stat-row" style="font-size:15px;border-top:1px solid var(--border);margin-top:4px;background:var(--accent-bg);border-radius:6px;padding:10px;margin-top:8px;border-bottom:none">
           <span style="font-weight:700;flex:1">Net payable</span>
-          <span style="font-weight:800;flex-shrink:0;white-space:nowrap;color:${netTotal > 0 ? "var(--red)" : netTotal < 0 ? "var(--green)" : "var(--text)"}">
-            ${netTotal > 0 ? "Pay " + fmtTk(netTotal) : netTotal < 0 ? "Get " + fmtTk(Math.abs(netTotal)) : "✓ Settled"}
+          <span style="font-weight:800;flex-shrink:0;white-space:nowrap;color:${netPayable > 0 ? "var(--red)" : netPayable < 0 ? "var(--green)" : "var(--text)"}">
+            ${netPayable > 0 ? "Pay " + fmtTk(netPayable) : netPayable < 0 ? "Get " + fmtTk(Math.abs(netPayable)) : "✓ Settled"}
           </span>
+        </div>
+
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6;background:var(--bg3);padding:8px 12px;border-radius:6px">
+          <b>Formula:</b> ${fmtTk(mealCost)} + ${fmtTk(khalaShare)} + ${fmtTk(otherShare)} + ${fmtTk(myRentDue)} + ${fmtTk(prepaidShare)} − ${fmtTk(memberBazar)} − ${fmtTk(myMealPaid)} − ${fmtTk(myRentPaid)} − ${fmtTk(myUtilActualPaid)}${messCredit > 0 ? ` − ${fmtTk(messCredit)} (carried fwd)` : ""} = <b>${fmtTk(netPayable)}</b>
         </div>
       </div>
     </div>

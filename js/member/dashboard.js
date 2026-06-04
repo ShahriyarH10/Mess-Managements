@@ -202,13 +202,14 @@ async function renderMyDashboard(el) {
       ` : ""}
 
       <!-- Credits row -->
-      ${(calc.memberBazar + calc.utilityPaid + calc.roomRentPaid + calc.mealPaid) > 0 ? `
+      ${(calc.memberBazar + calc.utilityPaid + calc.roomRentPaid + calc.mealPaid + (calc.messCredit||0)) > 0 ? `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid ${netBorder};display:flex;gap:10px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--text3)">Credits:</span>
-        ${calc.memberBazar  > 0 ? `<span style="font-size:10px;color:var(--green)">🛒 Bazar ${fmtTk(calc.memberBazar)}</span>` : ""}
-        ${calc.roomRentPaid > 0 ? `<span style="font-size:10px;color:var(--green)">🏠 Rent paid ${fmtTk(calc.roomRentPaid)}</span>` : ""}
-        ${calc.utilityPaid  > 0 ? `<span style="font-size:10px;color:var(--green)">⚡ Util paid ${fmtTk(calc.utilityPaid)}</span>` : ""}
-        ${calc.mealPaid     > 0 ? `<span style="font-size:10px;color:var(--green)">💵 Meal paid ${fmtTk(calc.mealPaid)}</span>` : ""}
+        ${calc.memberBazar      > 0 ? `<span style="font-size:10px;color:var(--green)">🛒 Bazar ${fmtTk(calc.memberBazar)}</span>` : ""}
+        ${calc.roomRentPaid     > 0 ? `<span style="font-size:10px;color:var(--green)">🏠 Rent paid ${fmtTk(calc.roomRentPaid)}</span>` : ""}
+        ${calc.utilityPaid      > 0 ? `<span style="font-size:10px;color:var(--green)">⚡ Util paid ${fmtTk(calc.utilityPaid)}</span>` : ""}
+        ${calc.mealPaid         > 0 ? `<span style="font-size:10px;color:var(--green)">💵 Meal paid ${fmtTk(calc.mealPaid)}</span>` : ""}
+        ${(calc.messCredit||0)  > 0 ? `<span style="font-size:10px;color:var(--blue)">↩ Carry fwd ${fmtTk(calc.messCredit)}</span>` : ""}
       </div>
       ` : ""}
     </div>
@@ -400,11 +401,29 @@ function showMySettlementBreakdown() {
       </div>
     ` : ""}
 
+    ${(p.messCredit || 0) > 0 ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:rgba(52,152,219,.08);border:1px solid rgba(52,152,219,.3);border-radius:6px;margin-bottom:5px">
+        <div>
+          <div style="font-weight:600;color:var(--blue)">↩ Carry-forward credit</div>
+          <div style="font-size:11px;color:var(--text3)">Credit from last month's overpayment or Mess Owes balance</div>
+        </div>
+        <div style="font-weight:700;color:var(--blue)">− ${fmtTk(p.messCredit)}</div>
+      </div>
+    ` : `
+      <div style="padding:8px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px;font-size:12px;color:var(--text3)">
+        ↩ No carry-forward credit this month
+      </div>
+    `}
+
     <div style="display:flex;justify-content:space-between;padding:14px 16px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:8px;margin-top:10px;font-size:17px;font-weight:800">
       <span>Net Payable</span>
       <span style="color:${p.netPayable > 0 ? 'var(--red)' : p.netPayable < 0 ? 'var(--green)' : 'var(--text)'}">
         ${p.netPayable > 0 ? 'Pay ' + fmtTk(p.netPayable) : p.netPayable < 0 ? 'Get ' + fmtTk(Math.abs(p.netPayable)) : '✓ Settled'}
       </span>
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6;background:var(--bg3);padding:8px 12px;border-radius:6px">
+      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid||0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)}${(p.messCredit||0) > 0 ? ` − ${fmtTk(p.messCredit)} (carried fwd)` : ''} = <b>${fmtTk(p.netPayable)}</b>
     </div>
 
     <div class="modal-footer">
@@ -658,6 +677,7 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
           <th style="color:var(--blue)">Rent</th>
           <th style="color:var(--green)">Bazar</th>
           <th style="color:var(--green)">Paid</th>
+          <th style="color:var(--blue)">↩ Carry fwd</th>
           <th>Net</th>
         </tr></thead>
         <tbody>
@@ -673,11 +693,16 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
                 <td style="color:var(--blue)">${fmtTk(p.roomRent)}</td>
                 <td style="color:var(--green)">${fmtTk(p.memberBazar)}</td>
                 <td style="color:${totalPaid>0?'var(--green)':'var(--text3)'}">${fmtTk(totalPaid)}</td>
+                <td style="color:${(p.messCredit||0)>0?'var(--blue)':'var(--text3)'}">${(p.messCredit||0)>0?'↩ '+fmtTk(p.messCredit):'—'}</td>
                 <td><b class="${p.netPayable>0?'net-neg':p.netPayable<0?'net-pos':''}">${p.netPayable>0?'Pay '+fmtTk(p.netPayable):p.netPayable<0?'Get '+fmtTk(Math.abs(p.netPayable)):'✓'}</b></td>
               </tr>`;
+
           }).join("")}
         </tbody>
       </table></div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        💡 <b style="color:var(--blue)">↩ Carry fwd</b> = credit from last month's overpayment or Mess Owes balance applied to reduce this month's net payable.
+      </div>
     </div>`;
 }
 
