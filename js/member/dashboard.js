@@ -506,7 +506,7 @@ function buildMessSnapshotBlock(allM, allB, key, myName) {
           const mealCost2 = round2(v * mealRate);
           const balance = round2(baz - mealCost2);
           return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);background:${isMe?"var(--accent-bg)":"transparent"};border:1px solid ${isMe?"rgba(212,168,83,.2)":"transparent"}">
-            <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${initials(m.name)}</div>
+            <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
             <div style="flex:1;min-width:0">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;gap:4px">
                 <span style="font-size:12px;font-weight:${isMe?"700":"500"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isMe?"var(--accent)":"var(--text)"}">${escapeHtml(m.name)}${isMe?" (You)":""}</span>
@@ -820,7 +820,7 @@ async function loadMyProfile(member) {
     <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:14px">
         <div class="avatar" style="width:52px;height:52px;font-size:17px;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">
-          ${initials(member.name)}
+          ${memberInitials(member.id, member.name)}
         </div>
         <div>
           <div style="font-family:var(--font-serif);font-size:22px;font-weight:700">${member.name}</div>

@@ -128,12 +128,16 @@ const MONTHS = [
 ];
 
 const PALETTE = [
-  { bg: "#1a2a3a", fg: "#5b9bd5" },
-  { bg: "#1a2e25", fg: "#4caf82" },
-  { bg: "#2e1a1a", fg: "#e05252" },
-  { bg: "#2a2218", fg: "#d4a853" },
-  { bg: "#251a2e", fg: "#9b7fd4" },
-  { bg: "#1e2a2a", fg: "#4cb8b8" },
-  { bg: "#2e1f1a", fg: "#d47a4c" },
-  { bg: "#1a1a2e", fg: "#7a7dd4" },
+  { bg: "#1a2a3a", fg: "#5b9bd5" },  // blue
+  { bg: "#1a2e25", fg: "#4caf82" },  // green
+  { bg: "#2e1a1a", fg: "#e05252" },  // red
+  { bg: "#2a2218", fg: "#d4a853" },  // amber
+  { bg: "#251a2e", fg: "#9b7fd4" },  // purple
+  { bg: "#1e2a2a", fg: "#4cb8b8" },  // teal
+  { bg: "#2e1f1a", fg: "#d47a4c" },  // orange
+  { bg: "#1a1a2e", fg: "#7a7dd4" },  // indigo
+  { bg: "#1e2a1e", fg: "#6abf6a" },  // lime
+  { bg: "#2e2420", fg: "#c49a6c" },  // brown
+  { bg: "#2a1a24", fg: "#d47aaa" },  // pink
+  { bg: "#1a2428", fg: "#5bbbd4" },  // cyan
 ];

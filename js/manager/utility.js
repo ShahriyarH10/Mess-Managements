@@ -27,7 +27,7 @@ function renderRent(el) {
 }
 
 async function loadRentMonth() {
-  members = await dbGetMembers();
+  members = await dbGetMembers(); buildInitialsMap(members);
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);

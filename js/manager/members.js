@@ -15,7 +15,7 @@ async function renderTransferRole(el) {
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px" id="transfer-list">
       ${others.map(m=>{ const col=avatarCol(members.indexOf(m)); return`<label style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s" class="transfer-option">
         <input type="radio" name="transfer-target" value="${m.id}" style="accent-color:var(--accent)"/>
-        <div class="avatar" style="background:${col.bg};color:${col.fg}">${initials(m.name)}</div>
+        <div class="avatar" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</div>
         <div><div style="font-weight:600">${m.name}</div><div style="font-size:12px;color:var(--text3)">@${m.username}</div></div>
       </label>`; }).join("")}
     </div>
@@ -39,7 +39,7 @@ async function doTransferRole() {
         const {error:e2}=await getClient().from('members').update({role:'manager'}).eq('id',target.id); if(e2) throw e2;
         toast(target.name+' is now the manager!','success');
         currentUser.role='member'; saveSession(currentUser,currentMess);
-        members=await dbGetMembers(); buildNav(); updateSidebarUser(); navigate('my-dashboard');
+        members=await dbGetMembers(); buildInitialsMap(members); buildNav(); updateSidebarUser(); navigate('my-dashboard');
       } catch(e){ toast('Transfer failed: '+e.message,'error'); }
     }
   }); return;
@@ -48,7 +48,7 @@ async function doTransferRole() {
     const {error:e2}=await getClient().from("members").update({role:"manager"}).eq("id",target.id); if(e2) throw e2;
     toast(`${target.name} is now the manager!`,"success");
     currentUser.role="member"; saveSession(currentUser,currentMess);
-    members=await dbGetMembers(); buildNav(); updateSidebarUser(); navigate("my-dashboard");
+    members=await dbGetMembers(); buildInitialsMap(members); buildNav(); updateSidebarUser(); navigate("my-dashboard");
   } catch(e){ toast("Transfer failed: "+e.message,"error"); }
 }
 
@@ -69,7 +69,7 @@ function renderMembersTable() {
   if(!members.length){ wrap.innerHTML='<div class="empty">No members yet. Click + Add member.</div>'; return; }
   wrap.innerHTML=`<table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th>Room</th><th>Phone</th><th></th></tr></thead>
   <tbody>${members.map((m,i)=>{ const col=avatarCol(i); const isMgr=m.role==="manager"; return`<tr>
-    <td><div class="avatar" style="background:${col.bg};color:${col.fg};width:26px;height:26px;font-size:10px">${initials(m.name)}</div></td>
+    <td><div class="avatar" style="background:${col.bg};color:${col.fg};width:26px;height:26px;font-size:10px">${memberInitials(m.id, m.name)}</div></td>
     <td><b>${m.name}</b></td>
     <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
     <td>${isMgr?`<span class="badge badge-amber">👑 Manager</span>`:`<span class="badge badge-blue">Member</span>`}</td>
@@ -126,7 +126,7 @@ async function addMember() {
   if(members.find(m=>m.username===d.username)){ toast("Username taken"); return; }
   try{
     d.password = await hashPassword(d.password);
-    await dbSaveMember(d); await logAudit("create","member",d.name,`Member "${d.name}" added`); members=await dbGetMembers(); closeModal(); toast(d.name+" added","success"); renderMembersTable();
+    await dbSaveMember(d); await logAudit("create","member",d.name,`Member "${d.name}" added`); members=await dbGetMembers(); buildInitialsMap(members); closeModal(); toast(d.name+" added","success"); renderMembersTable();
   }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function updateMember(id) {
@@ -142,7 +142,7 @@ async function updateMember(id) {
       // Left blank — keep existing password unchanged
       delete d.password;
     }
-    await dbSaveMember(d); await logAudit("update","member",d.name,`Member "${d.name}" updated`); members=await dbGetMembers(); closeModal(); toast("Updated","success"); renderMembersTable();
+    await dbSaveMember(d); await logAudit("update","member",d.name,`Member "${d.name}" updated`); members=await dbGetMembers(); buildInitialsMap(members); closeModal(); toast("Updated","success"); renderMembersTable();
   }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function deleteMember(id) {
@@ -154,10 +154,10 @@ async function deleteMember(id) {
     confirmLabel: 'Remove member',
     danger: true,
     onConfirm: async () => {
-      try{ await dbDeleteMember(id); await logAudit("delete","member",m.name,`Member "${m.name}" removed`); members=await dbGetMembers(); toast(m.name+' removed'); renderMembersTable(); }catch(e){ toast('Error','error'); }
+      try{ await dbDeleteMember(id); await logAudit("delete","member",m.name,`Member "${m.name}" removed`); members=await dbGetMembers(); buildInitialsMap(members); toast(m.name+' removed'); renderMembersTable(); }catch(e){ toast('Error','error'); }
     }
   }); return;
-  try{ await dbDeleteMember(id); members=await dbGetMembers(); toast(m.name+" removed"); renderMembersTable(); }catch(e){ toast("Error","error"); }
+  try{ await dbDeleteMember(id); members=await dbGetMembers(); buildInitialsMap(members); toast(m.name+" removed"); renderMembersTable(); }catch(e){ toast("Error","error"); }
 }
 
 

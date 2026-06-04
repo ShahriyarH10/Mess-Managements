@@ -367,7 +367,7 @@ async function renderDashboard(el) {
           const col = avatarCol(i);
           const bazAmt = memBazar[m.name] || 0;
           return `<div style="display:flex;align-items:center;gap:8px">
-            <div style="width:26px;height:26px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${initials(m.name)}</div>
+            <div style="width:26px;height:26px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
             <div style="width:80px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${escapeHtml(m.name)}</div>
             <div style="flex:1;height:7px;background:var(--bg4);border-radius:99px;overflow:hidden">
               <div style="width:${pct}%;height:100%;background:${col.fg};border-radius:99px;opacity:0.85;transition:width .8s var(--ease-spring)"></div>

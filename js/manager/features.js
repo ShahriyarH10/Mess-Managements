@@ -60,6 +60,10 @@ async function loadAbsenceCalendar() {
       attMap[a.date][a.member_id] = { day_meal: a.day_meal, night_meal: a.night_meal, id: a.id, source: "toggle" };
     });
 
+    // Track dates that have confirmed meal data (so we don't falsely say "All ate"
+    // on days where nobody logged meals at all)
+    const mealDataDates = new Set(); // dates where at least one member has a real meal entry
+
     // Merge 0-meal days from the meals table
     (mealRows || []).forEach(r => {
       const date = r.date;
@@ -68,6 +72,9 @@ async function loadAbsenceCalendar() {
       // Only process days where at least one member has ANY meals > 0
       const anyMeals = Object.values(mObj).some(v => Number(v) > 0);
       if (!anyMeals) return;
+
+      // This date has confirmed meal data — mark it
+      mealDataDates.add(date);
 
       if (!attMap[date]) attMap[date] = {};
 
@@ -98,22 +105,47 @@ async function loadAbsenceCalendar() {
       });
     });
 
-    // Member id → index for colour lookup
+    // Also mark dates that have explicit attendance toggles as having real data
+    Object.keys(attMap).forEach(date => mealDataDates.add(date));
+
+    // Build collision-aware initials map for this member list
+    buildInitialsMap(members);
     const memIdx = {};
-    members.forEach((m, i) => { memIdx[m.id] = i; });
+    members.forEach((m, i) => { memIdx[m.id] = i; }); // kept for legacy uses
 
     // Legend
     const legend = `
-      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;color:var(--text3)">
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--red);opacity:.8;display:inline-block"></span>All meals off</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--blue);opacity:.7;display:inline-block"></span>Day off only</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--accent);opacity:.8;display:inline-block"></span>Night off only</span>
-        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;border:1.5px solid var(--border);display:inline-block"></span>From meal entry</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;align-items:center">
+        <span style="font-weight:600;color:var(--text2);margin-right:2px">Legend:</span>
+        <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span>
+          <span style="color:var(--text2)">All ate</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block"></span>
+          <span style="color:var(--text2)">All meals off</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
+          <span style="color:var(--text2)">Day off only</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+          <span style="color:var(--text2)">Night off only</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--bg3);border:1.5px dashed var(--text3);display:inline-block"></span>
+          <span style="color:var(--text2)">From meal entry</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--bg3);border:1.5px solid var(--border);display:inline-block"></span>
+          <span style="color:var(--text3)">No data</span>
+        </span>
       </div>`;
 
     // Day-of-week headers
     const dowHeaders = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
-      .map(d => `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:4px 0;text-transform:uppercase;letter-spacing:.4px">${d}</div>`)
+      .map(d => `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);padding:5px 0;text-transform:uppercase;letter-spacing:.5px">${d}</div>`)
       .join("");
 
     // Calendar cells
@@ -126,14 +158,16 @@ async function loadAbsenceCalendar() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${key}-${String(d).padStart(2, "0")}`;
-      const isToday = dateStr === todayStr;
-      const isPast  = dateStr < todayStr;
-      const dayMap  = attMap[dateStr] || {}; // member_id → { day_meal, night_meal, source }
+      const isToday  = dateStr === todayStr;
+      const isPast   = dateStr < todayStr;
+      const isFuture = dateStr > todayStr;
+      const dayMap   = attMap[dateStr] || {}; // member_id → { day_meal, night_meal, source }
+      const hasData  = mealDataDates.has(dateStr); // confirmed meal data exists for this day
 
       // Categorise absences
-      const allOff    = []; // { member, source }
-      const dayOff    = [];
-      const nightOff  = [];
+      const allOff   = []; // { member, source }
+      const dayOff   = [];
+      const nightOff = [];
 
       members.forEach(m => {
         const a = dayMap[m.id];
@@ -144,38 +178,89 @@ async function loadAbsenceCalendar() {
         else if ( a.day_meal && !a.night_meal) nightOff.push(entry);
       });
 
-      const totalAbsent = allOff.length + dayOff.length + nightOff.length;
-      const cellBg     = isToday ? "var(--accent-bg)" : "var(--bg2)";
-      const cellBorder = isToday ? "2px solid var(--accent)" : "1px solid var(--border)";
-      const dayNumColor = isToday ? "var(--accent)" : isPast ? "var(--text3)" : "var(--text)";
+      const totalAbsent  = allOff.length + dayOff.length + nightOff.length;
+      // Heat intensity: more absences → deeper red tint on cell background
+      const heatOpacity  = totalAbsent > 0 ? Math.min(0.08 + (totalAbsent / members.length) * 0.18, 0.28) : 0;
+      const heatStyle    = totalAbsent > 0 ? `background:rgba(239,68,68,${heatOpacity});` : "";
 
-      function avatarDot(entry, borderColor) {
-        const m = entry.member;
-        const col = avatarCol(memIdx[m.id] ?? 0);
-        // Dashed border = inferred from meal entry, solid = explicit toggle
-        const borderStyle = entry.source === "meal_zero" ? "dashed" : "solid";
-        return `<div title="${escapeHtml(m.name)}${entry.source === "meal_zero" ? " (from meal entry)" : " (marked absent)"}"
-          style="width:26px;height:26px;border-radius:50%;background:${col.bg};color:${col.fg};
-                 display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;
-                 border:2px ${borderStyle} ${borderColor};flex-shrink:0">${initials(m.name)}</div>`;
+      // Cell state styling
+      let cellBg, cellBorder, cellExtraStyle = "";
+      if (isToday) {
+        cellBg = "var(--accent-bg)";
+        cellBorder = "2px solid var(--accent)";
+      } else if (totalAbsent > 0) {
+        cellBg = `var(--bg2)`;
+        cellBorder = "1px solid rgba(239,68,68,0.35)";
+        cellExtraStyle = heatStyle;
+      } else if (isPast && hasData) {
+        cellBg = "var(--bg2)";
+        cellBorder = "1px solid rgba(34,197,94,0.3)";
+        cellExtraStyle = "background:rgba(34,197,94,0.05);";
+      } else {
+        cellBg = "var(--bg2)";
+        cellBorder = "1px solid var(--border)";
       }
 
-      const dots = totalAbsent > 0
-        ? `<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px">
-            ${allOff.map(e   => avatarDot(e, "var(--red)")).join("")}
-            ${dayOff.map(e   => avatarDot(e, "var(--blue)")).join("")}
-            ${nightOff.map(e => avatarDot(e, "var(--accent)")).join("")}
-           </div>`
-        : isPast
-          ? `<div style="font-size:9px;color:var(--green);margin-top:4px;opacity:.7">✓ All ate</div>`
-          : `<div style="font-size:9px;color:var(--text3);margin-top:4px">—</div>`;
+      const dayNumColor = isToday ? "var(--accent)" : isPast ? "var(--text3)" : "var(--text)";
+
+      function avatarDot(entry, borderColor, bgTint) {
+        const m = entry.member;
+        const col = avatarCol(m.id); // hash on member ID for stable colors
+        const borderStyle = entry.source === "meal_zero" ? "dashed" : "solid";
+        const label = memberInitials(m.id, m.name); // collision-aware initials
+        return `<div title="${escapeHtml(m.name)}${entry.source === "meal_zero" ? " (from meal entry)" : " (marked absent)"}"
+          style="width:24px;height:24px;border-radius:50%;background:${col.bg};color:${col.fg};
+                 display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;
+                 border:2px ${borderStyle} ${borderColor};flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.15)">${label}</div>`;
+      }
+
+      // Status indicator bar at top of cell
+      let statusBar = "";
+      if (totalAbsent > 0) {
+        const absentPct = Math.round((totalAbsent / members.length) * 100);
+        statusBar = `<div style="height:3px;border-radius:2px;margin:-1px -1px 4px -1px;background:linear-gradient(90deg,
+          rgba(239,68,68,.8) ${absentPct}%, rgba(34,197,94,.4) ${absentPct}%)"></div>`;
+      } else if (isPast && hasData) {
+        statusBar = `<div style="height:3px;border-radius:2px;margin:-1px -1px 4px -1px;background:rgba(34,197,94,.6)"></div>`;
+      }
+
+      // Content area: absence avatars OR status text
+      let content;
+      if (totalAbsent > 0) {
+        // Group rows by type with tiny section labels
+        const sections = [];
+        if (allOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${allOff.map(e   => avatarDot(e, "var(--red)",     "#fef2f2")).join("")}</div>`);
+        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${dayOff.map(e   => avatarDot(e, "#f59e0b", "#fffbeb")).join("")}</div>`);
+        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${nightOff.map(e => avatarDot(e, "var(--accent)", "#f0f9ff")).join("")}</div>`);
+        content = `<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">${sections.join("")}</div>`;
+      } else if (isPast && hasData) {
+        // ✅ Only show "All ate" when we KNOW there was real meal data for this day
+        content = `<div style="display:flex;align-items:center;gap:3px;margin-top:5px">
+          <span style="width:14px;height:14px;border-radius:50%;background:rgba(34,197,94,.15);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0">✓</span>
+          <span style="font-size:9px;color:var(--green);font-weight:600">All ate</span>
+        </div>`;
+      } else if (isPast && !hasData) {
+        // Past day with no meal data logged at all — show "No data", NOT "All ate"
+        content = `<div style="font-size:9px;color:var(--text3);margin-top:5px;opacity:.6;font-style:italic">No data</div>`;
+      } else if (isToday) {
+        content = `<div style="font-size:9px;color:var(--accent);margin-top:5px;font-weight:600">Today</div>`;
+      } else {
+        content = `<div style="font-size:9px;color:var(--text3);margin-top:5px;opacity:.4">—</div>`;
+      }
+
+      // Absence count badge (shown when there are absences)
+      const badge = totalAbsent > 0
+        ? `<div style="position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border-radius:10px;font-size:8px;font-weight:700;padding:1px 5px;line-height:14px">${totalAbsent}</div>`
+        : "";
 
       cells.push(`
-        <div style="background:${cellBg};border:${cellBorder};border-radius:6px;padding:6px 6px 5px;min-height:80px;cursor:default;transition:border-color .15s"
-             onmouseover="this.style.borderColor='var(--accent)'"
-             onmouseout="this.style.borderColor='${isToday ? "var(--accent)" : "var(--border)"}'">
+        <div style="position:relative;${cellExtraStyle}border:${cellBorder};border-radius:8px;padding:5px 5px 5px;min-height:82px;cursor:default;transition:border-color .15s,box-shadow .15s;overflow:hidden"
+             onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'"
+             onmouseout="this.style.borderColor='${isToday ? "var(--accent)" : totalAbsent > 0 ? "rgba(239,68,68,.35)" : isPast && hasData ? "rgba(34,197,94,.3)" : "var(--border)"}';this.style.boxShadow='none'">
+          ${statusBar}
           <div style="font-size:11px;font-weight:700;color:${dayNumColor};line-height:1">${d}</div>
-          ${dots}
+          ${badge}
+          ${content}
         </div>`);
     }
 
@@ -186,6 +271,19 @@ async function loadAbsenceCalendar() {
         if (!a.day_meal || !a.night_meal) totalAbsenceDays++;
       });
     });
+
+    // Days with confirmed meal data
+    const confirmedDays = mealDataDates.size;
+    // Days where all members ate (has data, zero absences)
+    let allAteDays = 0;
+    mealDataDates.forEach(date => {
+      const dayMap = attMap[date] || {};
+      const hasAbsence = Object.values(dayMap).some(a => !a.day_meal || !a.night_meal);
+      if (!hasAbsence) allAteDays++;
+    });
+    const attendancePct = confirmedDays > 0
+      ? Math.round((allAteDays / confirmedDays) * 100)
+      : null;
 
     wrap.innerHTML = `
       <div class="card">
@@ -203,9 +301,19 @@ async function loadAbsenceCalendar() {
             <div class="stat-value" style="font-size:20px;margin-top:4px;color:var(--red)">${totalAbsenceDays}</div>
           </div>
           <div class="stat-card" style="flex:1;min-width:90px;padding:10px">
-            <div class="stat-label">Days in month</div>
-            <div class="stat-value" style="font-size:20px;margin-top:4px">${daysInMonth}</div>
+            <div class="stat-label">Days logged</div>
+            <div class="stat-value" style="font-size:20px;margin-top:4px">${confirmedDays}<span style="font-size:12px;color:var(--text3);font-weight:400">/${daysInMonth}</span></div>
           </div>
+          ${attendancePct !== null ? `
+          <div class="stat-card" style="flex:1;min-width:90px;padding:10px">
+            <div class="stat-label">Full attendance</div>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
+              <div class="stat-value" style="font-size:20px;color:${attendancePct >= 80 ? "var(--green)" : attendancePct >= 50 ? "#f59e0b" : "var(--red)"}">${attendancePct}%</div>
+              <div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden">
+                <div style="height:100%;width:${attendancePct}%;background:${attendancePct >= 80 ? "var(--green)" : attendancePct >= 50 ? "#f59e0b" : "var(--red)"};border-radius:2px;transition:width .4s"></div>
+              </div>
+            </div>
+          </div>` : ""}
         </div>
 
         ${legend}
@@ -224,12 +332,12 @@ async function loadAbsenceCalendar() {
                 .flatMap(([, dm]) => dm[m.id] ? [dm[m.id]] : [])
                 .filter(a => !a.day_meal || !a.night_meal);
               if (!mEntries.length) return "";
-              const col = avatarCol(i);
+              const col = avatarCol(m.id);
               const allOffDays   = mEntries.filter(a => !a.day_meal && !a.night_meal).length;
               const dayOffDays   = mEntries.filter(a => !a.day_meal &&  a.night_meal).length;
               const nightOffDays = mEntries.filter(a =>  a.day_meal && !a.night_meal).length;
               return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;display:flex;align-items:flex-start;gap:8px">
-                <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${initials(m.name)}</div>
+                <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
                 <div style="min-width:0">
                   <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(m.name)}</div>
                   <div style="font-size:10px;color:var(--text3);margin-top:3px;display:flex;flex-direction:column;gap:1px">

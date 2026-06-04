@@ -238,6 +238,7 @@ async function renderSAMetrics(main) {
 async function bootApp() {
   showScreen("app-shell");
   members = await dbGetMembers();
+  buildInitialsMap(members); // build collision-aware initials map
   buildNav();
   updateSidebarUser();
   updateMessBranding();

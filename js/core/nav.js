@@ -399,7 +399,7 @@ function navigate(page) {
 }
 
 async function renderPage(page) {
-  members = await dbGetMembers();
+  members = await dbGetMembers(); buildInitialsMap(members);
 
   updateSidebarUser();
 

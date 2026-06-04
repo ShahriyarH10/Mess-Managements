@@ -57,7 +57,7 @@ function renderRolesList() {
     const isSubMgr = m.role === "sub_manager";
     const isMgr = m.role === "manager";
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:11px;flex-shrink:0">${initials(m.name)}</div>
+      <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:11px;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600">${escapeHtml(m.name)}</div>
         <div style="font-size:11px;color:var(--text3)">@${escapeHtml(m.username)} · Room ${escapeHtml(m.room || "—")}</div>
@@ -92,7 +92,7 @@ async function setSubManager(memberId, promote) {
         const { error } = await getClient().from("members").update({ role: newRole }).eq("id", memberId);
         if (error) throw error;
         await logAudit("update", "member", m.name, `${currentUser.name} ${promote ? "promoted" : "demoted"} ${m.name} to ${newRole}`);
-        members = await dbGetMembers();
+        members = await dbGetMembers(); buildInitialsMap(members);
         toast(`${m.name} is now a ${label} ✓`, "success");
         renderRolesList();
       } catch (e) { toast("Error: " + e.message, "error"); }

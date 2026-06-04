@@ -8,8 +8,54 @@ const monthKey   = (y, m) => `${y}-${pad2(m)}`;
 const fmt        = (n) => Number(n || 0).toLocaleString("en-IN");
 const fmtTk      = (n) => "৳" + fmt(n);
 const round2     = (n) => Math.round((n || 0) * 100) / 100;
-const initials   = (name) => name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-const avatarCol  = (i) => PALETTE[i % PALETTE.length];
+// Collision-aware initials: builds a de-duplication map across all member names
+// so two members sharing the same standard initials get distinguishable labels.
+let _initialsMap = {}; // member id -> display initials string
+function buildInitialsMap(memberList) {
+  // First pass: compute naive initials for each member
+  const naive = memberList.map(m => ({
+    id: m.id,
+    name: m.name,
+    ini: m.name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase(),
+  }));
+  // Find which initials collide
+  const seen = {};
+  naive.forEach(x => { seen[x.ini] = (seen[x.ini] || 0) + 1; });
+  // Second pass: for colliding members use first 2 chars of first name
+  _initialsMap = {};
+  naive.forEach(x => {
+    if (seen[x.ini] > 1) {
+      const firstName = x.name.trim().split(/\s+/)[0];
+      _initialsMap[x.id] = firstName.slice(0, 2).toUpperCase();
+    } else {
+      _initialsMap[x.id] = x.ini;
+    }
+  });
+  // Third pass: if first-2-chars STILL collide, append a disambiguating digit
+  const seen2 = {};
+  Object.entries(_initialsMap).forEach(([id, ini]) => {
+    seen2[ini] = seen2[ini] || [];
+    seen2[ini].push(id);
+  });
+  Object.values(seen2).forEach(ids => {
+    if (ids.length > 1) {
+      ids.forEach((id, i) => { _initialsMap[id] = _initialsMap[id].slice(0, 1) + (i + 1); });
+    }
+  });
+}
+// Returns display initials for a member by id (falls back to naive if map not yet built)
+const memberInitials = (id, name) => _initialsMap[id] || name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+// Keep legacy initials() for non-member uses (non-collision-aware)
+const initials = (name) => name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+// avatarCol: accepts either a member ID string (stable hash) or a numeric index (legacy)
+function avatarCol(idOrIndex) {
+  if (typeof idOrIndex === "number") return PALETTE[idOrIndex % PALETTE.length];
+  let h = 0;
+  const s = String(idOrIndex);
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(h) % PALETTE.length];
+}
 
 function escapeHtml(v) {
   return String(v ?? "")
@@ -483,7 +529,7 @@ async function openManagerMealMonth(key) {
         const nPct = p.total > 0 ? 100 - dPct : 0;
         return `<div class="card mc-compact" style="padding:14px;${dim ? "opacity:.55" : ""};border-color:${p.total>0?"var(--accent)":"var(--border)"}">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-            <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${initials(p.name)}</div>
+            <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${memberInitials(p.id, p.name)}</div>
             <div style="min-width:0;flex:1">
               <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.name)}</div>
               <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${monthLabel}</div>

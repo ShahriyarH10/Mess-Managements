@@ -439,7 +439,7 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
 
     return `<div class="profile-card" onclick="selectProfile('${m.id}')" style="padding:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div class="avatar" style="background:${col.bg};color:${col.fg};width:40px;height:40px;font-size:14px;flex-shrink:0">${initials(m.name)}</div>
+        <div class="avatar" style="background:${col.bg};color:${col.fg};width:40px;height:40px;font-size:14px;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
         <div style="min-width:0;flex:1">
           <div style="font-weight:700;font-size:15px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</div>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
@@ -559,7 +559,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   document.getElementById("modal-content").innerHTML=`
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
-        <div class="avatar" style="width:46px;height:46px;font-size:15px;flex-shrink:0;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${initials(member.name)}</div>
+        <div class="avatar" style="width:46px;height:46px;font-size:15px;flex-shrink:0;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${memberInitials(member.id, member.name)}</div>
         <div style="min-width:0">
           <div style="font-family:var(--font-serif);font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${member.name}</div>
           <div style="font-size:11px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Room ${member.room||"—"} · @${member.username||"—"} · Joined: ${member.joined||"—"}</div>

@@ -94,7 +94,7 @@ function getCollectKey() {
 }
 
 async function loadCollectMonth() {
-  members = await dbGetMembers();
+  members = await dbGetMembers(); buildInitialsMap(members);
   const { month, year, key } = getCollectKey();
   const prev = previousMonthFromKey(key);
   const next = nextMonth(month, year);
