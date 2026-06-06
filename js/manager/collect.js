@@ -45,7 +45,7 @@ async function renderCollect(el) {
         month — exactly the same number you see in <b>Monthly Log</b>. It's split into:
         <i>Meal balance</i> (meal cost − bazar credit, from previous month) +
         <i>Utility remaining</i> + <i>Rent remaining</i>.
-        Type the cash they handed over in <b>Amount received</b> — it auto-splits <b>proportionally</b>
+        Type the cash they handed over in <b>Amount received</b> — it auto-splits in priority order: <b>Rent → Utility → Meal</b>.
         across the three. Overpayment shows as <b>Change to return</b>. Click <b>Save</b>: meal cash
         goes into <code>meal_paid</code>, utility into <code>paid</code>, rent into <code>rent.entries.paid</code>.<br><br>
         <b>💡 Mess Owes Credit:</b> When the mess owes a member (negative net), use the
@@ -134,6 +134,7 @@ async function loadCollectMonth() {
       rentPaid:      p.roomRentPaid,
       netPayable:    p.netPayable,
       messCredit:    p.messCredit,
+      creditPaid:    p.creditPaid || 0,
       existingCarryCredit:  round2(Number(existingCredits[m.name]       || 0)),
       // Persisted pending change — survives page reload
       pendingChange:        round2(Number(pendingChangeBills[m.name]    || 0)),
@@ -270,9 +271,9 @@ function buildCreditTable() {
         <tbody>
           ${creditMembers.map(m => {
             const r = _collectCtx.perMember[m.id];
-            const messOwes      = round2(Math.abs(r.netPayable)); // total mess owes
+            const messOwes      = round2(Math.abs(r.netPayable) + (r.creditPaid || 0)); // gross before credit_paid
             const alreadyFwd    = round2(r.existingCarryCredit);
-            const remainingCred = round2(messOwes - alreadyFwd);
+            const remainingCred = round2(Math.max(0, messOwes - alreadyFwd - (r.creditPaid || 0)));
 
             return `
               <tr id="ccr-${m.id}">
@@ -766,8 +767,20 @@ async function saveCreditRow(memberId) {
   const cashNow = round2(Math.min(Math.max(0, raw), remainingCred));
   const newCarry = round2(remainingCred - cashNow);
 
-  try {
-    // Load the NEXT month's utility record fresh (avoid stale data)
+try {
+    // ── 1) If cash was handed back, record it in CURRENT month payments ──
+    if (cashNow > 0) {
+      const { data: curUtil } = await getClient().from("utility_payments")
+        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+      const curBills    = curUtil?.bills    || {};
+      const curPayments = { ...(curUtil?.payments || {}) };
+      const curPay      = { ...(curPayments[m.name] || {}) };
+      curPay.credit_paid = round2(Number(curPay.credit_paid || 0) + cashNow);
+      curPayments[m.name] = curPay;
+      await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
+    }
+
+    // ── 2) Write carry-forward to NEXT month bills ──
     const nm = ctx.nextMonth;
     const { data: latestNext } = await getClient().from("utility_payments")
       .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
@@ -775,20 +788,17 @@ async function saveCreditRow(memberId) {
     const nextBills    = { ...(latestNext?.bills    || {}) };
     const nextPayments = { ...(latestNext?.payments || {}) };
 
-    // Update mess_credit map for this member
     const existCredit = { ...(nextBills.mess_credit || {}) };
     if (newCarry > 0) {
       existCredit[m.name] = newCarry;
     } else {
-      delete existCredit[m.name]; // zero carry — remove entry
+      delete existCredit[m.name];
     }
     nextBills.mess_credit = existCredit;
-
     await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
 
-    // Update in-memory
-    r.existingCarryCredit = round2(alreadyFwd + newCarry);
-    ctx.existingCredits[m.name] = newCarry;
+    // ── 3) Reload table from DB so everything is fresh ──
+    await loadCollectMonth();
 
     // Refresh carry-fwd display in table
     const fwdEl = document.getElementById("cc-fwd-" + memberId);
@@ -816,8 +826,12 @@ async function saveCreditRow(memberId) {
   }
 }
 
-/* Proportional split across 3 buckets (only positive remaining counts).
-   Excess (amount > sum) → change.            */
+/* Priority-ordered split: Rent → Util → Meal.
+   Fills each bucket fully before moving to the next.
+   Excess (amount > totalRem) → change.
+   Negative mealRem (bazar surplus) is clamped to 0 —
+   the surplus is already baked into netPayable so the
+   member simply pays less. */
 function computeSplit3(amount, mealRem, utilRem, rentRem) {
   amount  = Math.max(0, round2(amount  || 0));
   const m = Math.max(0, round2(mealRem || 0));
@@ -829,9 +843,17 @@ function computeSplit3(amount, mealRem, utilRem, rentRem) {
   if (totalRem <= 0)      return { allocMeal: 0, allocUtil: 0, allocRent: 0, change: amount };
   if (amount >= totalRem) return { allocMeal: m, allocUtil: u, allocRent: r, change: round2(amount - totalRem) };
 
-  const allocMeal = round2((amount * m) / totalRem);
-  const allocUtil = round2((amount * u) / totalRem);
-  const allocRent = round2(amount - allocMeal - allocUtil);
+  // Fill buckets in priority order: Rent → Util → Meal
+  let remaining = amount;
+
+  const allocRent = round2(Math.min(remaining, r));
+  remaining = round2(remaining - allocRent);
+
+  const allocUtil = round2(Math.min(remaining, u));
+  remaining = round2(remaining - allocUtil);
+
+  const allocMeal = round2(Math.min(remaining, m));
+
   return { allocMeal, allocUtil, allocRent, change: 0 };
 }
 
@@ -934,7 +956,7 @@ async function saveCollectRow(memberId) {
       newMealRem > 0
         ? `<span style="color:var(--red)">${fmtTk(newMealRem)}</span>`
         : newMealRem < 0
-          ? `<span style="color:var(--green)">+${fmtTk(Math.abs(newMealRem))}</span>`
+          ? `<span style="color:var(--green)" title="Bazar credit (৳${fmtTk(Math.abs(mealRem))}) covers meal — no meal payment needed">surplus ${fmtTk(Math.abs(mealRem))}</span>`
           : `<span style="color:var(--green)">✓ 0</span>`);
     setCell("cp-ur-" + memberId, newUtilRem > 0 ? fmtTk(newUtilRem) : "✓ 0", newUtilRem > 0 ? "var(--red)" : "var(--green)");
     setCell("cp-rr-" + memberId, newRentRem > 0 ? fmtTk(newRentRem) : "✓ 0", newRentRem > 0 ? "var(--red)" : "var(--green)");
@@ -981,6 +1003,9 @@ async function saveCollectRow(memberId) {
       ? `Saved ✓  ${parts.join(" • ") || "—"}  · Change: ${fmtTk(change)}`
       : `Saved ✓  ${parts.join(" • ") || "—"}`;
     toast(msg, "success");
+
+     // ── Re-fetch from DB so the table reflects exactly what was saved ──
+    await loadCollectMonth();
 
     /* ── 4) Auto-open shareable receipt ─────────────────────────── */
     showCollectReceipt({

@@ -398,21 +398,26 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
   const utilPayment = (currentUtilRec?.payments || {})[member.name] || {};
   const utilityPaid = Number(utilPayment.paid || 0);
   const mealPaid    = Number(utilPayment.meal_paid || 0);
+  const creditPaid  = Number(utilPayment.credit_paid || 0); // cash handed back to member
   const mealBalance = round2(mealCost - memberBazar);
   const bills       = currentUtilRec?.bills || {};
   const messCredit  = round2(
     Number((bills.mess_credit   || {})[member.name] || 0) +
     Number((bills.change_credit || {})[member.name] || 0)
   );
-  const totalPay    = round2(mealCost + roomRent + prepaidUtility + postpaidUtility);
-  const netPayable  = round2(totalPay - memberBazar - utilityPaid - roomRentPaid - mealPaid - messCredit);
+  const totalPay       = round2(mealCost + roomRent + prepaidUtility + postpaidUtility);
+  const baseNetPayable = round2(totalPay - memberBazar - utilityPaid - roomRentPaid - mealPaid - messCredit);
+  // creditPaid = cash handed back to member; caps at 0 so over-accumulated DB values can't flip sign
+  const netPayable     = baseNetPayable < 0
+    ? round2(Math.min(baseNetPayable + creditPaid, 0))
+    : baseNetPayable;
   return {
     memberName: member.name, settlementKey, sourceKey, prevMonthInfo,
     totalMeals: totals.totalMeals, totalBazar: totals.totalBazar, mealRate: totals.mealRate,
     memberMeals, memberBazar, mealCost, roomRent, roomRentPaid,
     prepaidTotal, prepaidUtility, khalaTotal, otherTotal, khalaShare, otherShare, postpaidUtility,
     utilityPaid, utilityStatus: utilPayment.status || "unpaid", rentStatus: rentEntry.status || "unpaid",
-    mealBalance, messCredit, mealPaid, totalPay, netPayable,
+    mealBalance, messCredit, mealPaid, creditPaid, totalPay, netPayable,
   };
 }
 
