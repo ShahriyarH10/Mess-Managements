@@ -96,22 +96,27 @@ function getCollectKey() {
 async function loadCollectMonth() {
   members = await dbGetMembers(); buildInitialsMap(members);
   const { month, year, key } = getCollectKey();
-  const prev = previousMonthFromKey(key);
-  const next = nextMonth(month, year);
+  const prev     = previousMonthFromKey(key);
+  const prevPrev = previousMonthFromKey(prev.key);
+  const next     = nextMonth(month, year);
 
-  const [allMeals, allBazar, utilCurR, utilPrevR, rentR, utilNextR] = await Promise.all([
+  const [allMeals, allBazar, utilCurR, utilPrevR, rentR, utilNextR, rentPrevR, utilPrevPrevR] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
     getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", next.key).maybeSingle(),
+    getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrev.key).maybeSingle(),
   ]);
 
-  const utilRec     = utilCurR.data  || null;
-  const utilRecPrev = utilPrevR.data || null;
-  const rentRec     = rentR.data     || null;
-  const utilRecNext = utilNextR.data || null;
+  const utilRec         = utilCurR.data      || null;
+  const utilRecPrev     = utilPrevR.data     || null;
+  const rentRec         = rentR.data         || null;
+  const utilRecNext     = utilNextR.data     || null;
+  const rentRecPrev     = rentPrevR.data     || null;
+  const utilRecPrevPrev = utilPrevPrevR.data || null;
 
   // Existing carry-forward credits stored in NEXT month's bills
   const existingCredits       = utilRecNext?.bills?.mess_credit    || {};
@@ -123,6 +128,12 @@ async function loadCollectMonth() {
   const perMember = {};
   members.forEach(m => {
     const p = calcMemberSettlement(m, allMeals, allBazar, rentRec, utilRec, utilRecPrev, key);
+
+    // Carry-forward: outstanding net due from previous month
+    const prevP        = calcMemberSettlement(m, allMeals, allBazar, rentRecPrev, utilRecPrev, utilRecPrevPrev, prev.key);
+    const prevDuePaid  = round2(Number((utilRec?.payments || {})[m.name]?.prev_due_paid || 0));
+    const prevDue      = round2(Math.max(0, prevP.netPayable - prevDuePaid));
+
     perMember[m.id] = {
       name:          m.name,
       mealCost:      p.mealCost,
@@ -135,6 +146,8 @@ async function loadCollectMonth() {
       netPayable:    p.netPayable,
       messCredit:    p.messCredit,
       creditPaid:    p.creditPaid || 0,
+      prevDue,
+      prevDuePaid,
       existingCarryCredit:  round2(Number(existingCredits[m.name]       || 0)),
       // Persisted pending change — survives page reload
       pendingChange:        round2(Number(pendingChangeBills[m.name]    || 0)),
@@ -153,8 +166,11 @@ function buildCollectTable() {
   if (!wrap) return;
   if (!members.length) { wrap.innerHTML = '<div class="empty">No members in this mess</div>'; return; }
 
-  // Only show members who owe money (net > 0) in this table
-  const owing = members.filter(m => (_collectCtx.perMember[m.id]?.netPayable || 0) > 0);
+  // Show members who owe this month OR have unpaid dues from last month
+  const owing = members.filter(m => {
+    const r = _collectCtx.perMember[m.id];
+    return r && (r.netPayable > 0 || r.prevDue > 0);
+  });
 
   if (!owing.length) {
     wrap.innerHTML = '<div class="empty" style="padding:18px;text-align:center">✅ All members are settled for this month!</div>';
@@ -167,11 +183,13 @@ function buildCollectTable() {
         <thead>
           <tr>
             <th>Member</th>
+            <th>Prev. Due</th>
             <th>Meal bal.</th>
             <th>Utility rem.</th>
             <th>Rent rem.</th>
-            <th>Net payable</th>
+            <th>Total payable</th>
             <th>Amount received (৳)</th>
+            <th>→ Prev.Due</th>
             <th>→ Meal</th>
             <th>→ Util</th>
             <th>→ Rent</th>
@@ -181,11 +199,13 @@ function buildCollectTable() {
         </thead>
         <tbody id="cp-tbody">
           ${owing.map(m => {
-            const r = _collectCtx.perMember[m.id];
+            const r       = _collectCtx.perMember[m.id];
             const mealRem = round2(r.mealCost - r.memberBazar - r.mealPaid);
             const utilRem = round2(Math.max(0, r.utilDue - r.utilPaid));
             const rentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
             const net     = round2(r.netPayable);
+            const pd      = round2(r.prevDue || 0);
+            const total   = round2(net + pd);
 
             const fmtMeal = mealRem > 0
               ? `<span style="color:var(--red)">${fmtTk(mealRem)}</span>`
@@ -193,24 +213,31 @@ function buildCollectTable() {
                 ? `<span style="color:var(--green)" title="Member is owed back">+${fmtTk(Math.abs(mealRem))}</span>`
                 : `<span style="color:var(--green)">✓ 0</span>`;
 
-            const netDisplay = net > 0
-              ? `<b style="color:var(--red)">${fmtTk(net)}</b>`
+            const totalDisplay = total > 0
+              ? `<b style="color:var(--red)">${fmtTk(total)}</b>${pd > 0 ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">curr ${fmtTk(net)} + prev ${fmtTk(pd)}</div>` : ''}`
               : `<b style="color:var(--green)">✓ Settled</b>`;
+
+            const prefill = (r.messCredit > 0 || pd > 0) && total > 0 ? total : '';
 
             return `
               <tr id="cpr-${m.id}">
                 <td><b>${m.name}</b></td>
+                <td id="cp-pd-disp-${m.id}" style="font-weight:700;color:${pd>0?'var(--red)':'var(--text3)'}">
+                  ${pd > 0 ? `<span title="Unpaid from last month">${fmtTk(pd)}</span>` : '—'}
+                </td>
                 <td id="cp-mr-${m.id}">${fmtMeal}</td>
                 <td id="cp-ur-${m.id}" style="color:${utilRem>0?'var(--red)':'var(--green)'}">${utilRem>0?fmtTk(utilRem):"✓ 0"}</td>
                 <td id="cp-rr-${m.id}" style="color:${rentRem>0?'var(--red)':'var(--green)'}">${rentRem>0?fmtTk(rentRem):"✓ 0"}</td>
-                <td id="cp-net-${m.id}">${netDisplay}</td>
+                <td id="cp-net-${m.id}">${totalDisplay}</td>
                 <td>
                   <input type="number" class="input input-sm" id="cp-amt-${m.id}"
                     min="0" step="1" placeholder="0" style="width:120px"
-                    value="${r.messCredit > 0 && net > 0 ? net : ''}"
+                    value="${prefill}"
                     oninput="onCollectAmtInput('${m.id}')"/>
                   ${r.messCredit > 0 ? `<div style="font-size:10px;color:var(--blue);margin-top:3px">↩ ৳${r.messCredit} credit applied</div>` : ''}
+                  ${pd > 0 ? `<div style="font-size:10px;color:var(--red);margin-top:2px">⚠ +৳${pd} prev. due</div>` : ''}
                 </td>
+                <td id="cp-apd-${m.id}" style="color:var(--red);font-weight:600">৳0</td>
                 <td id="cp-am-${m.id}" style="color:var(--violet,#9b59b6);font-weight:600">৳0</td>
                 <td id="cp-au-${m.id}" style="color:var(--blue);font-weight:600">৳0</td>
                 <td id="cp-ar-${m.id}" style="color:var(--amber);font-weight:600">৳0</td>
@@ -228,10 +255,10 @@ function buildCollectTable() {
       <button class="btn btn-ghost" onclick="loadCollectMonth()">↻ Refresh</button>
     </div>`;
 
-  // Trigger split calculation for any pre-filled inputs (carry-forward applied members)
+  // Trigger split calculation for any pre-filled inputs
   owing.forEach(m => {
     const r = _collectCtx.perMember[m.id];
-    if (r.messCredit > 0 && r.netPayable > 0) onCollectAmtInput(m.id);
+    if ((r.messCredit > 0 || r.prevDue > 0) && (r.netPayable > 0 || r.prevDue > 0)) onCollectAmtInput(m.id);
   });
 }
 
@@ -832,19 +859,23 @@ try {
    Negative mealRem (bazar surplus) is clamped to 0 —
    the surplus is already baked into netPayable so the
    member simply pays less. */
-function computeSplit3(amount, mealRem, utilRem, rentRem) {
-  amount  = Math.max(0, round2(amount  || 0));
-  const m = Math.max(0, round2(mealRem || 0));
-  const u = Math.max(0, round2(utilRem || 0));
-  const r = Math.max(0, round2(rentRem || 0));
-  const totalRem = round2(m + u + r);
+/* Priority order: prevDue (old debt) → Rent → Util → Meal */
+function computeSplit3(amount, mealRem, utilRem, rentRem, prevDue = 0) {
+  amount   = Math.max(0, round2(amount  || 0));
+  const m  = Math.max(0, round2(mealRem || 0));
+  const u  = Math.max(0, round2(utilRem || 0));
+  const r  = Math.max(0, round2(rentRem || 0));
+  const pd = Math.max(0, round2(prevDue || 0));
+  const totalRem = round2(m + u + r + pd);
 
-  if (amount <= 0)        return { allocMeal: 0, allocUtil: 0, allocRent: 0, change: 0 };
-  if (totalRem <= 0)      return { allocMeal: 0, allocUtil: 0, allocRent: 0, change: amount };
-  if (amount >= totalRem) return { allocMeal: m, allocUtil: u, allocRent: r, change: round2(amount - totalRem) };
+  if (amount <= 0)        return { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: 0 };
+  if (totalRem <= 0)      return { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: amount };
+  if (amount >= totalRem) return { allocMeal: m, allocUtil: u, allocRent: r, allocPrevDue: pd, change: round2(amount - totalRem) };
 
-  // Fill buckets in priority order: Rent → Util → Meal
   let remaining = amount;
+
+  const allocPrevDue = round2(Math.min(remaining, pd));
+  remaining = round2(remaining - allocPrevDue);
 
   const allocRent = round2(Math.min(remaining, r));
   remaining = round2(remaining - allocRent);
@@ -854,7 +885,7 @@ function computeSplit3(amount, mealRem, utilRem, rentRem) {
 
   const allocMeal = round2(Math.min(remaining, m));
 
-  return { allocMeal, allocUtil, allocRent, change: 0 };
+  return { allocMeal, allocUtil, allocRent, allocPrevDue, change: 0 };
 }
 
 function onCollectAmtInput(memberId) {
@@ -865,16 +896,18 @@ function onCollectAmtInput(memberId) {
   const mealRem = round2(r.mealCost - r.memberBazar - r.mealPaid);
   const utilRem = round2(Math.max(0, r.utilDue - r.utilPaid));
   const rentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
-  const { allocMeal, allocUtil, allocRent, change } = computeSplit3(amt, mealRem, utilRem, rentRem);
+  const prevDue = round2(r.prevDue || 0);
+  const { allocMeal, allocUtil, allocRent, allocPrevDue, change } = computeSplit3(amt, mealRem, utilRem, rentRem, prevDue);
 
   const set = (id, v, color) => {
     const el = document.getElementById(id);
     if (el) { el.textContent = fmtTk(v); if (color) el.style.color = color; }
   };
-  set("cp-am-" + memberId, allocMeal, "var(--violet,#9b59b6)");
-  set("cp-au-" + memberId, allocUtil, "var(--blue)");
-  set("cp-ar-" + memberId, allocRent, "var(--amber)");
-  set("cp-ch-" + memberId, change,    change > 0 ? "var(--green)" : "var(--text3)");
+  set("cp-apd-" + memberId, allocPrevDue, "var(--red)");
+  set("cp-am-"  + memberId, allocMeal,    "var(--violet,#9b59b6)");
+  set("cp-au-"  + memberId, allocUtil,    "var(--blue)");
+  set("cp-ar-"  + memberId, allocRent,    "var(--amber)");
+  set("cp-ch-"  + memberId, change,       change > 0 ? "var(--green)" : "var(--text3)");
 }
 
 async function saveCollectRow(memberId) {
@@ -891,26 +924,29 @@ async function saveCollectRow(memberId) {
   const mealRem = round2(r.mealCost - r.memberBazar - r.mealPaid);
   const utilRem = round2(Math.max(0, r.utilDue - r.utilPaid));
   const rentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
-  const { allocMeal, allocUtil, allocRent, change } = computeSplit3(amt, mealRem, utilRem, rentRem);
+  const prevDue = round2(r.prevDue || 0);
+  const { allocMeal, allocUtil, allocRent, allocPrevDue, change } = computeSplit3(amt, mealRem, utilRem, rentRem, prevDue);
 
   try {
-    /* ── 1) Update utility_payments — utility paid + meal_paid both live here ── */
-    if (allocUtil > 0 || allocMeal > 0) {
+    /* ── 1) Update utility_payments — utility paid + meal_paid + prev_due_paid live here ── */
+    if (allocUtil > 0 || allocMeal > 0 || allocPrevDue > 0) {
       const { data: latestUtil } = await getClient().from("utility_payments")
         .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
       const bills    = latestUtil?.bills    || {};
       const payments = { ...(latestUtil?.payments || {}) };
       const cur      = payments[m.name] || {};
-      const newPaid  = round2(Number(cur.paid      || 0) + allocUtil);
-      const newMeal  = round2(Number(cur.meal_paid || 0) + allocMeal);
+      const newPaid         = round2(Number(cur.paid          || 0) + allocUtil);
+      const newMeal         = round2(Number(cur.meal_paid     || 0) + allocMeal);
+      const newPrevDuePaid  = round2(Number(cur.prev_due_paid || 0) + allocPrevDue);
       const status   = newPaid <= 0           ? "unpaid"
                      : newPaid >= r.utilDue   ? "paid"
                      : "partial";
       payments[m.name] = {
-        paid:      newPaid,
-        meal_paid: newMeal,
+        paid:          newPaid,
+        meal_paid:     newMeal,
+        prev_due_paid: newPrevDuePaid,
         status,
-        notes:     cleanText(cur.notes || ""),
+        notes:         cleanText(cur.notes || ""),
       };
       await dbUpsertUtility(ctx.month, ctx.year, ctx.key, bills, payments);
     }
@@ -939,19 +975,25 @@ async function saveCollectRow(memberId) {
     }
 
     /* ── 3) Refresh in-memory ctx ── */
-    r.utilPaid   = round2(r.utilPaid   + allocUtil);
-    r.rentPaid   = round2(r.rentPaid   + allocRent);
-    r.mealPaid   = round2(r.mealPaid   + allocMeal);
-    r.netPayable = round2(r.netPayable - allocMeal - allocUtil - allocRent);
+    r.utilPaid    = round2(r.utilPaid    + allocUtil);
+    r.rentPaid    = round2(r.rentPaid    + allocRent);
+    r.mealPaid    = round2(r.mealPaid    + allocMeal);
+    r.prevDuePaid = round2(r.prevDuePaid + allocPrevDue);
+    r.prevDue     = round2(Math.max(0, r.prevDue - allocPrevDue));
+    r.netPayable  = round2(r.netPayable  - allocMeal - allocUtil - allocRent);
 
     const newMealRem = round2(r.mealCost - r.memberBazar - r.mealPaid);
     const newUtilRem = round2(Math.max(0, r.utilDue - r.utilPaid));
     const newRentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
+    const newTotal   = round2(r.netPayable + r.prevDue);
 
     const setCell = (id, txt, color) => {
       const el = document.getElementById(id);
       if (el) { el.innerHTML = txt; if (color) el.style.color = color; }
     };
+    setCell("cp-pd-disp-" + memberId,
+      r.prevDue > 0 ? `<span title="Unpaid from last month">${fmtTk(r.prevDue)}</span>` : "—",
+      r.prevDue > 0 ? "var(--red)" : "var(--text3)");
     setCell("cp-mr-" + memberId,
       newMealRem > 0
         ? `<span style="color:var(--red)">${fmtTk(newMealRem)}</span>`
@@ -961,8 +1003,8 @@ async function saveCollectRow(memberId) {
     setCell("cp-ur-" + memberId, newUtilRem > 0 ? fmtTk(newUtilRem) : "✓ 0", newUtilRem > 0 ? "var(--red)" : "var(--green)");
     setCell("cp-rr-" + memberId, newRentRem > 0 ? fmtTk(newRentRem) : "✓ 0", newRentRem > 0 ? "var(--red)" : "var(--green)");
     setCell("cp-net-" + memberId,
-      r.netPayable > 0
-        ? `<b style="color:var(--red)">${fmtTk(r.netPayable)}</b>`
+      newTotal > 0
+        ? `<b style="color:var(--red)">${fmtTk(newTotal)}</b>`
         : r.netPayable < 0
           ? `<b style="color:var(--green)">Get ${fmtTk(Math.abs(r.netPayable))}</b>`
           : `<b style="color:var(--green)">✓ Settled</b>`);
@@ -996,15 +1038,16 @@ async function saveCollectRow(memberId) {
     }
 
     const parts = [];
-    if (allocMeal > 0) parts.push(`Meal ${fmtTk(allocMeal)}`);
-    if (allocUtil > 0) parts.push(`Util ${fmtTk(allocUtil)}`);
-    if (allocRent > 0) parts.push(`Rent ${fmtTk(allocRent)}`);
+    if (allocPrevDue > 0) parts.push(`Prev.Due ${fmtTk(allocPrevDue)}`);
+    if (allocMeal    > 0) parts.push(`Meal ${fmtTk(allocMeal)}`);
+    if (allocUtil    > 0) parts.push(`Util ${fmtTk(allocUtil)}`);
+    if (allocRent    > 0) parts.push(`Rent ${fmtTk(allocRent)}`);
     const msg = change > 0
       ? `Saved ✓  ${parts.join(" • ") || "—"}  · Change: ${fmtTk(change)}`
       : `Saved ✓  ${parts.join(" • ") || "—"}`;
     toast(msg, "success");
 
-     // ── Re-fetch from DB so the table reflects exactly what was saved ──
+    // ── Re-fetch from DB so the table reflects exactly what was saved ──
     await loadCollectMonth();
 
     /* ── 4) Auto-open shareable receipt ─────────────────────────── */
@@ -1012,7 +1055,7 @@ async function saveCollectRow(memberId) {
       member:        m,
       monthLabel:    monthLabelFromKey(ctx.key),
       amountReceived: amt,
-      allocMeal, allocUtil, allocRent, change,
+      allocMeal, allocUtil, allocRent, allocPrevDue, change,
       newUtilRem, newRentRem, newMealRem,
       newNet:        r.netPayable,
       timestamp:     new Date(),
@@ -1400,10 +1443,11 @@ function buildReceiptText(d) {
   lines.push(``);
   lines.push(`Amount received:  ${fmtTk(d.amountReceived)}`);
   lines.push(`─────────────────────`);
-  if (d.allocMeal > 0) lines.push(`→ Meal:     ${fmtTk(d.allocMeal)}`);
-  if (d.allocUtil > 0) lines.push(`→ Utility:  ${fmtTk(d.allocUtil)}`);
-  if (d.allocRent > 0) lines.push(`→ Rent:     ${fmtTk(d.allocRent)}`);
-  if (d.change   > 0)  lines.push(`Change returned: ${fmtTk(d.change)}`);
+  if (d.allocPrevDue > 0) lines.push(`→ Prev. Due: ${fmtTk(d.allocPrevDue)}`);
+  if (d.allocMeal    > 0) lines.push(`→ Meal:      ${fmtTk(d.allocMeal)}`);
+  if (d.allocUtil    > 0) lines.push(`→ Utility:   ${fmtTk(d.allocUtil)}`);
+  if (d.allocRent    > 0) lines.push(`→ Rent:      ${fmtTk(d.allocRent)}`);
+  if (d.change       > 0) lines.push(`Change returned: ${fmtTk(d.change)}`);
   lines.push(`─────────────────────`);
   const netLine = d.newNet > 0
     ? `Still due:  ${fmtTk(d.newNet)}`
@@ -1441,9 +1485,10 @@ function showCollectReceipt(d) {
     + String(d.timestamp.getMinutes()).padStart(2,"0");
 
   const allocItems = [];
-  if (d.allocMeal > 0) allocItems.push({ icon:"🍽️", label:"Meal Balance",  val:d.allocMeal, color:"var(--accent)" });
-  if (d.allocUtil > 0) allocItems.push({ icon:"⚡",  label:"Utility",       val:d.allocUtil, color:"var(--blue)"   });
-  if (d.allocRent > 0) allocItems.push({ icon:"🏠",  label:"Room Rent",     val:d.allocRent, color:"var(--blue)"   });
+  if (d.allocPrevDue > 0) allocItems.push({ icon:"⏪",  label:"Prev. Month Due", val:d.allocPrevDue, color:"var(--red)"    });
+  if (d.allocMeal    > 0) allocItems.push({ icon:"🍽️", label:"Meal Balance",     val:d.allocMeal,    color:"var(--accent)" });
+  if (d.allocUtil    > 0) allocItems.push({ icon:"⚡",  label:"Utility",          val:d.allocUtil,    color:"var(--blue)"   });
+  if (d.allocRent    > 0) allocItems.push({ icon:"🏠",  label:"Room Rent",        val:d.allocRent,    color:"var(--blue)"   });
 
   const statusItems = [
     { icon:"🍽️", label:"Meal Balance",      val:d.newMealRem, signed:true,
