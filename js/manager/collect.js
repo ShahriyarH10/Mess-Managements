@@ -28,61 +28,148 @@ async function renderCollect(el) {
   <div class="topbar">
     <div>
       <div class="page-title">Collect Payment</div>
-      <div class="page-sub">Quick settle · Draw from Mess Owes credit · Remainder carries forward</div>
+      <div class="page-sub">Enter the cash a member hands over — it splits automatically</div>
     </div>
   </div>
   <div class="content">
-    <div class="card" style="margin-bottom:12px">
-      <div class="month-sel">
-        <label>Settlement month</label>
-        <select class="input" id="cp-month" style="width:150px">${opts.monthOptions}</select>
-        <label>Year</label>
-        <select class="input" id="cp-year" style="width:95px">${opts.yearOptions}</select>
-        <button class="btn btn-ghost btn-sm" onclick="loadCollectMonth()">Load</button>
-      </div>
-      <div class="settlement-note" style="margin-top:12px">
-        <b>How it works:</b> Each row shows the member's <b>Net payable</b> for the chosen settlement
-        month — exactly the same number you see in <b>Monthly Log</b>. It's split into:
-        <i>Meal balance</i> (meal cost − bazar credit, from previous month) +
-        <i>Utility remaining</i> + <i>Rent remaining</i>.
-        Type the cash they handed over in <b>Amount received</b> — it auto-splits in priority order: <b>Rent → Utility → Meal</b>.
-        across the three. Overpayment shows as <b>Change to return</b>. Click <b>Save</b>: meal cash
-        goes into <code>meal_paid</code>, utility into <code>paid</code>, rent into <code>rent.entries.paid</code>.<br><br>
-        <b>💡 Mess Owes Credit:</b> When the mess owes a member (negative net), use the
-        <b>Take Credit</b> panel to draw a custom cash amount. Any leftover credit automatically
-        carries forward to next month's utility bills as a deduction.
-      </div>
-    </div>
 
-    <div class="card">
-      <div class="card-title">💵 Per-member quick settle</div>
-      <div id="cp-table-wrap">
-        <div class="empty" style="padding:24px;text-align:center">
-          <div style="font-size:24px;margin-bottom:6px">💵</div>
-          Pick a month and click <b>Load</b>
+    <!-- Month picker + how-it-works -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <select class="input" id="cp-month" style="width:148px">${opts.monthOptions}</select>
+        <select class="input" id="cp-year"  style="width:92px">${opts.yearOptions}</select>
+        <button class="btn btn-primary btn-sm" onclick="loadCollectMonth()" style="gap:6px">
+          ↻ Load
+        </button>
+      </div>
+
+      <!-- Compact how-it-works pills -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
+        <div class="cp-pill cp-pill-red">
+          <span class="cp-pill-num">1</span>
+          <div>
+            <div class="cp-pill-title">Enter cash received</div>
+            <div class="cp-pill-body">Type how much the member handed you</div>
+          </div>
+        </div>
+        <div class="cp-pill cp-pill-amber">
+          <span class="cp-pill-num">2</span>
+          <div>
+            <div class="cp-pill-title">Split previews live</div>
+            <div class="cp-pill-body">Auto-fills: Prev.Due → Rent → Utility → Meal</div>
+          </div>
+        </div>
+        <div class="cp-pill cp-pill-green">
+          <span class="cp-pill-num">3</span>
+          <div>
+            <div class="cp-pill-title">Hit Save</div>
+            <div class="cp-pill-body">Overpay? Change shown — carry forward if needed</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="card" id="cp-credit-card" style="display:none">
-      <div class="card-title">🏦 Mess Owes — Credit Drawdown</div>
-      <div style="font-size:13px;color:var(--text3);margin-bottom:12px">
-        These members have a <b>negative net payable</b> — the mess owes them money.
-        Enter how much cash to hand back now. Any unpaid remainder will
-        <b>carry forward</b> to next month's utility deduction automatically.
+    <!-- Member payment cards -->
+    <div id="cp-table-wrap">
+      <div class="empty" style="padding:32px;text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">💵</div>
+        <div style="font-size:14px;color:var(--text2)">Pick a month above and click <b>↻ Load</b></div>
+      </div>
+    </div>
+
+    <!-- Mess Owes section -->
+    <div class="card" id="cp-credit-card" style="display:none;margin-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--green-bg);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🏦</div>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--green)">Mess Owes These Members</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:1px">Their balance is negative — the mess must pay them back</div>
+        </div>
       </div>
       <div id="cp-credit-wrap"></div>
     </div>
 
-    <div class="card" id="cp-change-card" style="display:none">
-      <div class="card-title">💸 Change & Carry Forward</div>
-      <div style="font-size:13px;color:var(--text3);margin-bottom:12px">
-        These members <b>overpaid</b> — they are owed change. Enter how much cash to return now.
-        Any unpaid remainder will <b>carry forward</b> to next month's utility deduction automatically.
+    <!-- Change / Overpayment section -->
+    <div class="card" id="cp-change-card" style="display:none;margin-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">💸</div>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--accent)">Return Change to These Members</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:1px">They overpaid — enter how much cash to hand back now</div>
+        </div>
       </div>
       <div id="cp-change-wrap"></div>
     </div>
-  </div>`;
+
+  </div>
+
+  <style>
+    /* ── How-it-works pills ── */
+    .cp-pill{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);flex:1;min-width:180px;}
+    .cp-pill-red{border-color:rgba(224,82,82,.25);background:var(--red-bg);}
+    .cp-pill-amber{border-color:rgba(212,168,83,.25);background:var(--accent-bg);}
+    .cp-pill-green{border-color:rgba(76,175,130,.25);background:var(--green-bg);}
+    .cp-pill-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;margin-top:1px;}
+    .cp-pill-red .cp-pill-num{background:var(--red);color:#fff;}
+    .cp-pill-amber .cp-pill-num{background:var(--accent);color:#0f0f0f;}
+    .cp-pill-green .cp-pill-num{background:var(--green);color:#fff;}
+    .cp-pill-title{font-size:12px;font-weight:700;color:var(--text);}
+    .cp-pill-body{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.4;}
+
+    /* ── Member payment cards grid ── */
+    .cp-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;}
+
+    /* ── Individual member card ── */
+    .cp-mcard{background:var(--bg2);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;transition:border-color .2s,box-shadow .2s;}
+    .cp-mcard:hover{border-color:var(--border2);box-shadow:0 4px 20px var(--shadow);}
+    .cp-mcard.cp-mcard-active{border-color:var(--accent);box-shadow:0 0 0 3px rgba(212,168,83,.12);}
+
+    /* header row */
+    .cp-mcard-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+    .cp-mcard-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+    .cp-mcard-name{font-size:15px;font-weight:700;color:var(--text);}
+    .cp-mcard-total{margin-left:auto;text-align:right;}
+    .cp-mcard-total-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;}
+    .cp-mcard-total-val{font-size:18px;font-weight:800;line-height:1.1;}
+
+    /* breakdown bars */
+    .cp-breakdown{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+    .cp-brow{display:flex;align-items:center;gap:8px;}
+    .cp-brow-ico{font-size:13px;width:18px;text-align:center;flex-shrink:0;}
+    .cp-brow-lbl{font-size:12px;color:var(--text2);flex:1;}
+    .cp-brow-bar-wrap{flex:2;height:5px;background:var(--bg4);border-radius:99px;overflow:hidden;}
+    .cp-brow-bar{height:100%;border-radius:99px;transition:width .4s var(--ease-spring);}
+    .cp-brow-val{font-size:12px;font-weight:600;width:68px;text-align:right;flex-shrink:0;}
+
+    /* amount input area */
+    .cp-input-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+    .cp-amt-input{flex:1;font-size:18px!important;font-weight:700!important;padding:10px 13px!important;border-radius:var(--radius-sm)!important;text-align:right;}
+    .cp-amt-input:focus{box-shadow:0 0 0 3px rgba(212,168,83,.18)!important;}
+    .cp-save-btn{padding:10px 18px!important;font-size:13px!important;white-space:nowrap;}
+
+    /* live split preview chips */
+    .cp-split-preview{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;min-height:26px;}
+    .cp-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;}
+    .cp-chip-pd{background:var(--red-bg);color:var(--red);border:1px solid rgba(224,82,82,.25);}
+    .cp-chip-rent{background:var(--accent-bg);color:var(--accent);border:1px solid rgba(212,168,83,.3);}
+    .cp-chip-util{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(91,155,213,.3);}
+    .cp-chip-meal{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,.3);}
+    .cp-chip-change{background:var(--green-bg);color:var(--green);border:1px solid rgba(76,175,130,.3);}
+
+    /* prev-due warning banner */
+    .cp-prevdue-banner{display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:var(--radius-sm);margin-bottom:10px;font-size:12px;color:var(--red);font-weight:600;}
+
+    /* credit applied note */
+    .cp-credit-note{font-size:11px;color:var(--blue);display:flex;align-items:center;gap:5px;margin-top:4px;}
+
+    /* Mess-owes & Change tables (simplified) */
+    .cp-simple-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg3);border-radius:var(--radius-sm);margin-bottom:8px;flex-wrap:wrap;}
+    .cp-simple-name{font-weight:700;font-size:14px;color:var(--text);flex:1;min-width:80px;}
+    .cp-simple-amt-lbl{font-size:11px;color:var(--text3);}
+    .cp-simple-amt-val{font-size:16px;font-weight:800;}
+    .cp-simple-input{width:130px!important;}
+    .cp-simple-carry{font-size:12px;color:var(--blue);font-weight:600;min-width:90px;text-align:right;}
+  </style>`;
 
   await loadCollectMonth();
 }
@@ -176,168 +263,227 @@ function buildCollectTable() {
   });
 
   if (!owing.length) {
-    wrap.innerHTML = '<div class="empty" style="padding:18px;text-align:center">✅ All members are settled for this month!</div>';
+    wrap.innerHTML = `
+      <div style="text-align:center;padding:36px 20px">
+        <div style="font-size:40px;margin-bottom:10px">✅</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">All settled!</div>
+        <div style="font-size:13px;color:var(--text3)">Every member has paid up for this month.</div>
+      </div>`;
     return;
   }
 
+  // Avatar colour palette (cycles through members)
+  const avatarColors = [
+    {bg:'rgba(212,168,83,.15)',color:'var(--accent)'},
+    {bg:'rgba(91,155,213,.15)',color:'var(--blue)'},
+    {bg:'rgba(76,175,130,.15)',color:'var(--green)'},
+    {bg:'rgba(224,82,82,.15)',color:'var(--red)'},
+    {bg:'rgba(167,139,250,.15)',color:'var(--purple)'},
+  ];
+
+  const cards = owing.map((m, idx) => {
+    const r       = _collectCtx.perMember[m.id];
+    const mealRem = round2(r.mealCost - r.memberBazar - r.mealPaid);
+    const utilRem = round2(Math.max(0, r.utilDue - r.utilPaid));
+    const rentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
+    const pd      = round2(r.prevDue || 0);
+    const total   = round2(r.netPayable + pd);
+    const prefill = total > 0 ? total : '';
+
+    // Bar widths (as % of total, for visual)
+    const barTotal = Math.max(0.01, pd + Math.max(0, mealRem) + utilRem + rentRem);
+    const pctPd   = Math.round((pd / barTotal) * 100);
+    const pctMeal = Math.round((Math.max(0, mealRem) / barTotal) * 100);
+    const pctUtil = Math.round((utilRem / barTotal) * 100);
+    const pctRent = Math.round((rentRem / barTotal) * 100);
+
+    const av = avatarColors[idx % avatarColors.length];
+    const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+
+    return `
+      <div class="cp-mcard" id="cpr-${m.id}">
+        <div class="cp-mcard-head">
+          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
+          <div>
+            <div class="cp-mcard-name">${m.name}</div>
+            ${r.messCredit > 0 ? `<div style="font-size:11px;color:var(--blue);margin-top:1px">↩ ${fmtTk(r.messCredit)} credit applied</div>` : ''}
+          </div>
+          <div class="cp-mcard-total">
+            <div class="cp-mcard-total-lbl">Total due</div>
+            <div class="cp-mcard-total-val" id="cp-net-${m.id}" style="color:${total > 0 ? 'var(--red)' : 'var(--green)'}">${total > 0 ? fmtTk(total) : '✓ Clear'}</div>
+          </div>
+        </div>
+
+        ${pd > 0.01 ? `
+          <div class="cp-prevdue-banner" id="cp-pd-disp-${m.id}">
+            ⚠ ${fmtTk(pd)} unpaid from last month
+          </div>
+        ` : `<div id="cp-pd-disp-${m.id}" style="display:none"></div>`}
+
+        <div class="cp-breakdown">
+          ${pd > 0.01 ? `
+          <div class="cp-brow">
+            <span class="cp-brow-ico">⏪</span>
+            <span class="cp-brow-lbl">Prev. Month Due</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctPd}%;background:var(--red)"></div></div>
+            <span class="cp-brow-val" id="cp-pd-bar-${m.id}" style="color:var(--red)">${fmtTk(pd)}</span>
+          </div>` : ''}
+          <div class="cp-brow">
+            <span class="cp-brow-ico">🏠</span>
+            <span class="cp-brow-lbl">Rent</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRent}%;background:var(--accent)"></div></div>
+            <span class="cp-brow-val" id="cp-rr-${m.id}" style="color:${rentRem > 0 ? 'var(--red)' : 'var(--green)'}">${rentRem > 0 ? fmtTk(rentRem) : '✓ 0'}</span>
+          </div>
+          <div class="cp-brow">
+            <span class="cp-brow-ico">⚡</span>
+            <span class="cp-brow-lbl">Utility</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctUtil}%;background:var(--blue)"></div></div>
+            <span class="cp-brow-val" id="cp-ur-${m.id}" style="color:${utilRem > 0 ? 'var(--red)' : 'var(--green)'}">${utilRem > 0 ? fmtTk(utilRem) : '✓ 0'}</span>
+          </div>
+          <div class="cp-brow">
+            <span class="cp-brow-ico">🍽️</span>
+            <span class="cp-brow-lbl">Meal Balance</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctMeal}%;background:var(--purple)"></div></div>
+            <span class="cp-brow-val" id="cp-mr-${m.id}" style="color:${mealRem > 0 ? 'var(--red)' : mealRem < 0 ? 'var(--green)' : 'var(--text3)'}">${mealRem > 0 ? fmtTk(mealRem) : mealRem < 0 ? '+'+fmtTk(Math.abs(mealRem)) : '✓ 0'}</span>
+          </div>
+        </div>
+
+        <div class="cp-split-preview" id="cp-split-${m.id}" style="display:none">
+          <span class="cp-chip cp-chip-pd"     id="cp-apd-${m.id}" style="display:none">⏪ ৳0</span>
+          <span class="cp-chip cp-chip-rent"   id="cp-ar-${m.id}"  style="display:none">🏠 ৳0</span>
+          <span class="cp-chip cp-chip-util"   id="cp-au-${m.id}"  style="display:none">⚡ ৳0</span>
+          <span class="cp-chip cp-chip-meal"   id="cp-am-${m.id}"  style="display:none">🍽️ ৳0</span>
+          <span class="cp-chip cp-chip-change" id="cp-ch-${m.id}"  style="display:none">💸 Change ৳0</span>
+        </div>
+
+        <div class="cp-input-row">
+          <div style="position:relative;flex:1">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:var(--text3);pointer-events:none">৳</span>
+            <input type="number" class="input cp-amt-input" id="cp-amt-${m.id}"
+              min="0" step="1" placeholder="0.00"
+              style="padding-left:26px!important"
+              value="${prefill}"
+              oninput="onCollectAmtInput('${m.id}')"
+              onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
+              onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
+          </div>
+          <button class="btn btn-primary cp-save-btn" onclick="saveCollectRow('${m.id}')">
+            Save
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
   wrap.innerHTML = `
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Member</th>
-            <th>Prev. Due</th>
-            <th>Meal bal.</th>
-            <th>Utility rem.</th>
-            <th>Rent rem.</th>
-            <th>Total payable</th>
-            <th>Amount received (৳)</th>
-            <th>→ Prev.Due</th>
-            <th>→ Meal</th>
-            <th>→ Util</th>
-            <th>→ Rent</th>
-            <th>Change</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="cp-tbody">
-          ${owing.map(m => {
-            const r       = _collectCtx.perMember[m.id];
-            const mealRem = round2(r.mealCost - r.memberBazar - r.mealPaid);
-            const utilRem = round2(Math.max(0, r.utilDue - r.utilPaid));
-            const rentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
-            const net     = round2(r.netPayable);
-            const pd      = round2(r.prevDue || 0);
-            const total   = round2(net + pd);
-
-            const fmtMeal = mealRem > 0
-              ? `<span style="color:var(--red)">${fmtTk(mealRem)}</span>`
-              : mealRem < 0
-                ? `<span style="color:var(--green)" title="Member is owed back">+${fmtTk(Math.abs(mealRem))}</span>`
-                : `<span style="color:var(--green)">✓ 0</span>`;
-
-            const totalDisplay = total > 0
-              ? `<b style="color:var(--red)">${fmtTk(total)}</b>${pd > 0 ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">curr ${fmtTk(net)} + prev ${fmtTk(pd)}</div>` : ''}`
-              : `<b style="color:var(--green)">✓ Settled</b>`;
-
-            const prefill = (r.messCredit > 0 || pd > 0) && total > 0 ? total : '';
-
-            return `
-              <tr id="cpr-${m.id}">
-                <td><b>${m.name}</b></td>
-                <td id="cp-pd-disp-${m.id}" style="font-weight:700;color:${pd>0?'var(--red)':'var(--text3)'}">
-                  ${pd > 0 ? `<span title="Unpaid from last month">${fmtTk(pd)}</span>` : '—'}
-                </td>
-                <td id="cp-mr-${m.id}">${fmtMeal}</td>
-                <td id="cp-ur-${m.id}" style="color:${utilRem>0?'var(--red)':'var(--green)'}">${utilRem>0?fmtTk(utilRem):"✓ 0"}</td>
-                <td id="cp-rr-${m.id}" style="color:${rentRem>0?'var(--red)':'var(--green)'}">${rentRem>0?fmtTk(rentRem):"✓ 0"}</td>
-                <td id="cp-net-${m.id}">${totalDisplay}</td>
-                <td>
-                  <input type="number" class="input input-sm" id="cp-amt-${m.id}"
-                    min="0" step="1" placeholder="0" style="width:120px"
-                    value="${prefill}"
-                    oninput="onCollectAmtInput('${m.id}')"/>
-                  ${r.messCredit > 0 ? `<div style="font-size:10px;color:var(--blue);margin-top:3px">↩ ৳${r.messCredit} credit applied</div>` : ''}
-                  ${pd > 0 ? `<div style="font-size:10px;color:var(--red);margin-top:2px">⚠ +৳${pd} prev. due</div>` : ''}
-                </td>
-                <td id="cp-apd-${m.id}" style="color:var(--red);font-weight:600">৳0</td>
-                <td id="cp-am-${m.id}" style="color:var(--violet,#9b59b6);font-weight:600">৳0</td>
-                <td id="cp-au-${m.id}" style="color:var(--blue);font-weight:600">৳0</td>
-                <td id="cp-ar-${m.id}" style="color:var(--amber);font-weight:600">৳0</td>
-                <td id="cp-ch-${m.id}" style="color:var(--text3);font-weight:700">৳0</td>
-                <td>
-                  <button class="btn btn-primary btn-sm"
-                    onclick="saveCollectRow('${m.id}')">💾 Save</button>
-                </td>
-              </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-      <button class="btn btn-ghost" onclick="loadCollectMonth()">↻ Refresh</button>
+    <div class="cp-cards-grid">${cards}</div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="loadCollectMonth()">↻ Refresh</button>
     </div>`;
 
-  // Trigger split calculation for any pre-filled inputs
+  // Trigger split calculation for all pre-filled inputs
   owing.forEach(m => {
     const r = _collectCtx.perMember[m.id];
-    if ((r.messCredit > 0 || r.prevDue > 0) && (r.netPayable > 0 || r.prevDue > 0)) onCollectAmtInput(m.id);
+    const total = round2(r.netPayable + (r.prevDue || 0));
+    if (total > 0) onCollectAmtInput(m.id);
   });
 }
-
 function buildCreditTable() {
   const card = document.getElementById("cp-credit-card");
   const wrap = document.getElementById("cp-credit-wrap");
   if (!wrap || !card) return;
 
-  // Members where mess owes them (netPayable <= 0, with some meaningful credit)
   const creditMembers = members.filter(m => {
     const r = _collectCtx.perMember[m.id];
     return r && r.netPayable < 0;
   });
 
-  if (!creditMembers.length) {
-    card.style.display = "none";
-    return;
-  }
+  if (!creditMembers.length) { card.style.display = "none"; return; }
 
   card.style.display = "";
   const { nextMonth: nm } = _collectCtx;
 
-  wrap.innerHTML = `
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Member</th>
-            <th>Mess Owes Total</th>
-            <th>Already Carried Fwd</th>
-            <th>Remaining Credit</th>
-            <th>Cash to Hand Back Now (৳)</th>
-            <th>Will Carry to ${MONTHS[nm.month]} ${nm.year}</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${creditMembers.map(m => {
-            const r = _collectCtx.perMember[m.id];
-            const messOwes      = round2(Math.abs(r.netPayable) + (r.creditPaid || 0)); // gross before credit_paid
-            const alreadyFwd    = round2(r.existingCarryCredit);
-            const remainingCred = round2(Math.max(0, messOwes - alreadyFwd - (r.creditPaid || 0)));
+  const avatarColors = [
+    {bg:'rgba(76,175,130,.15)',color:'var(--green)'},
+    {bg:'rgba(91,155,213,.15)',color:'var(--blue)'},
+    {bg:'rgba(212,168,83,.15)',color:'var(--accent)'},
+    {bg:'rgba(167,139,250,.15)',color:'var(--purple)'},
+    {bg:'rgba(224,82,82,.15)',color:'var(--red)'},
+  ];
 
-            return `
-              <tr id="ccr-${m.id}">
-                <td><b>${m.name}</b></td>
-                <td style="color:var(--green);font-weight:700">${fmtTk(messOwes)}</td>
-                <td style="color:var(--blue);font-weight:600" id="cc-fwd-${m.id}">
-                  ${alreadyFwd > 0 ? fmtTk(alreadyFwd) : '—'}
-                </td>
-                <td style="color:var(--amber);font-weight:700" id="cc-rem-${m.id}">
-                  ${fmtTk(Math.max(0, remainingCred))}
-                </td>
-                <td>
-                  <input type="number" class="input input-sm" id="cc-amt-${m.id}"
-                    min="0" max="${Math.max(0, remainingCred)}" step="1"
-                    placeholder="0" style="width:120px"
-                    oninput="onCreditAmtInput('${m.id}')"/>
-                </td>
-                <td style="color:var(--blue);font-weight:600" id="cc-carry-${m.id}">
-                  ${fmtTk(Math.max(0, remainingCred))}
-                </td>
-                <td>
-                  <button class="btn btn-sm" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green)"
-                    onclick="saveCreditRow('${m.id}')">💸 Save</button>
-                </td>
-              </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-    <div style="margin-top:10px;padding:10px 14px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-      💡 <b>Tip:</b> Enter ৳0 and Save to carry the full amount to next month. The carry-forward
-      credit will automatically reduce ${MONTHS[nm.month]} ${nm.year} utility dues for that member.
+  const cards = creditMembers.map((m, idx) => {
+    const r             = _collectCtx.perMember[m.id];
+    const messOwes      = round2(Math.abs(r.netPayable) + (r.creditPaid || 0));
+    const alreadyFwd    = round2(r.existingCarryCredit);
+    const remainingCred = round2(Math.max(0, messOwes - alreadyFwd - (r.creditPaid || 0)));
+
+    const av       = avatarColors[idx % avatarColors.length];
+    const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const pctFwd   = messOwes > 0 ? Math.round((alreadyFwd    / messOwes) * 100) : 0;
+    const pctRem   = messOwes > 0 ? Math.round((remainingCred / messOwes) * 100) : 100;
+
+    return `
+      <div class="cp-mcard" id="ccr-${m.id}">
+        <div class="cp-mcard-head">
+          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
+          <div>
+            <div class="cp-mcard-name">${m.name}</div>
+            <div style="font-size:11px;color:var(--green);margin-top:1px">Mess owes this member</div>
+          </div>
+          <div class="cp-mcard-total">
+            <div class="cp-mcard-total-lbl">To pay back</div>
+            <div class="cp-mcard-total-val" id="cc-rem-${m.id}" style="color:var(--green)">${fmtTk(remainingCred)}</div>
+          </div>
+        </div>
+
+        <div class="cp-breakdown">
+          <div class="cp-brow">
+            <span class="cp-brow-ico">💰</span>
+            <span class="cp-brow-lbl">Total owed</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:100%;background:var(--green)"></div></div>
+            <span class="cp-brow-val" style="color:var(--green)">${fmtTk(messOwes)}</span>
+          </div>
+          ${alreadyFwd > 0 ? `
+          <div class="cp-brow">
+            <span class="cp-brow-ico">↩</span>
+            <span class="cp-brow-lbl">Already carried fwd</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctFwd}%;background:var(--blue)"></div></div>
+            <span class="cp-brow-val" id="cc-fwd-${m.id}" style="color:var(--blue)">${fmtTk(alreadyFwd)}</span>
+          </div>` : `<span id="cc-fwd-${m.id}" style="display:none"></span>`}
+          <div class="cp-brow">
+            <span class="cp-brow-ico">💵</span>
+            <span class="cp-brow-lbl">Remaining to settle</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRem}%;background:var(--accent)"></div></div>
+            <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(remainingCred)}</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px">
+          <span id="cc-carry-${m.id}" style="font-size:12px;color:var(--blue);font-weight:600">↩ carry ${fmtTk(remainingCred)} → ${MONTHS[nm.month]} ${nm.year}</span>
+        </div>
+
+        <div class="cp-input-row">
+          <div style="position:relative;flex:1">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:var(--text3);pointer-events:none">৳</span>
+            <input type="number" class="input cp-amt-input" id="cc-amt-${m.id}"
+              min="0" max="${remainingCred}" step="1" placeholder="0.00"
+              style="padding-left:26px!important"
+              oninput="onCreditAmtInput('${m.id}')"
+              onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
+              onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
+          </div>
+          <button class="btn cp-save-btn" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green)"
+            onclick="saveCreditRow('${m.id}')">Save</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="cp-cards-grid">${cards}</div>
+    <div style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
+      💡 Enter ৳0 and Save to carry everything to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
     </div>`;
 }
+
 
 /* ═════════════════════════════════════════════════════════════════
    Change & Carry Forward — overpayment section
@@ -357,60 +503,88 @@ function buildChangeTable() {
   card.style.display = "";
   const { nextMonth: nm } = _collectCtx;
 
-  wrap.innerHTML = `
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Member</th>
-            <th>Overpaid (Change)</th>
-            <th>Already Carried Fwd</th>
-            <th>Remaining</th>
-            <th>Cash to Return Now (৳)</th>
-            <th>Will Carry to ${MONTHS[nm.month]} ${nm.year}</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${changeMembers.map(m => {
-            const r = _collectCtx.perMember[m.id];
-            const totalChange   = round2(r.pendingChange || 0);
-            const alreadyFwd    = round2(r.existingChangeCredit);
-            const remaining     = round2(Math.max(0, totalChange - alreadyFwd));
+  const avatarColors = [
+    {bg:'rgba(212,168,83,.15)',color:'var(--accent)'},
+    {bg:'rgba(91,155,213,.15)',color:'var(--blue)'},
+    {bg:'rgba(76,175,130,.15)',color:'var(--green)'},
+    {bg:'rgba(167,139,250,.15)',color:'var(--purple)'},
+    {bg:'rgba(224,82,82,.15)',color:'var(--red)'},
+  ];
 
-            return `
-              <tr id="chgr-${m.id}">
-                <td><b>${m.name}</b></td>
-                <td style="color:var(--amber);font-weight:700">${fmtTk(totalChange)}</td>
-                <td style="color:var(--blue);font-weight:600" id="chg-fwd-${m.id}">
-                  ${alreadyFwd > 0 ? fmtTk(alreadyFwd) : '—'}
-                </td>
-                <td style="color:var(--amber);font-weight:700" id="chg-rem-${m.id}">
-                  ${fmtTk(remaining)}
-                </td>
-                <td>
-                  <input type="number" class="input input-sm" id="chg-amt-${m.id}"
-                    min="0" max="${remaining}" step="1"
-                    placeholder="0" style="width:120px"
-                    oninput="onChangeAmtInput('${m.id}')"/>
-                </td>
-                <td style="color:var(--blue);font-weight:600" id="chg-carry-${m.id}">
-                  ${fmtTk(remaining)}
-                </td>
-                <td>
-                  <button class="btn btn-sm" style="background:var(--amber-bg,rgba(243,156,18,.1));border:1px solid var(--amber);color:var(--amber)"
-                    onclick="saveChangeRow('${m.id}')">💸 Save</button>
-                </td>
-              </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-    <div style="margin-top:10px;padding:10px 14px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-      💡 <b>Tip:</b> Enter ৳0 and Save to carry the full change to next month. It will automatically reduce
-      ${MONTHS[nm.month]} ${nm.year} utility dues for that member.
+  const cards = changeMembers.map((m, idx) => {
+    const r           = _collectCtx.perMember[m.id];
+    const totalChange = round2(r.pendingChange || 0);
+    const alreadyFwd  = round2(r.existingChangeCredit);
+    const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
+
+    const av       = avatarColors[idx % avatarColors.length];
+    const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+    const pctFwd   = totalChange > 0 ? Math.round((alreadyFwd / totalChange) * 100) : 0;
+    const pctRem   = totalChange > 0 ? Math.round((remaining  / totalChange) * 100) : 100;
+
+    return `
+      <div class="cp-mcard" id="chgr-${m.id}">
+        <div class="cp-mcard-head">
+          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
+          <div>
+            <div class="cp-mcard-name">${m.name}</div>
+            <div style="font-size:11px;color:var(--accent);margin-top:1px">Overpaid — return the change</div>
+          </div>
+          <div class="cp-mcard-total">
+            <div class="cp-mcard-total-lbl">To return</div>
+            <div class="cp-mcard-total-val" id="chg-rem-${m.id}" style="color:var(--accent)">${fmtTk(remaining)}</div>
+          </div>
+        </div>
+
+        <div class="cp-breakdown">
+          <div class="cp-brow">
+            <span class="cp-brow-ico">💸</span>
+            <span class="cp-brow-lbl">Total overpaid</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:100%;background:var(--accent)"></div></div>
+            <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(totalChange)}</span>
+          </div>
+          ${alreadyFwd > 0 ? `
+          <div class="cp-brow">
+            <span class="cp-brow-ico">↩</span>
+            <span class="cp-brow-lbl">Already carried fwd</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctFwd}%;background:var(--blue)"></div></div>
+            <span class="cp-brow-val" id="chg-fwd-${m.id}" style="color:var(--blue)">${fmtTk(alreadyFwd)}</span>
+          </div>` : `<span id="chg-fwd-${m.id}" style="display:none"></span>`}
+          <div class="cp-brow">
+            <span class="cp-brow-ico">💵</span>
+            <span class="cp-brow-lbl">Remaining to return</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRem}%;background:var(--green)"></div></div>
+            <span class="cp-brow-val" style="color:var(--green)">${fmtTk(remaining)}</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px">
+          <span id="chg-carry-${m.id}" style="font-size:12px;color:var(--blue);font-weight:600">↩ carry ${fmtTk(remaining)} → ${MONTHS[nm.month]} ${nm.year}</span>
+        </div>
+
+        <div class="cp-input-row">
+          <div style="position:relative;flex:1">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:var(--text3);pointer-events:none">৳</span>
+            <input type="number" class="input cp-amt-input" id="chg-amt-${m.id}"
+              min="0" max="${remaining}" step="1" placeholder="0.00"
+              style="padding-left:26px!important"
+              oninput="onChangeAmtInput('${m.id}')"
+              onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
+              onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
+          </div>
+          <button class="btn cp-save-btn" style="background:var(--accent-bg);border:1px solid var(--accent);color:var(--accent)"
+            onclick="saveChangeRow('${m.id}')">Save</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="cp-cards-grid">${cards}</div>
+    <div style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
+      💡 Enter ৳0 and Save to carry the full change to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
     </div>`;
 }
+
 
 function onChangeAmtInput(memberId) {
   if (!_collectCtx) return;
@@ -426,8 +600,14 @@ function onChangeAmtInput(memberId) {
 
   const carryEl = document.getElementById("chg-carry-" + memberId);
   if (carryEl) {
-    carryEl.textContent = fmtTk(carryFwd);
+    carryEl.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully returned";
     carryEl.style.color = carryFwd > 0 ? "var(--blue)" : "var(--green)";
+  }
+  // Update card header "To return" value
+  const remEl = document.getElementById("chg-rem-" + memberId);
+  if (remEl) {
+    remEl.textContent  = cashNow > 0 ? fmtTk(cashNow) : fmtTk(remaining);
+    remEl.style.color  = cashNow > 0 ? "var(--green)" : "var(--accent)";
   }
 }
 
@@ -775,8 +955,14 @@ function onCreditAmtInput(memberId) {
 
   const carry = document.getElementById("cc-carry-" + memberId);
   if (carry) {
-    carry.textContent = fmtTk(carryFwd);
+    carry.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully settled";
     carry.style.color = carryFwd > 0 ? "var(--blue)" : "var(--green)";
+  }
+  // Update card header "To pay back" value
+  const remEl = document.getElementById("cc-rem-" + memberId);
+  if (remEl) {
+    remEl.textContent = cashNow > 0 ? fmtTk(cashNow) : fmtTk(remainingCred);
+    remEl.style.color = cashNow > 0 ? "var(--accent)" : "var(--green)";
   }
 }
 
@@ -902,15 +1088,26 @@ function onCollectAmtInput(memberId) {
   const prevDue = round2(r.prevDue || 0);
   const { allocMeal, allocUtil, allocRent, allocPrevDue, change } = computeSplit3(amt, mealRem, utilRem, rentRem, prevDue);
 
-  const set = (id, v, color) => {
+  // Show/hide the chip row
+  const splitEl = document.getElementById("cp-split-" + memberId);
+  if (splitEl) splitEl.style.display = amt > 0 ? "flex" : "none";
+
+  // Helper: update a chip — show if value > 0, hide if 0
+  const setChip = (id, label, v) => {
     const el = document.getElementById(id);
-    if (el) { el.textContent = fmtTk(v); if (color) el.style.color = color; }
+    if (!el) return;
+    if (v > 0) {
+      el.textContent = label + " " + fmtTk(v);
+      el.style.display = "inline-flex";
+    } else {
+      el.style.display = "none";
+    }
   };
-  set("cp-apd-" + memberId, allocPrevDue, "var(--red)");
-  set("cp-am-"  + memberId, allocMeal,    "var(--violet,#9b59b6)");
-  set("cp-au-"  + memberId, allocUtil,    "var(--blue)");
-  set("cp-ar-"  + memberId, allocRent,    "var(--amber)");
-  set("cp-ch-"  + memberId, change,       change > 0 ? "var(--green)" : "var(--text3)");
+  setChip("cp-apd-" + memberId, "⏪",         allocPrevDue);
+  setChip("cp-ar-"  + memberId, "🏠",         allocRent);
+  setChip("cp-au-"  + memberId, "⚡",         allocUtil);
+  setChip("cp-am-"  + memberId, "🍽️",        allocMeal);
+  setChip("cp-ch-"  + memberId, "💸 Change", change);
 }
 
 async function saveCollectRow(memberId) {
