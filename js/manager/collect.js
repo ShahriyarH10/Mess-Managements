@@ -130,9 +130,12 @@ async function loadCollectMonth() {
     const p = calcMemberSettlement(m, allMeals, allBazar, rentRec, utilRec, utilRecPrev, key);
 
     // Carry-forward: outstanding net due from previous month
-    const prevP        = calcMemberSettlement(m, allMeals, allBazar, rentRecPrev, utilRecPrev, utilRecPrevPrev, prev.key);
-    const prevDuePaid  = round2(Number((utilRec?.payments || {})[m.name]?.prev_due_paid || 0));
-    const prevDue      = round2(Math.max(0, prevP.netPayable - prevDuePaid));
+    const prevP           = calcMemberSettlement(m, allMeals, allBazar, rentRecPrev, utilRecPrev, utilRecPrevPrev, prev.key);
+    const prevDuePaid     = round2(Number((utilRec?.payments || {})[m.name]?.prev_due_paid || 0));
+    const prevUtilStatus  = (utilRecPrev?.payments || {})[m.name]?.status || "unpaid";
+    const prevRentStatus  = (rentRecPrev?.entries  || []).find(e => e.name === m.name)?.status || "unpaid";
+    const prevFullyPaid   = prevUtilStatus === "paid" && prevRentStatus === "paid";
+    const prevDue         = prevFullyPaid ? 0 : round2(Math.max(0, prevP.netPayable - prevDuePaid));
 
     perMember[m.id] = {
       name:          m.name,
@@ -169,7 +172,7 @@ function buildCollectTable() {
   // Show members who owe this month OR have unpaid dues from last month
   const owing = members.filter(m => {
     const r = _collectCtx.perMember[m.id];
-    return r && (r.netPayable > 0 || r.prevDue > 0);
+    return r && (r.netPayable > 0 || r.prevDue > 0.01);
   });
 
   if (!owing.length) {

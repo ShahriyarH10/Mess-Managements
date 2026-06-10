@@ -48,8 +48,11 @@ async function renderDashboard(el) {
   const rentPartCount = rentRec?.entries?.filter(e => e.status === "partial").length || 0;
   const rentDueCount  = rentRec?.entries?.filter(e => !e.status || e.status === "unpaid").length || 0;
 
-  const bills = utilRec?.bills || {};
-  const totalUtil = ["elec", "wifi", "gas", "khala", "other"].reduce((s, k) => s + (Number(bills[k]) || 0), 0);
+  const bills     = utilRec?.bills || {};
+  const prevBills = prevUtilRes.data?.bills || {};
+  const currentPrepaid   = ["elec", "wifi", "gas"].reduce((s, k) => s + (Number(bills[k])     || 0), 0);
+  const previousPostpaid = ["khala", "other"].reduce((s, k) => s + (Number(prevBills[k]) || 0), 0);
+  const totalUtil = round2(currentPrepaid + previousPostpaid);
   const totalUtilPaid = Object.values(utilRec?.payments || {}).reduce((s, p) => s + Number(p.paid || 0), 0);
   const utilPaidCount = Object.values(utilRec?.payments || {}).filter(p => p.status === "paid").length;
   const utilPartCount = Object.values(utilRec?.payments || {}).filter(p => p.status === "partial").length;
