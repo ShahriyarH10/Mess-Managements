@@ -103,11 +103,14 @@ async function renderDashboard(el) {
   const maxDayMeal = Math.max(...Object.values(dayMealMap), 1);
   const todayDay = now.getDate();
 
-  // Onboarding
+  // Onboarding — auto-dismiss when all done; manual dismiss stored in localStorage
   const hasMembersAdded = members.length > 1;
   const hasMealsLogged  = mM.length > 0;
   const hasUtilitySet   = !!utilRec;
-  const showOnboarding  = !hasMembersAdded || !hasMealsLogged || !hasUtilitySet;
+  const allDone         = hasMembersAdded && hasMealsLogged && hasUtilitySet;
+  const dismissed       = localStorage.getItem(`mm_onboard_done_${messId()}`);
+  const showOnboarding  = !allDone && !dismissed;
+  if (allDone && !dismissed) localStorage.setItem(`mm_onboard_done_${messId()}`, '1');
 
   // ── SVG ring helper ──
   function ringChart(pct, color, size = 52, stroke = 5) {
@@ -239,6 +242,7 @@ async function renderDashboard(el) {
         </div>
       </div>
     </div>
+
 
     <!-- ── Meal heatmap ── -->
     <div class="card" style="margin-bottom:14px">

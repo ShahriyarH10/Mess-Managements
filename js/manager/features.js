@@ -1,32 +1,11 @@
 /* ═══════════════════════════════════════════════
-   MANAGER — Features: attendance board, broadcasts,
-   mess rules, PDF/Excel export, meal rate chart
+   MANAGER — Features: absence calendar, broadcasts,
+   mess rules, meal rate chart, month close
    ═══════════════════════════════════════════════ */
 
 /* ═══════════════════════════════════════════
-   ABSENCE CALENDAR (Manager view — full month)
+   ABSENCE CALENDAR (loaded as tab inside Meal Entry)
 ═══════════════════════════════════════════ */
-async function renderAttendanceBoard(el) {
-  const now = new Date();
-  const { month, year } = thisMonth();
-  el.innerHTML = `
-  <div class="topbar">
-    <div><div class="page-title">📅 Absence Calendar</div><div class="page-sub">Full month view of who is absent each day</div></div>
-    <div class="topbar-actions">
-      <select class="input" id="cal-month" style="width:130px" onchange="loadAbsenceCalendar()">
-        ${MONTHS.map((m, i) => `<option value="${i}" ${i === month ? "selected" : ""}>${m}</option>`).join("")}
-      </select>
-      <select class="input" id="cal-year" style="width:88px" onchange="loadAbsenceCalendar()">
-        ${Array.from({length:6},(_,i)=>new Date().getFullYear()-2+i).map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("")}
-      </select>
-    </div>
-  </div>
-  <div class="content">
-    <div id="absence-cal-wrap"><div class="empty" style="padding:32px;text-align:center"><div class="spinner"></div></div></div>
-  </div>`;
-  await loadAbsenceCalendar();
-}
-
 async function loadAbsenceCalendar() {
   const wrap = document.getElementById("absence-cal-wrap");
   if (!wrap) return;
@@ -454,59 +433,12 @@ async function refreshUpcomingAbsences(memberId) {
   } catch (e) { console.warn("Refresh absences failed:", e); }
 }
 
+
 /* ═══════════════════════════════════════════
    BROADCASTS (Manager) — with ⑪ Pin to top
 ═══════════════════════════════════════════ */
-async function renderBroadcasts(el) {
-  el.innerHTML = `
-  <div class="topbar">
-    <div><div class="page-title">📢 Broadcasts</div><div class="page-sub">Send urgent messages to all members</div></div>
-    <div class="topbar-actions">
-      <button class="btn btn-primary btn-sm" onclick="openBroadcastModal()">+ New broadcast</button>
-    </div>
-  </div>
-  <div class="content">
-    <div class="card" id="broadcast-list"><div class="empty">Loading…</div></div>
-  </div>`;
-  await loadBroadcastList();
-}
+async function renderBroadcasts(el) { await renderMessages(el, true); }
 
-async function loadBroadcastList() {
-  const wrap = document.getElementById("broadcast-list"); if (!wrap) return;
-  try {
-    // Fetch all (including expired) for manager view
-    const { data, error } = await getClient().from("broadcasts").select("*")
-      .eq("mess_id", messId()).order("pinned", { ascending: false })
-      .order("created_at", { ascending: false }).limit(50);
-    if (error) throw error;
-    const all = data || [];
-    if (!all.length) { wrap.innerHTML = '<div class="empty" style="padding:20px">No broadcasts yet.</div>'; return; }
-    wrap.innerHTML = all.map(b => {
-      const dt = new Date(b.created_at).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit", hour12:true });
-      const isUrgent = b.priority === "urgent";
-      const isPinned = b.pinned;
-      const isExpired = b.expires_at && new Date(b.expires_at) < new Date();
-      return `<div style="background:${isUrgent?"var(--red-bg)":isPinned?"var(--accent-bg)":"var(--bg3)"};border:1px solid ${isUrgent?"rgba(224,82,82,.25)":isPinned?"rgba(212,168,83,.25)":"var(--border)"};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;opacity:${isExpired?0.55:1}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
-              <span style="font-size:16px">${isPinned?"📌":isUrgent?"🔴":"📢"}</span>
-              ${isPinned?'<span style="font-size:10px;background:var(--accent);color:#000;padding:1px 6px;border-radius:99px;font-weight:700">PINNED</span>':""}
-              ${isUrgent?'<span style="font-size:10px;background:var(--red);color:#fff;padding:1px 6px;border-radius:99px;font-weight:700">URGENT</span>':""}
-              ${isExpired?'<span style="font-size:10px;color:var(--text3);border:1px solid var(--border);padding:1px 6px;border-radius:99px">EXPIRED</span>':""}
-            </div>
-            <div style="font-size:13px;color:var(--text);line-height:1.5">${escapeHtml(b.message)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:4px">${escapeHtml(b.author)} · ${dt}${b.expires_at?` · Expires ${new Date(b.expires_at).toLocaleDateString("en-IN")}`:""}</div>
-          </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-ghost btn-sm" onclick="toggleBroadcastPin('${b.id}',${!isPinned})" title="${isPinned?"Unpin":"Pin to top"}">${isPinned?"📌":"📍"}</button>
-            <button class="btn btn-ghost btn-sm" onclick="deleteBroadcastItem('${b.id}')">✕</button>
-          </div>
-        </div>
-      </div>`;
-    }).join("");
-  } catch (e) { wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
-}
 
 function openBroadcastModal() {
   document.getElementById("modal-content").innerHTML = `
@@ -541,21 +473,11 @@ async function sendBroadcast() {
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
-async function toggleBroadcastPin(id, pinned) {
-  try {
-    await getClient().from("broadcasts").update({ pinned }).eq("id", id);
-    toast(pinned ? "📌 Pinned" : "Unpinned", "success");
-    await loadBroadcastList();
-  } catch (e) { toast("Error: " + e.message, "error"); }
-}
 
-async function deleteBroadcastItem(id) {
-  try { await getClient().from("broadcasts").delete().eq("id", id); toast("Broadcast removed"); await loadBroadcastList(); }
-  catch (e) { toast("Error: " + e.message, "error"); }
-}
+
 
 /* ═══════════════════════════════════════════
-   MESS RULES — ⑭ Markdown editor + live preview
+   MESS RULES — Markdown editor + live preview
 ═══════════════════════════════════════════ */
 function renderMarkdown(text) {
   if (!text) return "";
@@ -659,13 +581,9 @@ async function saveMessRules() {
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
+
 /* ═══════════════════════════════════════════
-   CHARTS DASHBOARD ⑰-㉑
-   ⑰ Meal rate trend (12-month line)
-   ⑱ Bazar spend trend
-   ⑲ Member balance trend
-   ⑳ Member meal-share pie
-   ㉑ Spending by category pie
+   CHARTS DASHBOARD
 ═══════════════════════════════════════════ */
 async function renderMealRateChart(el) {
   el.innerHTML = `<div class="topbar"><div><div class="page-title">📊 Analytics</div><div class="page-sub">Meal rate, bazar, member trends & spending breakdown</div></div></div>
@@ -776,37 +694,8 @@ async function renderMealRateChart(el) {
       v => fmtTk(v))}
   </svg>`;
 
-  // ⑲ Member balance trend (last 6 months)
-  const last6 = sortedKeys.slice(-6);
-  const memColors = ["var(--accent)","var(--green)","var(--blue)","var(--purple)","var(--red)","var(--amber)"];
-  const allBalVals = members.slice(0,6).flatMap(m => last6.map(k => {
-    const d = monthData[k]; const rate = d.meals>0?d.bazar/d.meals:0;
-    return Math.abs(round2((d.memBazar[m.name]||0)-(d.memMeals[m.name]||0)*rate));
-  }));
-  const maxBalAbs = Math.max(...allBalVals, 1);
-  const memberLines = members.slice(0,6).map((m,mi) => {
-    const vals = last6.map(k => {
-      const d = monthData[k]; const rate = d.meals>0?d.bazar/d.meals:0;
-      return round2((d.memBazar[m.name]||0)-(d.memMeals[m.name]||0)*rate);
-    });
-    if (vals.length < 2) return "";
-    const col = memColors[mi];
-    const n = last6.length;
-    const pts = vals.map((v,i)=>`${xPos(i,n)},${yPos(v+maxBalAbs,maxBalAbs*2)}`).join(" ");
-    const dots = vals.map((v,i)=>`
-      <circle cx="${xPos(i,n)}" cy="${yPos(v+maxBalAbs,maxBalAbs*2)}" r="3.5" fill="${col}" stroke="var(--bg2)" stroke-width="1.5"><title>${m.name}: ${v>=0?"Credit":"Owe"} ${fmtTk(Math.abs(v))}</title></circle>
-      <text x="${xPos(i,n)}" y="${yPos(v+maxBalAbs,maxBalAbs*2)-7}" text-anchor="middle" font-size="7" fill="${col}">${v===0?"0":v>0?"+"+fmtTk(v):"-"+fmtTk(-v)}</text>`).join("");
-    const xLabels = mi===0 ? vals.map((v,i)=>`<text x="${xPos(i,n)}" y="${H-PAD+14}" text-anchor="middle" font-size="8" fill="var(--text3)">${MONTHS[parseInt(last6[i].slice(5))-1]?.slice(0,3)}</text>`).join("") : "";
-    return `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linejoin="round"/>${dots}${xLabels}`;
-  }).join("");
-  const zeroY = yPos(0+maxBalAbs, maxBalAbs*2);
-  const balChart = `<svg viewBox="0 0 ${W} ${H+16}" style="width:100%;display:block;overflow:visible;font-family:var(--font)">
-    <line x1="${PAD}" y1="${zeroY}" x2="${W-PAD}" y2="${zeroY}" stroke="var(--border2)" stroke-width="1" stroke-dasharray="4,3"/>
-    <text x="${PAD-6}" y="${zeroY+3}" text-anchor="end" font-size="7" fill="var(--text3)">0</text>
-    ${memberLines}
-  </svg>`;
 
-  // ⑳ Member meal-share pie (this month)
+    // ⑳ Member meal-share pie (this month)
   const curKey = monthKey(year, month);
   const curMeals = {};
   members.forEach(m => { curMeals[m.name] = round2(monthData[curKey]?.memMeals[m.name]||0); });
@@ -838,24 +727,8 @@ async function renderMealRateChart(el) {
   const piePaths  = buildPie(mealSegments);
   const pieLegend = members.map((m,i) => `<div style="display:flex;align-items:center;gap:5px;font-size:11px"><span style="width:10px;height:10px;border-radius:2px;background:${pieColors[i%6]};display:inline-block;flex-shrink:0"></span><span>${escapeHtml(m.name)}</span><span style="color:var(--text3);margin-left:auto">${curMeals[m.name]} (${round2((curMeals[m.name]/totalCurMeals)*100)}%)</span></div>`).join("");
 
-  // ㉑ Spending category pie
-  const bills = currentUtilRec?.bills || {};
-  const elec  = Number(bills.elec||0), gas=Number(bills.gas||0), wifi=Number(bills.wifi||0);
-  const curKey2 = monthKey(year, month);
-  const curBazar = round2(monthData[curKey2]?.bazar||0);
-  const totalRentAmt = round2((currentRentRec?.entries||[]).reduce((s,e)=>s+Number(e.rent||0),0));
-  const spendCats = [
-    { label:"Bazar", val:curBazar,   color:"var(--green)"  },
-    { label:"Rent",  val:totalRentAmt,color:"var(--amber)"  },
-    { label:"Elec",  val:elec,        color:"var(--blue)"   },
-    { label:"Gas",   val:gas,         color:"var(--red)"    },
-    { label:"WiFi",  val:wifi,        color:"var(--purple)" },
-  ].filter(c=>c.val>0);
-  const spendPaths  = buildPie(spendCats);
-  const totalSpend  = Math.max(spendCats.reduce((s,c)=>s+c.val,0),1);
-  const spendLegend = spendCats.map(c=>`<div style="display:flex;align-items:center;gap:5px;font-size:11px"><span style="width:10px;height:10px;border-radius:2px;background:${c.color};display:inline-block;flex-shrink:0"></span><span>${c.label}</span><span style="color:var(--text3);margin-left:auto">${fmtTk(c.val)} (${round2((c.val/totalSpend)*100)}%)</span></div>`).join("");
 
-  el.innerHTML = `
+    el.innerHTML = `
   <div class="topbar"><div><div class="page-title">📊 Analytics</div><div class="page-sub">Last 12 months of data</div></div></div>
   <div class="content">
 
@@ -878,31 +751,13 @@ async function renderMealRateChart(el) {
       <div style="overflow-x:auto">${bazarChart}</div>
     </div>
 
-    <!-- ⑲ Member Balance Trend -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title" style="margin-bottom:6px">⚖️ Member Balance Trend (last 6 months)</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">Above zero line = contributed more than ate (credit). Below = owes.</div>
-      <div style="overflow-x:auto">${balChart}</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
-        ${members.slice(0,6).map((m,i)=>`<span style="display:flex;align-items:center;gap:4px;font-size:11px"><span style="width:10px;height:3px;border-radius:1px;background:${memColors[i]};display:inline-block"></span>${escapeHtml(m.name)}</span>`).join("")}
-      </div>
-    </div>
 
-    <!-- ⑳ + ㉑ Pies side by side -->
-    <div class="grid-2" style="align-items:start">
-      <div class="card">
-        <div class="card-title" style="margin-bottom:10px">🍽️ Meal Share — ${MONTHS[month]}</div>
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-          <svg viewBox="0 0 160 160" width="160" height="160" style="flex-shrink:0">${piePaths}</svg>
-          <div style="flex:1;display:flex;flex-direction:column;gap:5px">${pieLegend}</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title" style="margin-bottom:10px">💰 Spending by Category — ${MONTHS[month]}</div>
-        ${spendCats.length ? `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-          <svg viewBox="0 0 160 160" width="160" height="160" style="flex-shrink:0">${spendPaths}</svg>
-          <div style="flex:1;display:flex;flex-direction:column;gap:5px">${spendLegend}</div>
-        </div>` : '<div class="empty">No billing data for this month</div>'}
+    <!-- ⑳ Meal share pie -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:10px">🍽️ Meal Share — ${MONTHS[month]}</div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <svg viewBox="0 0 160 160" width="160" height="160" style="flex-shrink:0">${piePaths}</svg>
+        <div style="flex:1;display:flex;flex-direction:column;gap:5px">${pieLegend}</div>
       </div>
     </div>
 
@@ -921,100 +776,130 @@ async function renderMealRateChart(el) {
   </div>`;
 }
 
+
 /* ═══════════════════════════════════════════
-   MONTHLY PDF/EXCEL REPORT EXPORT
+   MONTH CLOSE / LOCK
+   Stores a `locked` flag in utility_payments.bills.
+   When set, all save functions block writes for that month.
 ═══════════════════════════════════════════ */
-async function renderExport(el) {
-  const { month, year } = thisMonth();
+async function renderMonthLock(el) {
   el.innerHTML = `
-  <div class="topbar"><div><div class="page-title">📥 Monthly Report</div><div class="page-sub">Export settlement data as text report</div></div></div>
-  <div class="content">
-    <div class="card" style="max-width:500px">
-      <div class="card-title">Select month to export</div>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <select class="input" id="exp-month" style="flex:1">${MONTHS.map((m, i) => `<option value="${i}" ${i===month?"selected":""}>${m}</option>`).join("")}</select>
-        <select class="input" id="exp-year" style="width:90px">${Array.from({length:6},(_,i)=>new Date().getFullYear()-2+i).map(y => `<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("")}</select>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn btn-primary" onclick="doExportText()" style="flex:1;justify-content:center">📋 Copy Report</button>
-      </div>
+  <div class="topbar">
+    <div>
+      <div class="page-title">Month Close</div>
+      <div class="page-sub">Lock a month to prevent any further edits to meals, bazar, utility, and rent</div>
     </div>
+  </div>
+  <div class="content">
+    <div id="ml-wrap"><div class="empty" style="padding:32px;text-align:center"><div class="spinner"></div></div></div>
   </div>`;
+  await loadMonthLockList();
 }
 
-async function doExportText() {
-  const month = parseInt(document.getElementById("exp-month")?.value);
-  const year  = parseInt(document.getElementById("exp-year")?.value);
-  const key = monthKey(year, month);
-  const prevInfo = previousMonth(month, year);
+async function loadMonthLockList() {
+  const wrap = document.getElementById("ml-wrap");
+  if (!wrap) return;
 
-  const [allMeals, allBazar, rentRec, utilRes, prevUtilRes] = await Promise.all([
-    dbGetAll("meals"), dbGetAll("bazar"), dbGetMonth("rent", key),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevInfo.key).maybeSingle(),
-  ]);
-
-  const messName = currentMess?.name || "Mess";
-  const lines = [];
-  lines.push(`═══════════════════════════════════════`);
-  lines.push(`${messName} — Monthly Report`);
-  lines.push(`${MONTHS[month]} ${year}`);
-  lines.push(`Generated: ${new Date().toLocaleString("en-IN")}`);
-  lines.push(`═══════════════════════════════════════`);
-  lines.push(``);
-
-  // Summary
-  let totalMeals = 0, totalBazar = 0;
-  const mM = allMeals.filter(r => r.date.startsWith(key));
-  const mB = allBazar.filter(r => r.date.startsWith(key));
-  mM.forEach(r => { const mObj = r.meals || {}, ks = Object.keys(mObj), hasSplit = ks.some(k => k.endsWith("_day") || k.endsWith("_night")); if (hasSplit) ks.forEach(k => { if (k.endsWith("_day") || k.endsWith("_night")) totalMeals += Number(mObj[k]) || 0; }); else Object.values(mObj).forEach(v => { totalMeals += Number(v) || 0; }); });
-  mB.forEach(r => Object.values(r.bazar || {}).forEach(v => { totalBazar += Number(v); }));
-  const mealRate = totalMeals > 0 ? round2(totalBazar / totalMeals) : 0;
-
-  lines.push(`SUMMARY`);
-  lines.push(`───────────────────────────────────────`);
-  lines.push(`Total Meals:  ${round2(totalMeals)}`);
-  lines.push(`Total Bazar:  ${fmtTk(totalBazar)}`);
-  lines.push(`Meal Rate:    ${fmtTk(mealRate)} per meal`);
-  lines.push(`Members:      ${members.length}`);
-  lines.push(`Days Logged:  ${mM.length}`);
-  lines.push(``);
-
-  // Per-member settlement
-  lines.push(`PER-MEMBER SETTLEMENT`);
-  lines.push(`───────────────────────────────────────`);
-  const utilRec = utilRes.data;
-  const prevUtilRec = prevUtilRes.data;
-  members.forEach(m => {
-    const c = calcMemberSettlement(m, allMeals, allBazar, rentRec, utilRec, prevUtilRec, key);
-    const net = c.netPayable;
-    lines.push(`${m.name}:`);
-    lines.push(`  Meals: ${c.memberMeals} | Bazar: ${fmtTk(c.memberBazar)} | Meal cost: ${fmtTk(c.mealCost)}`);
-    lines.push(`  Rent: ${fmtTk(c.roomRent)} | Utility: ${fmtTk(round2(c.prepaidUtility + c.postpaidUtility))}`);
-    lines.push(`  Net: ${net > 0 ? "Pay " + fmtTk(net) : net < 0 ? "Get " + fmtTk(Math.abs(net)) : "Settled"}`);
-    lines.push(``);
-  });
-
-  // Rent status
-  if (rentRec?.entries?.length) {
-    lines.push(`RENT STATUS`);
-    lines.push(`───────────────────────────────────────`);
-    rentRec.entries.forEach(e => {
-      lines.push(`  ${e.name}: ${e.status} (${fmtTk(e.paid)}/${fmtTk(e.rent)})`);
-    });
-    lines.push(``);
-  }
-
-  lines.push(`— End of report —`);
-
-  const text = lines.join("\n");
   try {
-    await navigator.clipboard.writeText(text);
-    toast("Report copied to clipboard ✓", "success");
+    // Get all utility_payments rows (they carry the lock flag) + rent rows for month coverage
+    const [utilRes, rentRes, allMeals, allBazar] = await Promise.all([
+      getClient().from("utility_payments").select("month_key,bills").eq("mess_id", messId()).order("month_key", { ascending: false }),
+      getClient().from("rent").select("month_key").eq("mess_id", messId()).order("month_key", { ascending: false }),
+      dbGetAll("meals"),
+      dbGetAll("bazar"),
+    ]);
+
+    // Build union of all month keys that have any data
+    const keySet = new Set();
+    (utilRes.data || []).forEach(r => keySet.add(r.month_key));
+    (rentRes.data || []).forEach(r => keySet.add(r.month_key));
+    allMeals.forEach(r => keySet.add(String(r.date || "").slice(0, 7)));
+    allBazar.forEach(r => keySet.add(String(r.date || "").slice(0, 7)));
+    keySet.delete("");
+
+    const lockMap = {};
+    (utilRes.data || []).forEach(r => { lockMap[r.month_key] = !!(r.bills?.locked); });
+
+    const keys = Array.from(keySet).filter(Boolean).sort().reverse().slice(0, 18);
+
+    if (!keys.length) {
+      wrap.innerHTML = '<div class="card"><div class="empty" style="padding:24px">No months with data yet.</div></div>';
+      return;
+    }
+
+    wrap.innerHTML = `
+      <div class="info-banner" style="margin-bottom:14px">
+        🔒 Locking a month prevents any new saves to meals, bazar, utility, and rent for that period. You can unlock at any time.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+        ${keys.map(k => {
+          const locked = lockMap[k] || false;
+          const [y, m] = k.split("-").map(Number);
+          const label  = MONTHS[m - 1] + " " + y;
+          const mealCount = allMeals.filter(r => String(r.date || "").startsWith(k)).length;
+          const bazarCount = allBazar.filter(r => String(r.date || "").startsWith(k)).length;
+
+          return `
+          <div style="
+            background:var(--bg2);
+            border:1.5px solid ${locked ? "var(--green)" : "var(--border)"};
+            border-radius:var(--radius);
+            padding:16px;
+            transition:border-color .2s;
+          ">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div>
+                <div style="font-family:var(--font-serif);font-size:16px;font-weight:700">${label}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">${mealCount} meal days · ${bazarCount} bazar days</div>
+              </div>
+              <span style="
+                font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;
+                background:${locked ? "var(--green-bg)" : "var(--bg3)"};
+                color:${locked ? "var(--green)" : "var(--text3)"};
+                border:1px solid ${locked ? "rgba(76,175,130,.3)" : "var(--border)"};
+              ">${locked ? "🔒 Locked" : "🔓 Open"}</span>
+            </div>
+            ${locked ? `
+              <div style="font-size:11px;color:var(--green);margin-bottom:10px">
+                ✓ No edits can be made to this month's data
+              </div>` : `
+              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+                Edits are still allowed for this month
+              </div>`}
+            <button class="btn btn-sm ${locked ? "btn-ghost" : "btn-primary"}"
+              style="width:100%;justify-content:center"
+              onclick="toggleMonthLock('${k}', ${!locked})">
+              ${locked ? "🔓 Unlock month" : "🔒 Close & lock month"}
+            </button>
+          </div>`;
+        }).join("")}
+      </div>`;
   } catch (e) {
-    const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); toast("Report copied ✓", "success"); }
-    catch (_) { toast("Copy failed", "error"); }
-    document.body.removeChild(ta);
+    wrap.innerHTML = `<div class="card"><div class="empty">Error: ${escapeHtml(e.message)}</div></div>`;
   }
+}
+
+async function toggleMonthLock(key, lock) {
+  if (!requireManager('toggleMonthLock')) return;
+  const [y, m] = key.split("-").map(Number);
+  const label  = MONTHS[m - 1] + " " + y;
+
+  showConfirm({
+    title: lock ? `🔒 Lock ${label}?` : `🔓 Unlock ${label}?`,
+    body:  lock
+      ? `This will prevent any further saves to meals, bazar, utility, and rent for ${label}. You can unlock it later.`
+      : `This will allow edits to ${label} again. Make sure you re-lock after any corrections.`,
+    confirmLabel: lock ? "Lock month" : "Unlock",
+    danger: false,
+    onConfirm: async () => {
+      try {
+        await dbSetMonthLocked(m - 1, y, key, lock);
+        await logAudit("update", "month_lock", key, `${lock ? "Locked" : "Unlocked"} month ${label}`);
+        toast(lock ? `🔒 ${label} locked` : `🔓 ${label} unlocked`, "success");
+        await loadMonthLockList();
+      } catch (e) {
+        toast("Error: " + e.message, "error");
+      }
+    },
+  });
 }

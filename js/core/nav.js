@@ -24,6 +24,8 @@ const IC = {
   rules:   `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 6h6M5 9h4M5 12h3"/></svg>`,
   broadcast:`<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8c0 0 3-5 7-5s7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>`,
   roles:   `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2"/><circle cx="11" cy="5" r="2"/><path d="M1 13c0-2.2 1.8-4 4-4"/><path d="M8 13c0-2.2 1.8-4 4-4s4 1.8 4 4"/><path d="M7 9h2"/></svg>`,
+  lock:    `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="8" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>`,
+  fund:    `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M6 7h3a1 1 0 010 2H7a1 1 0 000 2h3"/></svg>`,
 };
 
 const MANAGER_NAV = [
@@ -37,21 +39,19 @@ const MANAGER_NAV = [
   { page:"utility",       label:"Utility Entry",   icon:IC.util },
   { page:"rent",          label:"Room Rent",       icon:IC.rent },
   { page:"collect",       label:"Collect Payment", icon:IC.bazar },
-  { page:"attendance",    label:"Absence Calendar",icon:IC.attend },
 
   { section:"Reports" },
   { page:"log",           label:"Monthly Log",     icon:IC.log },
   { page:"rate-chart",    label:"Meal Rate Chart", icon:IC.chart },
   { page:"audit-log",     label:"Audit Log",       icon:IC.audit },
+  { page:"mess-rules",    label:"Mess Rules",      icon:IC.rules },
+  { page:"month-lock",    label:"Month Close",     icon:IC.lock },
+  { page:"mess-fund",     label:"Mess Fund",       icon:IC.fund },
 
   { section:"Mess" },
-  { page:"broadcasts",    label:"Broadcasts",      icon:IC.broadcast },
-  { page:"mess-rules",    label:"Mess Rules",      icon:IC.rules },
-  { page:"chores",        label:"Chore Roster",    icon:IC.chores },
+  { page:"messages",      label:"Messages",        icon:IC.broadcast },
   { page:"notifications", label:"Notifications",   icon:IC.bell },
   { page:"members",       label:"Members",         icon:IC.members },
-  { page:"manager-roles", label:"Manager Roles",   icon:IC.roles },
-  { page:"transfer",      label:"Transfer Role",   icon:IC.transfer },
 
   { section:"Account" },
   { page:"my-profile",    label:"My Profile",      icon:IC.profile },
@@ -66,8 +66,7 @@ const MEMBER_NAV = [
   { page:"my-meals",      label:"Meal Log",       icon:IC.meal },
   { page:"my-bazar",      label:"Bazar Log",      icon:IC.bazar },
   { page:"my-payments",   label:"Utility/Rent",   icon:IC.rent },
-  { page:"mess-overview", label:"Mess Overview",  icon:IC.log },
-  { page:"my-chores",     label:"Chore Roster",   icon:IC.chores },
+  { page:"my-messages",   label:"Messages",       icon:IC.broadcast },
   { page:"my-rules",      label:"Mess Info",      icon:IC.rules },
 ];
 
@@ -415,9 +414,9 @@ async function renderPage(page) {
   // Pages manager OR sub_manager can access
   const managerOrSubOnly = [
     "dashboard", "profiles", "meals", "bazar", "utility", "rent",
-    "collect", "log", "chores", "notifications",
-    "attendance", "rate-chart", "audit-log",
-    "broadcasts", "mess-rules",
+    "collect", "log", "notifications",
+    "rate-chart", "audit-log",
+    "messages", "mess-rules", "month-lock", "mess-fund",
   ];
 
   if (!isManager && fullManagerOnly.includes(page)) {
@@ -446,17 +445,18 @@ async function renderPage(page) {
       case "collect":        await renderCollect(div);                break;
       case "log":                  renderLog(div);                    break;
       case "members":              renderMembers(div);                break;
-      case "chores":         await renderChores(div, true);           break;
       case "transfer":       await renderTransferRole(div);           break;
       case "notifications":  await renderNotifications(div);          break;
 
       // ── New manager pages ──
-      case "attendance":     await renderAttendanceBoard(div);        break;
       case "rate-chart":     await renderMealRateChart(div);          break;
       case "audit-log":      await renderAuditLog(div);               break;
-      case "broadcasts":     await renderBroadcasts(div);             break;
+      case "month-lock":     await renderMonthLock(div);              break;
+      case "messages":       await renderMessages(div, true);          break;
+
+
+      case "mess-fund":      await renderMessFund(div);               break;
       case "mess-rules":     await renderMessRules(div, true);        break;
-      case "manager-roles":  await renderManagerRoles(div);           break;
 
       // ── Member pages ──
       case "my-profile":     await renderMyProfile(div);              break;
@@ -465,9 +465,9 @@ async function renderPage(page) {
       case "my-bazar":       await renderMyBazar(div);                break;
       case "my-payments":    await renderMyPayments(div);             break;
       case "mess-overview":  await renderMessOverview(div);           break;
-      case "my-chores":      await renderChores(div, false);          break;
 
       // ── New member pages ──
+      case "my-messages":    await renderMessages(div, false);         break;
       case "my-rules":       await renderMessRules(div, false);       break;
 
       default:

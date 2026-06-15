@@ -6,34 +6,92 @@
 ═══════════════════════════════════════════ */
 const mealDayVals={}, mealNightVals={};
 async function renderMeals(el) {
+  // Render the shell with tabs — Entry tab shown by default
   el.innerHTML=`
-  <div class="topbar"><div><div class="page-title">Meal Entry</div><div class="page-sub">Log day & night meals per member</div></div></div>
-  <div class="content">
-    <div class="card" style="margin-bottom:12px">
-      <div class="date-row"><label>Date</label><input type="date" class="input" id="meal-date" value="${today()}" style="width:170px" onchange="loadMealDate()"/><button class="btn btn-ghost btn-sm" onclick="loadMealDate()">Load</button></div>
-      <div class="stat-grid" style="margin-bottom:12px">
-        <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="mt-total">0</div></div>
-        <div class="stat-card"><div class="stat-label">Day</div><div class="stat-value" id="mt-day">0</div></div>
-        <div class="stat-card"><div class="stat-label">Night</div><div class="stat-value" id="mt-night">0</div></div>
-        <div class="stat-card"><div class="stat-label">Eating</div><div class="stat-value" id="mt-eating">0</div></div>
-      </div>
-      <div class="meal-grid" id="meal-grid"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-        <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
-        <button class="btn btn-ghost" onclick="setAllMeals('day',1)">Day All → 1</button>
-        <button class="btn btn-ghost" onclick="setAllMeals('night',1)">Night All → 1</button>
-        <button class="btn btn-ghost" onclick="setAllMeals('both',1)">All → 1</button>
-        <button class="btn btn-ghost" onclick="setAllMeals('both',0)">Clear</button>
+  <div class="topbar">
+    <div><div class="page-title">Meal Entry</div><div class="page-sub">Log meals or view the absence calendar</div></div>
+    <div class="topbar-actions">
+      <div style="display:flex;gap:0;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+        <button id="meal-tab-entry" onclick="switchMealTab('entry')"
+          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:var(--accent);color:#0f0f0f;border-radius:0">
+          📝 Entry
+        </button>
+        <button id="meal-tab-calendar" onclick="switchMealTab('calendar')"
+          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:transparent;color:var(--text2);border-radius:0">
+          📅 Calendar
+        </button>
       </div>
     </div>
-    <div class="grid-2" style="align-items:start">
-      <div class="card"><div class="card-title">Recent entries</div><div class="tbl-wrap" id="meals-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
-      <div class="card"><div class="card-title">Month history</div><div id="manager-meal-months"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+  </div>
+  <div class="content">
+    <!-- Entry tab -->
+    <div id="meal-pane-entry">
+      <div class="card" style="margin-bottom:12px">
+        <div class="date-row"><label>Date</label><input type="date" class="input" id="meal-date" value="${today()}" style="width:170px" onchange="loadMealDate()"/><button class="btn btn-ghost btn-sm" onclick="loadMealDate()">Load</button></div>
+        <div class="stat-grid" style="margin-bottom:12px">
+          <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="mt-total">0</div></div>
+          <div class="stat-card"><div class="stat-label">Day</div><div class="stat-value" id="mt-day">0</div></div>
+          <div class="stat-card"><div class="stat-label">Night</div><div class="stat-value" id="mt-night">0</div></div>
+          <div class="stat-card"><div class="stat-label">Eating</div><div class="stat-value" id="mt-eating">0</div></div>
+        </div>
+        <div class="meal-grid" id="meal-grid"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
+          <button class="btn btn-ghost" onclick="setAllMeals('day',1)">Day All → 1</button>
+          <button class="btn btn-ghost" onclick="setAllMeals('night',1)">Night All → 1</button>
+          <button class="btn btn-ghost" onclick="setAllMeals('both',1)">All → 1</button>
+          <button class="btn btn-ghost" onclick="setAllMeals('both',0)">Clear</button>
+        </div>
+      </div>
+      <div class="grid-2" style="align-items:start">
+        <div class="card"><div class="card-title">Recent entries</div><div class="tbl-wrap" id="meals-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+        <div class="card"><div class="card-title">Month history</div><div id="manager-meal-months"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+      </div>
+    </div>
+    <!-- Calendar tab (lazy-loaded) -->
+    <div id="meal-pane-calendar" style="display:none">
+      <div id="absence-cal-outer"></div>
     </div>
   </div>`;
-  members.forEach(m=>{ mealDayVals[m.id]=0; mealNightVals[m.id]=0; });
+  members.forEach(m=>{
+    mealDayVals[m.id]   = m.meal_default_day ?? 1;
+    mealNightVals[m.id] = 1;
+  });
   window._absentDay = {}; window._absentNight = {};
   await loadMealDate(); loadMealsRecent(); loadManagerMealMonths();
+}
+
+function switchMealTab(tab) {
+  const isEntry = tab === 'entry';
+  document.getElementById('meal-pane-entry').style.display    = isEntry ? '' : 'none';
+  document.getElementById('meal-pane-calendar').style.display = isEntry ? 'none' : '';
+  const btnEntry = document.getElementById('meal-tab-entry');
+  const btnCal   = document.getElementById('meal-tab-calendar');
+  if (btnEntry) { btnEntry.style.background = isEntry ? 'var(--accent)' : 'transparent'; btnEntry.style.color = isEntry ? '#0f0f0f' : 'var(--text2)'; }
+  if (btnCal)   { btnCal.style.background   = isEntry ? 'transparent' : 'var(--accent)'; btnCal.style.color   = isEntry ? 'var(--text2)' : '#0f0f0f'; }
+  if (!isEntry) {
+    const outer = document.getElementById('absence-cal-outer');
+    if (outer && !outer._loaded) {
+      outer._loaded = true;
+      // Inject the calendar controls + mount point and load
+      const now = new Date();
+      const { month, year } = thisMonth();
+      outer.innerHTML = `
+        <div class="topbar" style="padding:0 0 18px 0">
+          <div></div>
+          <div class="topbar-actions">
+            <select class="input" id="cal-month" style="width:130px" onchange="loadAbsenceCalendar()">
+              ${MONTHS.map((m, i) => `<option value="${i}" ${i===month?"selected":""}>${m}</option>`).join("")}
+            </select>
+            <select class="input" id="cal-year" style="width:88px" onchange="loadAbsenceCalendar()">
+              ${Array.from({length:6},(_,i)=>new Date().getFullYear()-2+i).map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div id="absence-cal-wrap"><div class="empty" style="padding:32px;text-align:center"><div class="spinner"></div></div></div>`;
+      loadAbsenceCalendar();
+    }
+  }
 }
 function buildMealGrid() {
   const g=document.getElementById("meal-grid"); if(!g) return;
@@ -100,6 +158,8 @@ async function loadMealDate() {
 async function saveMeals() {
   if (!requireManager('saveMeals')) return;
   const date=document.getElementById("meal-date")?.value; if(!date){ toast("Select a date"); return; }
+  const key = date.slice(0,7);
+  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const meals={};
   members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
   try { await dbUpsertMeals(date,meals); await logAudit("update","meal",date,`Meals saved for ${date}`); toast("Meals saved","success"); loadMealsRecent(); loadManagerMealMonths(); } catch(e){ toast("Save failed: "+e.message,"error"); }
@@ -156,6 +216,8 @@ function clearBazar() { members.forEach(m=>{ const e=document.getElementById("bz
 async function saveBazar() {
   if (!requireManager('saveBazar')) return;
   const date=document.getElementById("bazar-date")?.value; if(!date){ toast("Select a date"); return; }
+  const key = date.slice(0,7);
+  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const bazar={}; members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
   try{ await dbUpsertBazar(date,bazar); await logAudit("update","bazar",date,`Bazar saved for ${date}`); toast("Bazar saved","success"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error: "+e.message,"error"); }
 }

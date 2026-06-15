@@ -290,7 +290,44 @@ async function renderMyDashboard(el) {
 
     <!-- ── Embedded mess snapshot (current month) ── -->
     ${buildMessSnapshotBlock(allMeals, allBazar, key, member.name)}
+
+    <!-- ── Mess Info (WiFi, bank, contacts) ── -->
+    <div id="my-dash-mess-info"></div>
   </div>`;
+
+  // Load mess info asynchronously
+  dbGetMessRules().then(rules => {
+    const infoWrap = document.getElementById("my-dash-mess-info");
+    if (!infoWrap) return;
+    const hasAny = rules && (rules.wifi_pass || rules.bank_info || rules.contacts);
+    if (!hasAny) return;
+    infoWrap.innerHTML = `
+      <div class="card" style="margin-top:12px">
+        <div class="card-title" style="margin-bottom:10px">🏠 Mess Info</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          ${rules.wifi_pass ? `
+          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📶 WiFi</div>
+            <div style="font-size:15px;font-weight:700;font-family:monospace;user-select:all;color:var(--accent)">${escapeHtml(rules.wifi_pass)}</div>
+          </div>` : ''}
+          ${rules.bank_info ? `
+          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">💳 Payment</div>
+            <div style="font-size:12px;white-space:pre-wrap;color:var(--text2);line-height:1.5">${escapeHtml(rules.bank_info)}</div>
+          </div>` : ''}
+          ${rules.contacts ? `
+          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px">
+            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📞 Contacts</div>
+            <div style="font-size:12px;white-space:pre-wrap;color:var(--text2);line-height:1.5">${escapeHtml(rules.contacts)}</div>
+          </div>` : ''}
+        </div>
+        ${rules.rules_text ? `
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;font-size:12px;color:var(--text3);font-weight:600">📜 Mess rules</summary>
+          <div style="font-size:13px;color:var(--text2);margin-top:8px;line-height:1.7">${renderMarkdown(rules.rules_text)}</div>
+        </details>` : ''}
+      </div>`;
+  }).catch(() => {});
 
   // Store calc in window for breakdown modal
   window._myDashCalc = calc;
@@ -791,8 +828,9 @@ async function loadMyProfile(member) {
   const prevUtilRec = profPrevUtilRes.data;
 
   const { meals, bazar, rent, utility } = getFilteredData(allM, allB, allR, period, allU || []);
-  const s        = getMemberStats(member, meals, bazar, rent, utility);
-  const allStats = getMemberStats(member, allM, allB, allR, allU || []);
+  const filteredUtilForStats = getFilteredUtilityOnly(allU || [], period);
+  const s        = getMemberStats(member, meals, bazar, rent, utility, filteredUtilForStats);
+  const allStats = getMemberStats(member, allM, allB, allR, allU || [], null); // null = use full allU (all-time)
 
   const idx = members.findIndex(m => m.id === member.id);
   const col = avatarCol(Math.max(idx, 0));
@@ -809,7 +847,8 @@ async function loadMyProfile(member) {
   const bazarShare = allBazarTotal > 0 ? Math.round((s.totalBazar / allBazarTotal) * 100) : 0;
 
   const settlementCalc = calcMemberSettlement(member, allM, allB, profRentRes, curUtilRec, prevUtilRec, curKey);
-  const mealNet  = round2(settlementCalc.memberBazar - settlementCalc.mealCost);
+  // mealNet: positive = member is owed back (bazar+paid > mealCost), negative = member still owes
+  const mealNet  = round2(settlementCalc.memberBazar + settlementCalc.mealPaid - settlementCalc.mealCost);
   const myRentEntry = profRentRes?.entries?.find(e => e.name === member.name) || {};
   const myUtilPay   = (curUtilRec?.payments || {})[member.name] || {};
   const rentNet  = round2(Number(myRentEntry.paid || 0) - Number(myRentEntry.rent || 0));
@@ -822,14 +861,24 @@ async function loadMyProfile(member) {
       <div class="card-title">Recent months</div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Util paid</th></tr></thead>
+          <thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Util paid</th><th>Net</th></tr></thead>
           <tbody>
             ${allMK.length
               ? allMK.slice(-6).reverse().map(k => {
                   const d      = allStats.byMonth[k] || {};
                   const mIndex = parseInt(k.slice(5), 10) - 1;
                   const y      = k.slice(0, 4);
-                  return `<tr><td>${MONTHS[mIndex]} ${y}</td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(d.rentPaid || 0)}</td><td style="color:var(--green)">${fmtTk(d.utilityPaid || 0)}</td></tr>`;
+                  // Per-month net payable — canonical settlement for each historical month
+                  const rentByKeyM = {}; allR.forEach(r => { rentByKeyM[r.month_key] = r; });
+                  const utilByKeyM = {}; (allU || []).forEach(r => { utilByKeyM[r.month_key] = r; });
+                  const prevKM = previousMonthFromKey(k).key;
+                  const netCalcM = calcMemberSettlement(member, allM, allB, rentByKeyM[k] || null, utilByKeyM[k] || null, utilByKeyM[prevKM] || null, k);
+                  const netCellM = netCalcM.netPayable > 0
+                    ? `<b style="color:var(--red)">Pay ${fmtTk(netCalcM.netPayable)}</b>`
+                    : netCalcM.netPayable < 0
+                      ? `<b style="color:var(--green)">Get ${fmtTk(Math.abs(netCalcM.netPayable))}</b>`
+                      : `<b style="color:var(--green)">✓</b>`;
+                  return `<tr><td>${MONTHS[mIndex]} ${y}</td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(d.rentPaid || 0)}</td><td style="color:var(--green)">${fmtTk(d.utilityPaid || 0)}</td><td>${netCellM}</td></tr>`;
                 }).join("")
               : `<tr><td colspan="5" class="empty">No recent data</td></tr>`
             }
@@ -839,8 +888,15 @@ async function loadMyProfile(member) {
     </div>`;
 
   const whatIOweHTML = buildWhatIOweHTML(member, allM, allB, profRentRes, curUtilRec, prevUtilRec, curM, curY);
+  const isMultiPeriod = (period !== "1" && period !== "last");
+  const multiPeriodBanner = isMultiPeriod ? `
+    <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:9px 13px;margin-bottom:12px;font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px">
+      ℹ️ <span>Stats cover <b>${periodLabel}</b>. 
+      Net payable and "What I Owe" are always pinned to the <b>latest settlement month (${monthLabelFromKey(curKey)})</b>.</span>
+    </div>` : "";
 
   content.innerHTML = `
+  ${multiPeriodBanner}
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:14px">

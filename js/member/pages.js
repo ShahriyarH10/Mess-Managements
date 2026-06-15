@@ -56,8 +56,9 @@ async function renderMyMeals(el) {
   <div class="topbar">
     <div>
       <div class="page-title">Meal Log</div>
-      <div class="page-sub">Mark absences & update your meal count</div>
+      <div class="page-sub">Mark absences &amp; update your meal count</div>
     </div>
+
   </div>
 
   <div class="content">
@@ -153,10 +154,42 @@ async function renderMyMeals(el) {
       </div>
 
     </div>
+  </div>
+
   </div>`;
 
   // Auto-load today's existing meal data as soon as the section renders
   fillMyMealFromDate();
+  // Load bazar history for the bazar tab
+  loadMyBazarRecent();
+}
+
+function switchMyMealTab(tab) {
+  ['meals','bazar'].forEach(t => {
+    const pane = document.getElementById('myml-pane-' + t);
+    if (pane) pane.style.display = t === tab ? '' : 'none';
+    const btn = document.getElementById('myml-tab-' + t);
+    if (btn) {
+      btn.style.background = t === tab ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === tab ? '#0f0f0f' : 'var(--text2)';
+    }
+  });
+  if (tab === 'bazar') { fillMyBazarFromDate(); loadMyBazarRecent(); }
+}
+
+async function loadMyBazarRecent() {
+  const wrap = document.getElementById("my-bazar-recent-wrap"); if (!wrap) return;
+  const member = await getMe(); if (!member) return;
+  const allBazar = await dbGetAll("bazar");
+  const myRows = allBazar
+    .filter(r => Number((r.bazar||{})[member.name]||0) > 0)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, 15);
+  if (!myRows.length) { wrap.innerHTML = '<div class="empty">No bazar entries yet.</div>'; return; }
+  wrap.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>Date</th><th>Amount</th></tr></thead>
+    <tbody>${myRows.map(r => `<tr><td>${r.date}</td><td style="color:var(--green);font-weight:600">${fmtTk(Number((r.bazar||{})[member.name]||0))}</td></tr>`).join("")}
+    </tbody></table></div>`;
 }
 
 async function fillMyMealFromDate() {

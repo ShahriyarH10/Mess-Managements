@@ -31,33 +31,55 @@ async function loadProfiles() {
   const key = monthKey(curY, curM);
   const prevM = curM===0?11:curM-1, prevY = curM===0?curY-1:curY;
   const prevKey = monthKey(prevY, prevM);
-  const [allMeals,allBazar,allRent,{data:allUtil},curUtilRes,prevUtilRes] = await Promise.all([
+  const [allMeals,allBazar,allRent,{data:allUtil},curUtilRes,prevUtilRes,curRentRec] = await Promise.all([
     dbGetAll("meals"), dbGetAll("bazar"), dbGetAll("rent"),
     getClient().from("utility_payments").select("*").eq("mess_id",messId()),
     getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle(),
     getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
+    dbGetMonth("rent", key),
   ]);
   buildProfileCards(allMeals,allBazar,allRent,allUtil||[],curUtilRes.data,prevUtilRes.data);
-  if (selectedProfileId) showProfileDetail(selectedProfileId,allMeals,allBazar,allRent,allUtil||[],null,curUtilRes.data,prevUtilRes.data,curM,curY);
+  if (selectedProfileId) showProfileDetail(selectedProfileId,allMeals,allBazar,allRent,allUtil||[],curRentRec,curUtilRes.data,prevUtilRes.data,curM,curY);
 }
 async function refreshProfiles() { await loadProfiles(); }
 
+/* Helper: returns the period-filtered utility array for stat display (ud/up totals).
+   Unlike getFilteredData, this does NOT change the utility array used for postpaid
+   prev-month lookups — that always uses full allU. */
+function getFilteredUtilityOnly(allU, period) {
+  if (period === "all") return allU;
+  if (period === "last") {
+    const now = new Date(); let m = now.getMonth() - 1, y = now.getFullYear();
+    if (m < 0) { m = 11; y--; }
+    const key = y + "-" + String(m + 1).padStart(2, "0");
+    return allU.filter(r => r.month_key === key);
+  }
+  const months = parseInt(period), now = new Date();
+  let cm = now.getMonth() - months + 1, cy = now.getFullYear();
+  while (cm < 0) { cm += 12; cy--; }
+  const cut = cy + "-" + String(cm + 1).padStart(2, "0");
+  return allU.filter(r => r.month_key >= cut);
+}
+
 function getFilteredData(allM,allB,allR,period,allU=[]) {
+  // NOTE: utility is ALWAYS returned unfiltered so getMemberStats can look up
+  // the previous month's postpaid bills (Khala+Other) via utilByKey.
+  // Filtering utility to a single month would break the postpaid calculation.
   if (period==="all") return {meals:allM,bazar:allB,rent:allR,utility:allU};
   if (period==="last") {
     const now=new Date(); let m=now.getMonth()-1,y=now.getFullYear();
     if(m<0){m=11;y--;}
     const key=y+"-"+String(m+1).padStart(2,"0");
-    return { meals:allM.filter(r=>r.date.slice(0,7)===key), bazar:allB.filter(r=>r.date.slice(0,7)===key), rent:allR.filter(r=>r.month_key===key), utility:allU.filter(r=>r.month_key===key) };
+    return { meals:allM.filter(r=>r.date.slice(0,7)===key), bazar:allB.filter(r=>r.date.slice(0,7)===key), rent:allR.filter(r=>r.month_key===key), utility:allU };
   }
   const months=parseInt(period), now=new Date();
   let cm=now.getMonth()-months+1, cy=now.getFullYear();
   while(cm<0){cm+=12;cy--;}
   const cut=cy+"-"+String(cm+1).padStart(2,"0");
-  return { meals:allM.filter(r=>r.date.slice(0,7)>=cut), bazar:allB.filter(r=>r.date.slice(0,7)>=cut), rent:allR.filter(r=>r.month_key>=cut), utility:allU.filter(r=>r.month_key>=cut) };
+  return { meals:allM.filter(r=>r.date.slice(0,7)>=cut), bazar:allB.filter(r=>r.date.slice(0,7)>=cut), rent:allR.filter(r=>r.month_key>=cut), utility:allU };
 }
 
-function getMemberStats(member,meals,bazar,rent,utility=[]) {
+function getMemberStats(member,meals,bazar,rent,utility=[],filteredUtility=null) {
   let tm=0,tb=0,rd=0,rp=0,ud=0,up=0,ad=0;
   const byM={};
   const em=k=>{ byM[k]=byM[k]||{meals:0,bazar:0,rentPaid:0,utilityPaid:0}; };
@@ -68,12 +90,14 @@ function getMemberStats(member,meals,bazar,rent,utility=[]) {
   });
   bazar.forEach(r=>{ const v=Number(r.bazar[member.name]||0); tb+=v; const k=r.date.slice(0,7); em(k); byM[k].bazar+=v; });
   rent.forEach(r=>{ const e=r.entries?.find(x=>x.name===member.name); if(e){ rd+=Number(e.rent||0); rp+=Number(e.paid||0); em(r.month_key); byM[r.month_key].rentPaid+=Number(e.paid||0); } });
-  // Canonical utility due for each settlement month M:
-  //   prepaid (Elec+Gas+WiFi) from M's record  +  postpaid (Khala+Other) from M-1's record
-  // Index records by month_key so we can look up the previous-month bills.
+  // utility = full allU (for postpaid prev-month lookup)
+  // filteredUtility = period-scoped subset (for ud/up stat totals)
+  // If filteredUtility not provided, fall back to utility (all-time view)
+  const utilForStats = filteredUtility !== null ? filteredUtility : utility;
   const utilByKey = {};
   utility.forEach(r => { utilByKey[r.month_key] = r; });
-  utility.forEach(r => {
+  // ud/up: only sum within the filtered period so the stat card is accurate
+  utilForStats.forEach(r => {
     const prevKey  = previousMonthFromKey(r.month_key).key;
     const prepaid  = utilTotalFromBills(r.bills || {},                     UTIL_PREPAID_KEYS);
     const postpaid = utilTotalFromBills(utilByKey[prevKey]?.bills || {},   UTIL_POSTPAID_KEYS);
@@ -387,6 +411,9 @@ function buildWhatIOweHTML(
 function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
   const period=document.getElementById("prof-period")?.value||"1";
   const {meals,bazar,rent,utility}=getFilteredData(allM,allB,allR,period,allU);
+  // filteredUtility: period-scoped subset for stat totals (ud/up in getMemberStats)
+  // utility (full allU) stays for postpaid prev-month lookup
+  const filteredUtility = getFilteredUtilityOnly(allU, period);
   const grid=document.getElementById("profile-card-grid"); if(!grid) return;
   if(!members.length){ grid.innerHTML='<div class="empty">No members yet.</div>'; return; }
 
@@ -405,7 +432,7 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
   const isSinglePeriod  = (period === "1" || period === "last");
 
   grid.innerHTML=members.map((m,i)=>{
-    const s   = getMemberStats(m, meals, bazar, rent, utility);
+    const s   = getMemberStats(m, meals, bazar, rent, utility, filteredUtility);
     const col = avatarCol(i);
 
     // Canonical per-member settlement for the resolved month — keeps
@@ -443,7 +470,9 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
 
       <div style="background:var(--accent-bg);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Net payable · ${monthLabelFromKey(settlementKey)}</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">
+            Net payable · ${monthLabelFromKey(settlementKey)}${!isSinglePeriod ? ' <span style="font-weight:400;opacity:.7">(latest)</span>' : ''}
+          </div>
         </div>
         <div class="${netCls}" style="font-size:18px;font-weight:800;margin-top:2px">${netLabel}</div>
       </div>
@@ -486,7 +515,10 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   selectedProfileId = id;
   const period=document.getElementById("prof-period")?.value||"1";
   const {meals,bazar,rent,utility}=getFilteredData(allM,allB,allR,period,allU);
-  const s=getMemberStats(member,meals,bazar,rent,utility);
+  // filteredUtility: period-scoped subset for stat totals (ud/up in getMemberStats)
+  // utility (full allU) stays for postpaid prev-month lookup
+  const filteredUtility = getFilteredUtilityOnly(allU, period);
+  const s=getMemberStats(member,meals,bazar,rent,utility,filteredUtility);
   const col=avatarCol(members.indexOf(member));
   const allMK=Object.keys(s.byMonth).sort(), r8=allMK.slice(-8);
   const maxM=Math.max(...r8.map(k=>s.byMonth[k]?.meals||0),1);
@@ -548,7 +580,15 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
 
   const whatIOweHTML = buildWhatIOweHTML(member,allM,allB,currentRentRec,currentUtilRec,prevUtilRec,curM,curY);
 
+  const isMultiMonth = (period !== "1" && period !== "last");
+  const settlKey2 = monthKey(curM || thisMonth().month, curY || thisMonth().year);
+  const multiMonthBanner = isMultiMonth ? `
+    <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px">
+      ℹ️ <span>Stats cover <b>${period === "all" ? "all time" : "last " + period + " months"}</b>. 
+      Net payable and "What I Owe" are always pinned to the <b>latest settlement month (${monthLabelFromKey(settlKey2)})</b>.</span>
+    </div>` : "";
   document.getElementById("modal-content").innerHTML=`
+    ${multiMonthBanner}
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
         <div class="avatar" style="width:46px;height:46px;font-size:15px;flex-shrink:0;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${memberInitials(member.id, member.name)}</div>

@@ -31,8 +31,14 @@ create table if not exists members (
   phone      text default '',
   joined     date,
   created_at timestamptz default now(),
+  meal_default_day float  default 1,
+  meal_default_night float default 1,
   unique(mess_id, username)
 );
+
+-- Migration: add meal_default_day if table already exists
+-- ALTER TABLE members ADD COLUMN IF NOT EXISTS meal_default_day float default 1;
+-- ALTER TABLE members ADD COLUMN IF NOT EXISTS meal_default_night float default 1;
 
 -- ── MEALS ──────────────────────────────────────────────
 -- meals column is a JSON object:

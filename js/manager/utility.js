@@ -110,6 +110,7 @@ async function saveRent() {
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);
+  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const entries=members.map(m=>({
     name:   m.name,
     rent:   parseFloat(document.getElementById("rd-"+m.id)?.value||0),

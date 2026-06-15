@@ -195,3 +195,100 @@ async function saveChore(id) {
   try{ await dbSaveChore(row); closeModal(); toast("Saved","success"); navigate("chores"); }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function deleteChore(id) { if (!requireManager("deleteChore")) return; showConfirm({ title: "Delete chore?", body: "This chore assignment will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDeleteChore(id); toast("Deleted"); navigate("chores"); }catch(e){ toast("Error","error"); } } }); }
+
+/* ═══════════════════════════════════════════════
+   MESSAGES — merged Announcements + Broadcasts
+   Manager: post both. Member: read-only feed.
+═══════════════════════════════════════════════ */
+
+async function renderMessages(el, isManager) {
+  el.innerHTML = `
+  <div class="topbar">
+    <div>
+      <div class="page-title">Messages</div>
+      <div class="page-sub">${isManager ? "Post broadcasts to all members" : "Broadcasts from your manager"}</div>
+    </div>
+    ${isManager ? `
+    <div class="topbar-actions">
+      <button class="btn btn-primary btn-sm" onclick="openBroadcastModal()">📢 Broadcast</button>
+    </div>` : ""}
+  </div>
+  <div class="content">
+    <div id="msg-broadcasts-wrap"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+  </div>`;
+
+  if (!isManager && currentUser.memberId) {
+    localStorage.setItem(`mm_announce_read_${currentUser.memberId}`, new Date().toISOString());
+    refreshMemberAnnounceBadge?.();
+  }
+
+  await loadMessagesPage(isManager);
+}
+
+async function loadMessagesPage(isManager) {
+  const bWrap = document.getElementById("msg-broadcasts-wrap");
+  if (!bWrap) return;
+
+  try {
+    const { data: bcs } = await getClient().from("broadcasts").select("*")
+      .eq("mess_id", messId())
+      .order("pinned", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    const now    = new Date();
+    const active = (bcs || []).filter(b => !b.expires_at || new Date(b.expires_at) > now);
+    const list   = isManager ? (bcs || []) : active;
+
+    if (!list.length) {
+      bWrap.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--text3)">
+        <div style="font-size:40px;margin-bottom:12px">📢</div>
+        <div style="font-size:14px">${isManager ? "No broadcasts yet — click 📢 Broadcast to post one." : "No broadcasts from your manager yet."}</div>
+      </div>`;
+      return;
+    }
+
+    bWrap.innerHTML = list.map(b => {
+      const isUrgent  = b.priority === "urgent";
+      const isPinned  = b.pinned;
+      const isExpired = b.expires_at && new Date(b.expires_at) < now;
+      const dt = new Date(b.created_at).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit", hour12:true });
+      return `<div style="
+          background:${isUrgent ? "var(--red-bg)" : isPinned ? "var(--accent-bg)" : "var(--bg2)"};
+          border:1.5px solid ${isUrgent ? "rgba(224,82,82,.3)" : isPinned ? "rgba(212,168,83,.3)" : "var(--border)"};
+          border-radius:var(--radius);
+          padding:14px 16px;
+          margin-bottom:10px;
+          opacity:${isExpired ? 0.5 : 1};
+          transition:border-color .2s;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+              <span style="font-size:16px">${isPinned ? "📌" : isUrgent ? "🔴" : "📢"}</span>
+              ${isPinned  ? '<span style="font-size:10px;background:var(--accent);color:#000;padding:2px 7px;border-radius:99px;font-weight:800">PINNED</span>'  : ""}
+              ${isUrgent  ? '<span style="font-size:10px;background:var(--red);color:#fff;padding:2px 7px;border-radius:99px;font-weight:800">URGENT</span>'   : ""}
+              ${isExpired ? '<span style="font-size:10px;color:var(--text3);border:1px solid var(--border);padding:2px 7px;border-radius:99px">EXPIRED</span>' : ""}
+            </div>
+            <div style="font-size:14px;color:var(--text);line-height:1.6">${escapeHtml(b.message)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px">${escapeHtml(b.author || "")} · ${dt}</div>
+          </div>
+          ${isManager ? `<div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn btn-ghost btn-sm" onclick="toggleBroadcastPin('${b.id}',${!isPinned})" title="${isPinned ? "Unpin" : "Pin"}">${isPinned ? "📌" : "📍"}</button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteBroadcastMsg('${b.id}')">✕</button>
+          </div>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    bWrap.innerHTML = `<div class="empty">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function deleteBroadcastMsg(id) {
+  try { await getClient().from("broadcasts").delete().eq("id", id); toast("Broadcast removed"); await loadMessagesPage(true); }
+  catch(e) { toast("Error: " + e.message, "error"); }
+}
+async function toggleBroadcastPin(id, pinned) {
+  try { await getClient().from("broadcasts").update({ pinned }).eq("id", id); toast(pinned ? "📌 Pinned" : "Unpinned", "success"); await loadMessagesPage(true); }
+  catch(e) { toast("Error: " + e.message, "error"); }
+}

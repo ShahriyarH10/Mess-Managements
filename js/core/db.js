@@ -65,6 +65,26 @@ async function dbUpsertUtility(month, year, key, bills, payments) {
   if (error) throw error;
 }
 
+/* ── Month Lock ── */
+async function isMonthLocked(key) {
+  try {
+    const { data } = await getClient().from("utility_payments").select("bills")
+      .eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+    return !!(data?.bills?.locked);
+  } catch(_) { return false; }
+}
+
+async function dbSetMonthLocked(month, year, key, locked) {
+  // Fetch current record (or blank) so we don't wipe bills/payments
+  const { data: cur } = await getClient().from("utility_payments").select("*")
+    .eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+  const bills    = { ...(cur?.bills    || {}) };
+  const payments = cur?.payments || {};
+  if (locked) bills.locked = true;
+  else delete bills.locked;
+  await dbUpsertUtility(month, year, key, bills, payments);
+}
+
 async function dbDelete(table, id) {
   const { error } = await getClient().from(table).delete().eq("id", id).eq("mess_id", messId());
   if (error) throw error;
@@ -82,6 +102,8 @@ async function dbSaveMember(row) {
     name: row.name, username: row.username,
     role: row.role || "member", room: row.room || "",
     phone: row.phone || "", joined: row.joined || null, mess_id: messId(),
+    meal_default_day:   row.meal_default_day   ?? 1,
+    meal_default_night: row.meal_default_night ?? 1,
   };
   // Only include password in payload if explicitly provided (avoids overwriting with undefined)
   if (row.password) payload.password = row.password;

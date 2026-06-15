@@ -161,6 +161,7 @@ async function loadUtilityGroup(type) {
 async function saveUtilityGroup(type) {
   if (!requireManager('saveUtilityGroup')) return;
   const { month, year, key } = getUtilityGroupKey(type);
+  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const { data: rec } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const bills = { ...(rec?.bills || {}) };
   if (type === "prepaid") {
@@ -372,6 +373,7 @@ function markAllUtilPaid() {
 async function saveUtilityPayments() {
   if (!requireManager('saveUtilityPayments')) return;
   const { month, year, key } = getPaymentKey();
+  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const { data: rec } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
   const payments = {};
   members.forEach(m => {
