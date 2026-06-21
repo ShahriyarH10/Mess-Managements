@@ -294,51 +294,206 @@ async function loadBazarMonths() {
                 <span style="color:var(--text3)">· ${fmtTk(round2(top[1]))}</span>
               </div>
             ` : `<div style="font-size:11px;color:var(--text3)">No bazar data yet</div>`}
+            <div style="font-size:10px;color:var(--text3);text-align:right;margin-top:2px">📅 View calendar →</div>
           </button>`;
       }).join("")}
     </div>`;
 }
 
 async function openBazarMonth(key) {
-  const all = await dbGetAll("bazar");
+  const all  = await dbGetAll("bazar");
+  const year  = parseInt(key.split("-")[0]);
+  const monthIdx = parseInt(key.split("-")[1]) - 1;
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
   const rows = all.filter(r => String(r.date || "").startsWith(key)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const totals = {}; members.forEach(m => totals[m.name] = 0);
+
+  // Build date-keyed map: { "15": { MemberA: 120, MemberB: 0, ... } }
+  const byDay = {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    byDay[String(d).padStart(2, "0")] = {};
+  }
+  rows.forEach(r => {
+    const dayStr = String(r.date || "").slice(8, 10);
+    if (!byDay[dayStr]) return;
+    members.forEach(m => {
+      byDay[dayStr][m.name] = Number((r.bazar || {})[m.name] || 0);
+    });
+  });
+
+  // Member totals
+  const totals = {}; members.forEach(m => { totals[m.name] = 0; });
   rows.forEach(r => Object.entries(r.bazar || {}).forEach(([n, v]) => { totals[n] = (totals[n] || 0) + Number(v || 0); }));
-  const grand = Object.values(totals).reduce((s, v) => s + v, 0);
-  const max = Math.max(1, ...Object.values(totals));
+  const grand = round2(Object.values(totals).reduce((s, v) => s + v, 0));
+  const maxMember = Math.max(1, ...Object.values(totals));
+
+  // Day totals for colour intensity
+  const dayTotals = {};
+  Object.entries(byDay).forEach(([d, mmap]) => {
+    dayTotals[d] = Object.values(mmap).reduce((s, v) => s + v, 0);
+  });
+  const maxDay = Math.max(1, ...Object.values(dayTotals));
+
+  // Weekday of first day (Sun=0)
+  const firstDow = new Date(year, monthIdx, 1).getDay();
+
+  // Member colour palette (cycles)
+  const MEMBER_COLOURS = ["#d4a853","#5b9bd5","#27ae60","#e67e22","#9b59b6","#e74c3c","#1abc9c","#e91e63"];
+  const memberColour = {};
+  members.forEach((m, i) => { memberColour[m.name] = MEMBER_COLOURS[i % MEMBER_COLOURS.length]; });
+
+  // Build calendar cell HTML
+  function buildCalCell(dayNum) {
+    const d = String(dayNum).padStart(2, "0");
+    const dayMap  = byDay[d] || {};
+    const dayTotal = dayTotals[d] || 0;
+    const hasBazar = dayTotal > 0;
+    // Intensity drives how deep the green fill goes (0.18 min so low days still look distinct)
+    const intensity = hasBazar ? Math.max(0.18, dayTotal / maxDay) : 0;
+    // Solid green-tinted background; text must always be the app's normal text, NOT green
+    const bg     = hasBazar ? `rgba(39,174,96,${intensity.toFixed(2)})` : "var(--bg3)";
+    // High intensity (>0.55) → background is bright enough to need dark text; otherwise keep light text
+    const numColor   = hasBazar
+      ? (intensity > 0.55 ? "#0f1a14" : "var(--text)")
+      : "var(--text3)";
+    // Amount: white/near-white on green bg — never green-on-green
+    const amtColor   = hasBazar
+      ? (intensity > 0.55 ? "#0f1a14" : "#e0f7ef")
+      : "var(--text3)";
+    // Border: slightly brighter than the fill so the cell edge is always visible
+    const borderCol  = hasBazar ? "rgba(39,174,96,0.55)" : "var(--border)";
+
+    // Stacked pips per member
+    const pips = hasBazar ? members
+      .filter(m => (dayMap[m.name] || 0) > 0)
+      .map(m => `<div title="${m.name}: ${fmtTk(dayMap[m.name])}" style="
+        height:4px;border-radius:2px;
+        background:${memberColour[m.name]};
+        flex:${dayMap[m.name]};
+        min-width:4px;
+        opacity:0.9;
+      "></div>`).join("") : "";
+
+    return `
+      <div onclick="openBazarDayDetail('${key}','${d}')"
+        title="${hasBazar ? 'Day total: '+fmtTk(dayTotal) : 'No bazar'}"
+        style="
+          background:${bg};
+          border-radius:8px;
+          padding:6px 5px 5px;
+          cursor:${hasBazar?'pointer':'default'};
+          min-height:58px;
+          display:flex;flex-direction:column;gap:3px;
+          border:1px solid ${borderCol};
+          transition:transform .1s,box-shadow .1s;
+          position:relative;
+        "
+        onmouseover="${hasBazar?`this.style.transform='scale(1.04)';this.style.boxShadow='0 4px 14px rgba(0,0,0,.25)'`:''}"
+        onmouseout="${hasBazar?`this.style.transform='scale(1)';this.style.boxShadow='none'`:''}">
+        <div style="font-size:11px;font-weight:700;color:${numColor};line-height:1">${dayNum}</div>
+        ${hasBazar
+          ? `<div style="font-size:10px;font-weight:700;color:${amtColor};margin-top:1px;line-height:1">${fmtTk(dayTotal)}</div>
+             <div style="display:flex;gap:2px;margin-top:auto;flex-wrap:wrap">${pips}</div>`
+          : `<div style="font-size:9px;color:var(--text3);margin-top:auto">—</div>`}
+      </div>`;
+  }
+
+  // Empty leading cells
+  const leadingEmpties = Array.from({ length: firstDow }, () =>
+    `<div style="min-height:58px"></div>`).join("");
+
+  const calCells = Array.from({ length: daysInMonth }, (_, i) => buildCalCell(i + 1)).join("");
+
+  // Store rows on window for day-detail modal
+  window._bazarMonthRows = byDay;
+  window._bazarMonthKey  = key;
 
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
-    <div class="modal-title">${monthLabelFromKey(key)} — Bazar history</div>
-    <div class="modal-sub" style="margin-bottom:14px">${rows.length} active day${rows.length===1?"":"s"} · grand total ${fmtTk(grand)}</div>
+    <div class="modal-title">🛒 ${monthLabelFromKey(key)} — Bazar Calendar</div>
+    <div class="modal-sub" style="margin-bottom:14px">${rows.length} active day${rows.length===1?"":"s"} · grand total <b style="color:var(--green)">${fmtTk(grand)}</b> · click any highlighted day for details</div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:14px">
-      ${members.map(m => `
-        <div class="stat-card" style="padding:10px">
-          <div style="font-size:11px;color:var(--text3)">${m.name}</div>
-          <div style="font-size:15px;font-weight:700;color:var(--green);margin:2px 0 4px">${fmtTk(round2(totals[m.name] || 0))}</div>
-          <div style="height:5px;background:var(--bg3);border-radius:99px;overflow:hidden">
-            <div style="height:100%;width:${Math.round(((totals[m.name]||0)/max)*100)}%;background:var(--green);transition:width .4s"></div>
-          </div>
-        </div>`).join("")}
+    <!-- Member contribution bars -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px">
+      ${members.map(m => {
+        const pct = Math.round(((totals[m.name]||0) / maxMember) * 100);
+        return `
+          <div style="background:var(--bg3);border-radius:8px;padding:9px 11px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <div style="font-size:11px;font-weight:600;color:var(--text2)">${escapeHtml(m.name)}</div>
+              <div style="width:8px;height:8px;border-radius:50%;background:${memberColour[m.name]}"></div>
+            </div>
+            <div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:4px">${fmtTk(round2(totals[m.name]||0))}</div>
+            <div style="height:4px;background:var(--bg2);border-radius:99px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${memberColour[m.name]};transition:width .5s"></div>
+            </div>
+          </div>`;
+      }).join("")}
     </div>
 
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>Date</th>${members.map(m => `<th>${m.name}</th>`).join("")}<th>Total</th></tr></thead>
-      <tbody>${rows.length
-        ? rows.map(r => {
-            const t = members.reduce((s, m) => s + Number((r.bazar || {})[m.name] || 0), 0);
-            return `<tr><td><b>${r.date}</b></td>${members.map(m => {
-              const v = Number((r.bazar || {})[m.name] || 0);
-              return `<td class="${v>0?'net-pos':''}">${v>0?fmtTk(v):'—'}</td>`;
-            }).join("")}<td><b>${fmtTk(round2(t))}</b></td></tr>`;
-          }).join("")
-        : `<tr><td colspan="${members.length + 2}" class="empty">No bazar entries</td></tr>`}
-      </tbody>
-    </table></div>
+    <!-- Calendar grid -->
+    <div style="
+      display:grid;
+      grid-template-columns:repeat(7,1fr);
+      gap:5px;
+      margin-bottom:10px;
+    ">
+      ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d =>
+        `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:4px 0">${d}</div>`
+      ).join("")}
+      ${leadingEmpties}
+      ${calCells}
+    </div>
+
+    <!-- Legend -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text3);padding:8px 0 4px;border-top:1px solid var(--border)">
+      <span>Colour intensity = spending amount.</span>
+      <span>Coloured pips = member split.</span>
+      ${members.map(m => `<span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${memberColour[m.name]}"></span>${escapeHtml(m.name)}</span>`).join("")}
+    </div>
 
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
   document.querySelector(".modal").classList.add("modal-wide");
+  openModal();
+}
+
+/* Day detail popup from calendar click */
+async function openBazarDayDetail(monthKey, dayStr) {
+  const dayMap = (window._bazarMonthRows || {})[dayStr] || {};
+  const dayTotal = Object.values(dayMap).reduce((s, v) => s + v, 0);
+  if (!dayTotal) return;
+
+  const year = parseInt(monthKey.split("-")[0]);
+  const monthIdx = parseInt(monthKey.split("-")[1]) - 1;
+  const dateLabel = `${parseInt(dayStr)} ${MONTHS[monthIdx]} ${year}`;
+
+  const MEMBER_COLOURS = ["#d4a853","#5b9bd5","#27ae60","#e67e22","#9b59b6","#e74c3c","#1abc9c","#e91e63"];
+  const memberColour = {};
+  members.forEach((m, i) => { memberColour[m.name] = MEMBER_COLOURS[i % MEMBER_COLOURS.length]; });
+
+  const modal = document.getElementById("modal-content");
+  modal.innerHTML = `
+    <div class="modal-title">🛒 Bazar — ${escapeHtml(dateLabel)}</div>
+    <div class="modal-sub" style="margin-bottom:14px">Day total: <b style="color:var(--green)">${fmtTk(round2(dayTotal))}</b></div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${members.map(m => {
+        const v = Number(dayMap[m.name] || 0);
+        const pct = dayTotal > 0 ? Math.round((v / dayTotal) * 100) : 0;
+        return `
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:90px;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">${escapeHtml(m.name)}</div>
+            <div style="flex:1;height:8px;background:var(--bg3);border-radius:99px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${memberColour[m.name]};transition:width .4s"></div>
+            </div>
+            <div style="width:70px;text-align:right;font-size:13px;font-weight:700;color:${v>0?'var(--green)':'var(--text3)'}">${v>0?fmtTk(v):'—'}</div>
+          </div>`;
+      }).join("")}
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="openBazarMonth('${monthKey}')">← Back to calendar</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>`;
+  document.querySelector(".modal").classList.remove("modal-wide");
   openModal();
 }
 async function delBazar(id) { showConfirm({ title: "Delete bazar entry?", body: "This day's bazar record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDelete("bazar",id); toast("Deleted"); loadBazarRecent(); loadBazarMonths(); }catch(e){ toast("Error","error"); } } }); }

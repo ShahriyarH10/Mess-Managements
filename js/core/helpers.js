@@ -183,15 +183,35 @@ function clearSession() {
 }
 
 /* ROLE GUARD */
+// Actions only the full manager (or superadmin) can do — never sub_manager
+const FULL_MANAGER_ONLY_FNS = new Set([
+  "addMember", "updateMember", "deleteMember", "openLeavingFlow",
+  "openManagerResetPasswordModal", "doManagerResetPassword",
+  "setSubManager", "renderManagerRoles",
+  "toggleMonthLock",
+  "saveMessRules",
+  "saveFundEntry", "deleteFundEntry",
+]);
+
 function requireManager(fnName) {
   if (!currentUser) {
     console.warn(`[Security] ${fnName} blocked — not logged in`);
     toast("Not authenticated", "error");
     return false;
   }
-  if (currentUser.role !== "manager" && currentUser.role !== "superadmin") {
+  const isManager    = currentUser.role === "manager";
+  const isSubManager = currentUser.role === "sub_manager";
+  const isSuperAdmin = currentUser.role === "superadmin";
+
+  if (!isManager && !isSubManager && !isSuperAdmin) {
     console.warn(`[Security] ${fnName} blocked — insufficient role: ${currentUser.role}`);
     toast("Manager access required", "error");
+    return false;
+  }
+  // Sub-managers are blocked from full-manager-only actions
+  if (isSubManager && FULL_MANAGER_ONLY_FNS.has(fnName)) {
+    console.warn(`[Security] ${fnName} blocked — sub_manager cannot perform this action`);
+    toast("Only the main manager can do this", "error");
     return false;
   }
   return true;

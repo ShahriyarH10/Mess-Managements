@@ -130,7 +130,7 @@ function buildNav() {
     "my-payments",
   ];
 
-  const mainPages = isManager ? managerMainPages : memberMainPages;
+  const mainPages = (isManager || isSubMgr) ? managerMainPages : memberMainPages;
 
   const mobileMainItems = filteredNav.filter(i =>
     !i.section && mainPages.includes(i.page)
@@ -240,7 +240,7 @@ function buildNav() {
       <div>
         <div style="font-weight:600;font-size:14px">${currentUser.name}</div>
         <div style="font-size:11px;color:var(--text3)">
-          ${isManager ? "👑 Manager" : "Member"} · @${currentUser.username}
+          ${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"} · @${currentUser.username}
         </div>
       </div>
     </div>
@@ -254,7 +254,7 @@ function buildNav() {
   const logoutBtn = document.getElementById("sidebar-logout");
   if (logoutBtn) logoutBtn.innerHTML = IC.logout + "Sign out";
 
-  if (isManager) refreshNotifBadge();
+  if (isManager || isSubMgr) refreshNotifBadge();
   else refreshMemberAnnounceBadge();
 }
 
