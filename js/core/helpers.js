@@ -441,6 +441,19 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
   };
 }
 
+/* Outstanding net due carried forward from the previous month's settlement,
+   net of whatever the member has already paid against it. Mirrors the
+   prevDue logic used in the Collect page. */
+function calcPrevDueForMember(member, allMeals, allBazar, currentUtilRec, rentRecPrev, utilRecPrev, utilRecPrevPrev, settlementKey) {
+  const prev         = previousMonth(monthIndexFromKey(settlementKey), yearFromKey(settlementKey));
+  const prevP        = calcMemberSettlement(member, allMeals, allBazar, rentRecPrev, utilRecPrev, utilRecPrevPrev, prev.key);
+  const prevDuePaid  = round2(Number((currentUtilRec?.payments || {})[member.name]?.prev_due_paid || 0));
+  const prevUtilStatus = (utilRecPrev?.payments || {})[member.name]?.status || "unpaid";
+  const prevRentStatus = (rentRecPrev?.entries  || []).find(e => e.name === member.name)?.status || "unpaid";
+  const prevFullyPaid  = prevUtilStatus === "paid" && prevRentStatus === "paid";
+  return prevFullyPaid ? 0 : round2(Math.max(0, prevP.netPayable - prevDuePaid));
+}
+
 function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForward = 5) {
   const now   = new Date();
   const start = now.getFullYear() - yearsBack;

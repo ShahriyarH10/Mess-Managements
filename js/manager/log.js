@@ -42,7 +42,7 @@ function renderLog(el) {
           ✅ Credits (deducted): Bazar spent + Meal cash + Rent paid + Utility paid + ↩ Carry-forward credit
         </div>
         <div style="margin-top:6px;background:var(--accent-bg);border-radius:6px;padding:8px 12px;font-weight:600;color:var(--accent)">
-          Net = Meal cost + Khala + Other + Rent + Elec/Gas/WiFi − Bazar − Meal paid − Rent paid − Util paid − Carried fwd
+          Net = Meal cost + Khala + Other + Rent + Elec/Gas/WiFi − Bazar − Meal paid − Rent paid − Util paid − Carried fwd + Prev due
         </div>
       </div>
 
@@ -75,6 +75,7 @@ async function loadLog() {
   const settlementKey = monthKey(year, month);
   const prev          = previousMonth(month, year);
   const sourceKey     = prev.key;
+  const prevPrev      = previousMonthFromKey(prev.key);
 
   const logContent = document.getElementById("log-content");
   logContent.innerHTML = '<div class="loading"><div class="spinner"></div>Generating settlement report…</div>';
@@ -85,20 +86,29 @@ async function loadLog() {
     currentRentRec,
     currentUtilRes,
     previousUtilRes,
+    rentRecPrevRes,
+    utilRecPrevPrevRes,
   ] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
     dbGetMonth("rent", settlementKey),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
+    dbGetMonth("rent", prev.key),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrev.key).maybeSingle(),
   ]);
 
-  const currentUtilRec  = currentUtilRes.data;
-  const previousUtilRec = previousUtilRes.data;
+  const currentUtilRec   = currentUtilRes.data;
+  const previousUtilRec  = previousUtilRes.data;
+  const rentRecPrev      = rentRecPrevRes;
+  const utilRecPrevPrev  = utilRecPrevPrevRes.data;
 
-  const payData = members.map(m =>
-    calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey)
-  );
+  const payData = members.map(m => {
+    const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
+    p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, currentUtilRec, rentRecPrev, previousUtilRec, utilRecPrevPrev, settlementKey);
+    p.netWithPrevDue = round2(p.netPayable + p.prevDue);
+    return p;
+  });
   window._logPayData = payData; // store for Details button
 
   const totalMeals   = round2(payData[0]?.totalMeals || 0);
@@ -117,7 +127,7 @@ async function loadLog() {
   const mealRows  = allMeals.filter(r => String(r.date || "").startsWith(sourceKey)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const bazarRows = allBazar.filter(r => String(r.date || "").startsWith(sourceKey)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
-  const grandNetPayable = round2(payData.reduce((s, p) => s + p.netPayable, 0));
+  const grandNetPayable = round2(payData.reduce((s, p) => s + p.netWithPrevDue, 0));
   const totalRent       = round2(payData.reduce((s, p) => s + p.roomRent, 0));
   const totalMealCost   = round2(payData.reduce((s, p) => s + p.mealCost, 0));
   const totalUtilPaid   = round2(payData.reduce((s, p) => s + p.utilityPaid, 0));
@@ -193,7 +203,7 @@ async function loadLog() {
               <th colspan="2" style="color:var(--blue);background:rgba(91,155,213,.07)">
                 🔵 Prepaid — ${MONTHS[month].slice(0,3)} ${year}
               </th>
-              <th colspan="5" style="color:var(--green);background:rgba(39,174,96,.07)">
+              <th colspan="6" style="color:var(--green);background:rgba(39,174,96,.07)">
                 ✅ Credits
               </th>
               <th rowspan="2" style="background:var(--bg3)">Net</th>
@@ -209,6 +219,7 @@ async function loadLog() {
               <th style="color:var(--green)">Rent paid</th>
               <th style="color:var(--green)">Util paid</th>
               <th style="color:var(--blue)">↩ Carried fwd</th>
+              <th style="color:var(--red)">Prev due</th>
             </tr>
           </thead>
 
@@ -251,6 +262,9 @@ async function loadLog() {
                 <td style="color:${(p.messCredit||0) > 0 ? 'var(--blue)' : 'var(--text3)'}">
                   ${(p.messCredit||0) > 0 ? `↩ ${fmtTk(p.messCredit)}` : '—'}
                 </td>
+                <td style="color:${(p.prevDue||0) > 0 ? 'var(--red)' : 'var(--text3)'}">
+                  ${(p.prevDue||0) > 0 ? fmtTk(p.prevDue) : '—'}
+                </td>
                 <td style="background:var(--bg3)">
                   <button
                     class="btn btn-ghost btn-sm"
@@ -258,8 +272,8 @@ async function loadLog() {
                     onclick="showSettlementBreakdown(${payData.indexOf(p)})"
                   >Details</button>
                   <div>
-                    <b class="${p.netPayable > 0 ? 'net-neg' : p.netPayable < 0 ? 'net-pos' : ''}" style="font-size:14px">
-                      ${p.netPayable > 0 ? 'Pay ' + fmtTk(p.netPayable) : p.netPayable < 0 ? 'Get ' + fmtTk(Math.abs(p.netPayable)) : '✓ Settled'}
+                    <b class="${p.netWithPrevDue > 0 ? 'net-neg' : p.netWithPrevDue < 0 ? 'net-pos' : ''}" style="font-size:14px">
+                      ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '✓ Settled'}
                     </b>
                   </div>
                 </td>
@@ -281,6 +295,7 @@ async function loadLog() {
               <td>${fmtTk(totalRentPaid)}</td>
               <td>${fmtTk(totalUtilPaid)}</td>
               <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p) => s + (p.messCredit||0), 0)))}</td>
+              <td style="color:var(--red)">${fmtTk(round2(payData.reduce((s,p) => s + (p.prevDue||0), 0)))}</td>
               <td><b class="${grandNetPayable > 0 ? 'net-neg' : grandNetPayable < 0 ? 'net-pos' : ''}">
                 ${grandNetPayable > 0 ? 'Pay ' + fmtTk(grandNetPayable) : grandNetPayable < 0 ? 'Get ' + fmtTk(Math.abs(grandNetPayable)) : '✓ Balanced'}
               </b></td>
@@ -290,7 +305,7 @@ async function loadLog() {
       </div>
 
       <div style="font-size:12px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        💡 Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">↩ Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable.
+        💡 Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">↩ Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month — adds to this month's net payable.
       </div>
     </div>
 
@@ -502,15 +517,28 @@ function showSettlementBreakdown(idx) {
       </div>
     ` : ""}
 
+    ${(p.prevDue||0) > 0 ? `
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin:12px 0 6px">
+        🔴 Previous due
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(231,76,60,.08);border:1px solid rgba(231,76,60,.3);border-radius:6px;margin-bottom:6px">
+        <div>
+          <div style="font-weight:600;color:var(--red)">⏮ Previous due</div>
+          <div style="font-size:11px;color:var(--text3)">Unpaid balance carried forward from ${prevLabel}</div>
+        </div>
+        <div style="font-weight:700;color:var(--red);font-size:15px">+ ${fmtTk(p.prevDue)}</div>
+      </div>
+    ` : ""}
+
     <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:8px;margin-top:10px;font-size:16px;font-weight:800">
       <span>Net Payable</span>
-      <span style="color:${p.netPayable > 0 ? 'var(--red)' : p.netPayable < 0 ? 'var(--green)' : 'var(--text)'}">
-        ${p.netPayable > 0 ? 'Pay ' + fmtTk(p.netPayable) : p.netPayable < 0 ? 'Get ' + fmtTk(Math.abs(p.netPayable)) : '✓ Settled'}
+      <span style="color:${p.netWithPrevDue > 0 ? 'var(--red)' : p.netWithPrevDue < 0 ? 'var(--green)' : 'var(--text)'}">
+        ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '✓ Settled'}
       </span>
     </div>
 
     <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6;background:var(--bg3);padding:8px 12px;border-radius:6px">
-      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid || 0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)}${(p.messCredit||0) > 0 ? ` − ${fmtTk(p.messCredit)} (carried fwd)` : ''} = <b>${fmtTk(p.netPayable)}</b>
+      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid || 0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)}${(p.messCredit||0) > 0 ? ` − ${fmtTk(p.messCredit)} (carried fwd)` : ''}${(p.prevDue||0) > 0 ? ` + ${fmtTk(p.prevDue)} (prev due)` : ''} = <b>${fmtTk(p.netWithPrevDue)}</b>
     </div>
 
     <div class="modal-footer">
@@ -538,23 +566,31 @@ async function doExportReport() {
   const settlementKey = monthKey(year, month);
   const prev          = previousMonth(month, year);
   const sourceKey     = prev.key;
+  const prevPrev      = previousMonthFromKey(prev.key);
 
   const btn = document.activeElement;
   if (btn) { btn.disabled = true; btn.textContent = "Preparing..."; }
 
   try {
-    const [allMeals, allBazar, currentRentRec, currentUtilRes, previousUtilRes] = await Promise.all([
+    const [allMeals, allBazar, currentRentRec, currentUtilRes, previousUtilRes, rentRecPrevRes, utilRecPrevPrevRes] = await Promise.all([
       dbGetAll("meals"), dbGetAll("bazar"), dbGetMonth("rent", settlementKey),
       getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
       getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
+      dbGetMonth("rent", prev.key),
+      getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrev.key).maybeSingle(),
     ]);
 
     const currentUtilRec  = currentUtilRes.data;
     const previousUtilRec = previousUtilRes.data;
+    const rentRecPrev     = rentRecPrevRes;
+    const utilRecPrevPrev = utilRecPrevPrevRes.data;
 
-    const payData = members.map(m =>
-      calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey)
-    );
+    const payData = members.map(m => {
+      const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
+      p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, currentUtilRec, rentRecPrev, previousUtilRec, utilRecPrevPrev, settlementKey);
+      p.netWithPrevDue = round2(p.netPayable + p.prevDue);
+      return p;
+    });
 
     const totalMeals    = round2(payData[0]?.totalMeals || 0);
     const totalBazar    = round2(payData[0]?.totalBazar  || 0);
@@ -567,13 +603,14 @@ async function doExportReport() {
     const otherTotal    = Number(previousUtilRec?.bills?.other || 0);
     const postpaidTotal = round2(khalaTotal + otherTotal);
     const prepaidShare  = members.length > 0 ? round2(prepaidTotal / members.length) : 0;
-    const grandNet      = round2(payData.reduce((s,p) => s + p.netPayable, 0));
+    const grandNet      = round2(payData.reduce((s,p) => s + p.netWithPrevDue, 0));
     const totalMealCost = round2(payData.reduce((s,p) => s + p.mealCost, 0));
     const totalRent     = round2(payData.reduce((s,p) => s + p.roomRent, 0));
     const totalUtilPaid = round2(payData.reduce((s,p) => s + p.utilityPaid, 0));
     const totalRentPaid = round2(payData.reduce((s,p) => s + p.roomRentPaid, 0));
     const totalMealPaid = round2(payData.reduce((s,p) => s + (p.mealPaid||0), 0));
     const totalCarried  = round2(payData.reduce((s,p) => s + (p.messCredit||0), 0));
+    const totalPrevDue  = round2(payData.reduce((s,p) => s + (p.prevDue||0), 0));
 
     const messName    = currentMess?.name || "Mess";
     const managerName = members.find(m => m.role === "manager")?.name || currentUser?.name || "";
@@ -585,7 +622,7 @@ async function doExportReport() {
 
     /* ── Settlement table rows ── */
     const tableRows = payData.map(p => {
-      const net = p.netPayable;
+      const net = p.netWithPrevDue;
       const netColor = net > 0 ? "#c0392b" : net < 0 ? "#27ae60" : "#888";
       const netHtml  = net > 0 ? `Pay ${fP(net)}` : net < 0 ? `Get ${fP(Math.abs(net))}` : "&#10003; Settled";
       const rentBg   = p.rentStatus === "paid" ? "#e8f8f0" : p.rentStatus === "partial" ? "#fff8e8" : "#fdf0f0";
@@ -619,6 +656,7 @@ async function doExportReport() {
         <td class="num ${p.roomRentPaid>0?"green":"muted"}">${p.roomRentPaid>0?fP(p.roomRentPaid):fP(0)}</td>
         <td class="num ${p.utilityPaid>0?"green":"muted"}">${p.utilityPaid>0?fP(p.utilityPaid):fP(0)}</td>
         <td class="num ${(p.messCredit||0)>0?"blue":"muted"}">${(p.messCredit||0)>0?"&#8629; "+fP(p.messCredit):"&mdash;"}</td>
+        <td class="num ${(p.prevDue||0)>0?"red":"muted"}">${(p.prevDue||0)>0?fP(p.prevDue):"&mdash;"}</td>
         <td class="num net-cell"><b style="color:${netColor};font-size:13px">${netHtml}</b></td>
       </tr>`;
     }).join("");
@@ -639,12 +677,13 @@ async function doExportReport() {
       <td class="num">${fP(totalRentPaid)}</td>
       <td class="num">${fP(totalUtilPaid)}</td>
       <td class="num" style="color:#5b9bd5">${fP(totalCarried)}</td>
+      <td class="num" style="color:#c0392b">${fP(totalPrevDue)}</td>
       <td class="num net-cell"><b style="color:${grandColor}">${grandHtml}</b></td>
     </tr>`;
 
     /* ── Member receipt cards (page-break separated) ── */
     const memberCards = payData.map(p => {
-      const net      = p.netPayable;
+      const net      = p.netWithPrevDue;
       const netColor = net > 0 ? "#c0392b" : net < 0 ? "#27ae60" : "#888";
       const netLabel = net > 0 ? `Pay ${fP(net)}` : net < 0 ? `Get ${fP(Math.abs(net))}` : "&#10003; Settled";
       const netBg    = net > 0 ? "#fdf0f0" : net < 0 ? "#e8f8f0" : "#f7f7f7";
@@ -690,6 +729,7 @@ async function doExportReport() {
             ${p.utilityPaid   > 0 ? `<div class="card-row"><span>Utility paid</span><span class="card-val green">- ${fP(p.utilityPaid)}</span></div>` : ""}
             ${(p.mealPaid||0) > 0 ? `<div class="card-row"><span>Meal cash paid</span><span class="card-val green">- ${fP(p.mealPaid)}</span></div>` : ""}
             ${(p.messCredit||0) > 0 ? `<div class="card-row"><span>&#8629; Carried forward</span><span class="card-val blue">- ${fP(p.messCredit)}</span></div>` : ""}
+            ${(p.prevDue||0) > 0 ? `<div class="card-row"><span>Previous due (${MONTHS[prev.month]})</span><span class="card-val" style="color:#c0392b">+ ${fP(p.prevDue)}</span></div>` : ""}
           </div>
         </div>
 
@@ -860,7 +900,7 @@ async function doExportReport() {
           <th class="th-plain" rowspan="2" style="text-align:right">MEALS<br><span style="font-weight:400">${MONTHS[prev.month].slice(0,3)}</span></th>
           <th class="th-postpaid" colspan="3">&#9679; POSTPAID &mdash; ${MONTHS[prev.month].slice(0,3).toUpperCase()} ${prev.year}</th>
           <th class="th-prepaid"  colspan="2">&#9679; PREPAID &mdash; ${MONTHS[month].slice(0,3).toUpperCase()} ${year}</th>
-          <th class="th-credits"  colspan="5">&#10003; CREDITS</th>
+          <th class="th-credits"  colspan="6">&#10003; CREDITS</th>
           <th class="th-plain" rowspan="2" style="text-align:right">NET</th>
         </tr>
         <tr class="thead-group">
@@ -874,6 +914,7 @@ async function doExportReport() {
           <th class="th-credits"  style="text-align:right">RENT PAID</th>
           <th class="th-credits"  style="text-align:right">UTIL PAID</th>
           <th class="th-credits"  style="text-align:right">&#8629; CARRIED FWD</th>
+          <th class="th-credits"  style="text-align:right">PREV DUE</th>
         </tr>
       </thead>
       <tbody>
