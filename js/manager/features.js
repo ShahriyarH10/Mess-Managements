@@ -233,7 +233,7 @@ async function loadAbsenceCalendar() {
         : "";
 
       cells.push(`
-        <div style="position:relative;${cellExtraStyle}border:${cellBorder};border-radius:8px;padding:5px 5px 5px;min-height:82px;cursor:default;transition:border-color .15s,box-shadow .15s;overflow:hidden"
+        <div class="att-cal-cell" style="position:relative;${cellExtraStyle}border:${cellBorder};border-radius:8px;padding:5px 5px 5px;min-height:82px;cursor:default;transition:border-color .15s,box-shadow .15s;overflow:hidden"
              onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'"
              onmouseout="this.style.borderColor='${isToday ? "var(--accent)" : totalAbsent > 0 ? "rgba(239,68,68,.35)" : isPast && hasData ? "rgba(34,197,94,.3)" : "var(--border)"}';this.style.boxShadow='none'">
           ${statusBar}
@@ -297,9 +297,11 @@ async function loadAbsenceCalendar() {
 
         ${legend}
 
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
-          ${dowHeaders}
-          ${cells.join("")}
+        <div class="att-cal-scroll">
+          <div class="att-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+            ${dowHeaders}
+            ${cells.join("")}
+          </div>
         </div>
 
         ${totalAbsenceDays > 0 ? `

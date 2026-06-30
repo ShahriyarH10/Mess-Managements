@@ -375,7 +375,7 @@ async function openBazarMonth(key) {
       "></div>`).join("") : "";
 
     return `
-      <div onclick="openBazarDayDetail('${key}','${d}')"
+      <div class="bz-cal-cell" onclick="openBazarDayDetail('${key}','${d}')"
         title="${hasBazar ? 'Day total: '+fmtTk(dayTotal) : 'No bazar'}"
         style="
           background:${bg};
@@ -432,17 +432,19 @@ async function openBazarMonth(key) {
     </div>
 
     <!-- Calendar grid -->
-    <div style="
-      display:grid;
-      grid-template-columns:repeat(7,1fr);
-      gap:5px;
-      margin-bottom:10px;
-    ">
-      ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d =>
-        `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:4px 0">${d}</div>`
-      ).join("")}
-      ${leadingEmpties}
-      ${calCells}
+    <div class="bz-cal-scroll">
+      <div class="bz-cal-grid" style="
+        display:grid;
+        grid-template-columns:repeat(7,1fr);
+        gap:5px;
+        margin-bottom:10px;
+      ">
+        ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d =>
+          `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:4px 0">${d}</div>`
+        ).join("")}
+        ${leadingEmpties}
+        ${calCells}
+      </div>
     </div>
 
     <!-- Legend -->

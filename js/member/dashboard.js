@@ -913,18 +913,18 @@ async function loadMyProfile(member) {
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:20px;flex-wrap:wrap">
-        <div style="text-align:right">
+      <div class="profile-balance-row" style="display:flex;gap:20px;flex-wrap:wrap">
+        <div class="profile-balance-item" style="text-align:right">
           <div style="font-size:11px;color:var(--text3)">Meal balance</div>
           <div style="font-size:18px;font-weight:800" class="${mealNet >= 0 ? "net-pos" : "net-neg"}">
             ${mealNet >= 0 ? "Get " + fmtTk(mealNet) : "Pay " + fmtTk(Math.abs(mealNet))}
           </div>
         </div>
-        <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
+        <div class="profile-balance-item profile-balance-item-bordered" style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
           <div style="font-size:11px;color:var(--text3)">Rent balance</div>
           <div style="font-size:18px;font-weight:800" class="${rentNet >= 0 ? "net-pos" : "net-neg"}">${rentNet >= 0 ? "+" : ""}${fmtTk(rentNet)}</div>
         </div>
-        <div style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
+        <div class="profile-balance-item profile-balance-item-bordered" style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
           <div style="font-size:11px;color:var(--text3)">Utility balance</div>
           <div style="font-size:18px;font-weight:800" class="${utilNet >= 0 ? "net-pos" : "net-neg"}">${utilNet >= 0 ? "+" : ""}${fmtTk(utilNet)}</div>
         </div>

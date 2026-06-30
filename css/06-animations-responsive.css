@@ -82,6 +82,13 @@
   .my-stat-row{font-size:12px;gap:8px;}
   .my-stat-val{min-width:60px;}
 
+  /* My Profile — meal/rent/util balance row: avoid orphaned border-left
+     when the row wraps onto its own line on narrow screens. Switch to
+     three equal full-width columns with no side borders. */
+  .profile-balance-row{width:100%;display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:8px!important;}
+  .profile-balance-item{text-align:center!important;}
+  .profile-balance-item-bordered{padding-left:0!important;border-left:none!important;}
+
   /* Toast above mobile nav */
   #toast{bottom:calc(78px + env(safe-area-inset-bottom, 8px));right:12px;left:12px;max-width:none;text-align:center;}
 
@@ -96,6 +103,17 @@
   .tbl-wrap{margin:6px -6px 0;width:calc(100% + 12px);padding:0 6px;-webkit-overflow-scrolling:touch;}
   .tbl-wrap table{font-size:12px;min-width:max-content;}
   .tbl-wrap th,.tbl-wrap td{padding:7px 8px;white-space:nowrap;}
+
+  /* Attendance Board calendar — keep 7-column day alignment but let it
+     scroll horizontally on phones instead of squashing cells unreadable */
+  .att-cal-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;}
+  .att-cal-grid{min-width:540px;}
+  .att-cal-cell{min-height:64px!important;padding:4px 4px 4px!important;}
+
+  /* Bazar Calendar modal — same horizontal-scroll approach */
+  .bz-cal-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -16px;padding:0 16px;}
+  .bz-cal-grid{min-width:420px;}
+  .bz-cal-cell{min-height:48px!important;}
 
   /* Month selectors */
   .month-sel{flex-wrap:wrap;gap:8px;}
@@ -147,6 +165,9 @@
   /* What I Owe: tighter rows on very small screens */
   .my-stat-row{font-size:12px;padding:7px 0;gap:6px;}
   .my-stat-val{font-size:12px;}
+
+  /* Profile balance row: 2 columns on very small phones so currency values don't crowd */
+  .profile-balance-row{grid-template-columns:repeat(2,1fr)!important;}
 }
 
 @media(prefers-reduced-motion:reduce){
