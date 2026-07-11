@@ -14,6 +14,7 @@ async function renderMyDashboard(el) {
   const key     = monthKey(year, month);
   const prevInfo = previousMonth(month, year);
   const prevKey  = prevInfo.key;
+  const prevPrevInfo = previousMonthFromKey(prevKey);
 
   const [
     allMeals,
@@ -23,6 +24,8 @@ async function renderMyDashboard(el) {
     rentRec,
     curUtilRes,
     prevUtilRes,
+    rentRecPrev,
+    prevPrevUtilRes,
   ] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
@@ -31,13 +34,22 @@ async function renderMyDashboard(el) {
     dbGetMonth("rent", key),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevKey).maybeSingle(),
+    dbGetMonth("rent", prevKey),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrevInfo.key).maybeSingle(),
   ]);
 
   const utilRec     = curUtilRes.data;
   const prevUtilRec = prevUtilRes.data;
+  const prevPrevUtilRec = prevPrevUtilRes.data;
 
   // Use the canonical settlement calc
   const calc = calcMemberSettlement(member, allMeals, allBazar, rentRec, utilRec, prevUtilRec, key);
+
+  // Outstanding balance carried forward from settlements older than last month
+  // (mirrors calcPrevDueForMember used on the manager's Log page — previously
+  // omitted here, so members never saw dues older than one month back).
+  calc.prevDue = calcPrevDueForMember(member, allMeals, allBazar, utilRec, rentRecPrev, prevUtilRec, prevPrevUtilRec, key);
+  calc.netWithPrevDue = round2(calc.netPayable + calc.prevDue);
 
   const now = new Date();
   const displayDate = now.getHours() >= 23
@@ -68,14 +80,14 @@ async function renderMyDashboard(el) {
     }).join("");
   }
 
-  const netColor  = calc.netPayable > 0 ? "var(--red)" : calc.netPayable < 0 ? "var(--green)" : "var(--text)";
-  const netBg     = calc.netPayable > 0 ? "var(--red-bg)" : calc.netPayable < 0 ? "var(--green-bg)" : "var(--bg3)";
-  const netBorder = calc.netPayable > 0 ? "rgba(224,82,82,.25)" : calc.netPayable < 0 ? "rgba(76,175,130,.25)" : "var(--border2)";
-  const netIcon   = calc.netPayable > 0 ? "⚠️" : calc.netPayable < 0 ? "💚" : "✅";
-  const netLabel  = calc.netPayable > 0
-    ? "You Pay " + fmtTk(calc.netPayable)
-    : calc.netPayable < 0
-      ? "You Get " + fmtTk(Math.abs(calc.netPayable))
+  const netColor  = calc.netWithPrevDue > 0 ? "var(--red)" : calc.netWithPrevDue < 0 ? "var(--green)" : "var(--text)";
+  const netBg     = calc.netWithPrevDue > 0 ? "var(--red-bg)" : calc.netWithPrevDue < 0 ? "var(--green-bg)" : "var(--bg3)";
+  const netBorder = calc.netWithPrevDue > 0 ? "rgba(224,82,82,.25)" : calc.netWithPrevDue < 0 ? "rgba(76,175,130,.25)" : "var(--border2)";
+  const netIcon   = calc.netWithPrevDue > 0 ? "⚠️" : calc.netWithPrevDue < 0 ? "💚" : "✅";
+  const netLabel  = calc.netWithPrevDue > 0
+    ? "You Pay " + fmtTk(calc.netWithPrevDue)
+    : calc.netWithPrevDue < 0
+      ? "You Get " + fmtTk(Math.abs(calc.netWithPrevDue))
       : "Settled";
 
   // Load broadcasts
@@ -178,6 +190,10 @@ async function renderMyDashboard(el) {
           <div style="font-size:11px;color:var(--text3);margin-top:6px">
             Meals/bazar from ${MONTHS[prevInfo.month]} ${prevInfo.year} · Rent/utility from ${MONTHS[month]} ${year}
           </div>
+          ${(calc.prevDue||0) > 0 ? `
+          <div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:600">
+            ⚠️ Includes ${fmtTk(calc.prevDue)} unpaid due carried from before ${MONTHS[prevInfo.month]} ${prevInfo.year}
+          </div>` : ""}
         </div>
         <button class="btn btn-ghost btn-sm" onclick="showMySettlementBreakdown()" style="flex-shrink:0">📊 Breakdown</button>
       </div>
@@ -452,15 +468,28 @@ function showMySettlementBreakdown() {
       </div>
     `}
 
+    ${(p.prevDue || 0) > 0 ? `
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin:12px 0 6px">
+        🔴 Previous due — before ${prevLabel}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:6px;margin-bottom:5px">
+        <div>
+          <div style="font-weight:600;color:var(--red)">⚠️ Unpaid balance carried forward</div>
+          <div style="font-size:11px;color:var(--text3)">Still outstanding from settlements before ${prevLabel}</div>
+        </div>
+        <div style="font-weight:700;color:var(--red)">+ ${fmtTk(p.prevDue)}</div>
+      </div>
+    ` : ""}
+
     <div style="display:flex;justify-content:space-between;padding:14px 16px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:8px;margin-top:10px;font-size:17px;font-weight:800">
       <span>Net Payable</span>
-      <span style="color:${p.netPayable > 0 ? 'var(--red)' : p.netPayable < 0 ? 'var(--green)' : 'var(--text)'}">
-        ${p.netPayable > 0 ? 'Pay ' + fmtTk(p.netPayable) : p.netPayable < 0 ? 'Get ' + fmtTk(Math.abs(p.netPayable)) : '✓ Settled'}
+      <span style="color:${p.netWithPrevDue > 0 ? 'var(--red)' : p.netWithPrevDue < 0 ? 'var(--green)' : 'var(--text)'}">
+        ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '✓ Settled'}
       </span>
     </div>
 
     <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6;background:var(--bg3);padding:8px 12px;border-radius:6px">
-      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid||0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)}${(p.messCredit||0) > 0 ? ` − ${fmtTk(p.messCredit)} (carried fwd)` : ''} = <b>${fmtTk(p.netPayable)}</b>
+      <b>Formula:</b> ${fmtTk(p.mealCost)} + ${fmtTk(p.khalaShare)} + ${fmtTk(p.otherShare)} + ${fmtTk(p.roomRent)} + ${fmtTk(p.prepaidUtility)} − ${fmtTk(p.memberBazar)} − ${fmtTk(p.mealPaid||0)} − ${fmtTk(p.roomRentPaid)} − ${fmtTk(p.utilityPaid)}${(p.messCredit||0) > 0 ? ` − ${fmtTk(p.messCredit)} (carried fwd)` : ''}${(p.prevDue||0) > 0 ? ` + ${fmtTk(p.prevDue)} (prev due)` : ''} = <b>${fmtTk(p.netWithPrevDue)}</b>
     </div>
 
     <div class="modal-footer">

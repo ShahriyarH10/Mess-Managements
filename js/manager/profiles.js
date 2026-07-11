@@ -174,7 +174,8 @@ function buildWhatIOweHTML(
   currentUtilRec,
   prevUtilRec,
   curM,
-  curY
+  curY,
+  prevDue = 0
 ) {
   const { month: tm, year: ty } = thisMonth();
   const month = curM !== undefined ? curM : tm;
@@ -203,6 +204,8 @@ function buildWhatIOweHTML(
     messCredit,
     netPayable,
   } = p;
+
+  const netWithPrevDue = round2(netPayable + prevDue);
 
   const currentBills  = currentUtilRec?.bills || {};
   const elecAmt = Number(currentBills.elec || 0);
@@ -392,15 +395,26 @@ function buildWhatIOweHTML(
             </div>`
         }
 
+        ${prevDue > 0
+          ? `<div class="my-stat-row" style="background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:6px;padding:8px 10px;margin-top:4px">
+              <span class="my-stat-key" style="color:var(--red)">
+                ⚠️ Previous due
+                <span style="font-size:10px;color:var(--text3);display:block">Unpaid balance carried forward from before ${prevLabel}</span>
+              </span>
+              <span class="my-stat-val" style="color:var(--red);font-weight:800">+ ${fmtTk(prevDue)}</span>
+            </div>`
+          : ""
+        }
+
         <div class="my-stat-row" style="font-size:15px;border-top:1px solid var(--border);margin-top:4px;background:var(--accent-bg);border-radius:6px;padding:10px;margin-top:8px;border-bottom:none">
           <span style="font-weight:700;flex:1">Net payable</span>
-          <span style="font-weight:800;flex-shrink:0;white-space:nowrap;color:${netPayable > 0 ? "var(--red)" : netPayable < 0 ? "var(--green)" : "var(--text)"}">
-            ${netPayable > 0 ? "Pay " + fmtTk(netPayable) : netPayable < 0 ? "Get " + fmtTk(Math.abs(netPayable)) : "✓ Settled"}
+          <span style="font-weight:800;flex-shrink:0;white-space:nowrap;color:${netWithPrevDue > 0 ? "var(--red)" : netWithPrevDue < 0 ? "var(--green)" : "var(--text)"}">
+            ${netWithPrevDue > 0 ? "Pay " + fmtTk(netWithPrevDue) : netWithPrevDue < 0 ? "Get " + fmtTk(Math.abs(netWithPrevDue)) : "✓ Settled"}
           </span>
         </div>
 
         <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.6;background:var(--bg3);padding:8px 12px;border-radius:6px">
-          <b>Formula:</b> ${fmtTk(mealCost)} + ${fmtTk(khalaShare)} + ${fmtTk(otherShare)} + ${fmtTk(myRentDue)} + ${fmtTk(prepaidShare)} − ${fmtTk(memberBazar)} − ${fmtTk(myMealPaid)} − ${fmtTk(myRentPaid)} − ${fmtTk(myUtilActualPaid)}${messCredit > 0 ? ` − ${fmtTk(messCredit)} (carried fwd)` : ""} = <b>${fmtTk(netPayable)}</b>
+          <b>Formula:</b> ${fmtTk(mealCost)} + ${fmtTk(khalaShare)} + ${fmtTk(otherShare)} + ${fmtTk(myRentDue)} + ${fmtTk(prepaidShare)} − ${fmtTk(memberBazar)} − ${fmtTk(myMealPaid)} − ${fmtTk(myRentPaid)} − ${fmtTk(myUtilActualPaid)}${messCredit > 0 ? ` − ${fmtTk(messCredit)} (carried fwd)` : ""}${prevDue > 0 ? ` + ${fmtTk(prevDue)} (prev due)` : ""} = <b>${fmtTk(netWithPrevDue)}</b>
         </div>
       </div>
     </div>
@@ -431,6 +445,15 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
   const currentRentRec  = allR.find(r => r.month_key === settlementKey) || null;
   const isSinglePeriod  = (period === "1" || period === "last");
 
+  // allR/allU are the FULL (unfiltered) histories, so we can look up
+  // whatever prior months calcPrevDueForMember needs without extra fetches.
+  const rentByKeyAll = {}; allR.forEach(r => { rentByKeyAll[r.month_key] = r; });
+  const utilByKeyAll = {}; allU.forEach(r => { utilByKeyAll[r.month_key] = r; });
+  const prevKeyForCard     = previousMonthFromKey(settlementKey).key;
+  const prevPrevKeyForCard = previousMonthFromKey(prevKeyForCard).key;
+  const rentRecPrevForCard = rentByKeyAll[prevKeyForCard] || null;
+  const utilRecPrevPrevForCard = utilByKeyAll[prevPrevKeyForCard] || null;
+
   grid.innerHTML=members.map((m,i)=>{
     const s   = getMemberStats(m, meals, bazar, rent, utility, filteredUtility);
     const col = avatarCol(i);
@@ -439,6 +462,11 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
     // card numbers in sync with Monthly Log + What-I-Owe detail panel.
     const p = calcMemberSettlement(m, allM, allB, currentRentRec, curUtilRec, prevUtilRec, settlementKey);
 
+    // Outstanding balance from settlements older than last month — previously
+    // omitted here, so profile cards understated what a member actually owes.
+    p.prevDue = calcPrevDueForMember(m, allM, allB, curUtilRec, rentRecPrevForCard, prevUtilRec, utilRecPrevPrevForCard, settlementKey);
+    p.netWithPrevDue = round2(p.netPayable + p.prevDue);
+
     // Status badges always reflect the *current* settlement record
     // (so the manager always sees the actionable state, regardless of period).
     const rentStatus = p.rentStatus    || "unpaid";
@@ -446,11 +474,11 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
     const rc = rentStatus==="paid"?"badge-green":rentStatus==="partial"?"badge-amber":"badge-red";
     const uc = utilStatus==="paid"?"badge-green":utilStatus==="partial"?"badge-amber":"badge-red";
 
-    const netCls   = p.netPayable > 0 ? "net-neg" : p.netPayable < 0 ? "net-pos" : "";
-    const netLabel = p.netPayable > 0
-      ? "Pay "  + fmtTk(p.netPayable)
-      : p.netPayable < 0
-        ? "Get " + fmtTk(Math.abs(p.netPayable))
+    const netCls   = p.netWithPrevDue > 0 ? "net-neg" : p.netWithPrevDue < 0 ? "net-pos" : "";
+    const netLabel = p.netWithPrevDue > 0
+      ? "Pay "  + fmtTk(p.netWithPrevDue)
+      : p.netWithPrevDue < 0
+        ? "Get " + fmtTk(Math.abs(p.netWithPrevDue))
         : "✓ Settled";
     const periodLabel = isSinglePeriod
       ? monthLabelFromKey(settlementKey)
@@ -475,6 +503,7 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
           </div>
         </div>
         <div class="${netCls}" style="font-size:18px;font-weight:800;margin-top:2px">${netLabel}</div>
+        ${p.prevDue > 0 ? `<div style="font-size:10px;color:var(--red);margin-top:2px">⚠️ Includes ${fmtTk(p.prevDue)} due from before</div>` : ""}
       </div>
 
       <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">${periodLabel} · totals</div>
@@ -557,9 +586,22 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const monthlyNet = {};
   allMK.forEach(k => {
     const prevK = previousMonthFromKey(k).key;
+    const prevPrevK = previousMonthFromKey(prevK).key;
     const p = calcMemberSettlement(member, allM, allB, rentByKey[k] || null, utilByKey[k] || null, utilByKey[prevK] || null, k);
-    monthlyNet[k] = p.netPayable;
+    const prevDueForMonth = calcPrevDueForMember(member, allM, allB, utilByKey[k] || null, rentByKey[prevK] || null, utilByKey[prevK] || null, utilByKey[prevPrevK] || null, k);
+    monthlyNet[k] = round2(p.netPayable + prevDueForMonth);
   });
+
+  // Outstanding balance from settlements older than last month, for the
+  // currently-selected settlement month — feeds the What I Owe panel below.
+  const currentKeyForOwe = monthKey(curY || thisMonth().year, curM !== undefined ? curM : thisMonth().month);
+  const currentKeyPrev     = previousMonthFromKey(currentKeyForOwe).key;
+  const currentKeyPrevPrev = previousMonthFromKey(currentKeyPrev).key;
+  const prevDueForOwe = calcPrevDueForMember(
+    member, allM, allB, currentUtilRec,
+    rentByKey[currentKeyPrev] || null, prevUtilRec, utilByKey[currentKeyPrevPrev] || null,
+    currentKeyForOwe
+  );
 
   // Fix 2: Recent months + What I Owe side by side
   const recentMonthsHTML =
@@ -578,7 +620,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
     }).join("") +
     '</tbody></table></div></div>';
 
-  const whatIOweHTML = buildWhatIOweHTML(member,allM,allB,currentRentRec,currentUtilRec,prevUtilRec,curM,curY);
+  const whatIOweHTML = buildWhatIOweHTML(member,allM,allB,currentRentRec,currentUtilRec,prevUtilRec,curM,curY,prevDueForOwe);
 
   const isMultiMonth = (period !== "1" && period !== "last");
   const settlKey2 = monthKey(curM || thisMonth().month, curY || thisMonth().year);
