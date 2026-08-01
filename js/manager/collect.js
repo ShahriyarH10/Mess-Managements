@@ -183,27 +183,25 @@ function getCollectKey() {
 async function loadCollectMonth() {
   members = await dbGetMembers(); buildInitialsMap(members);
   const { month, year, key } = getCollectKey();
-  const prev     = previousMonthFromKey(key);
-  const prevPrev = previousMonthFromKey(prev.key);
   const next     = nextMonth(month, year);
 
-  const [allMeals, allBazar, utilCurR, utilPrevR, rentR, utilNextR, rentPrevR, utilPrevPrevR] = await Promise.all([
+  const [allMeals, allBazar, allRentArr, allUtilR, utilNextR] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
-    getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
+    dbGetAll("rent"),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", next.key).maybeSingle(),
-    getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", prev.key).maybeSingle(),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrev.key).maybeSingle(),
   ]);
 
-  const utilRec         = utilCurR.data      || null;
-  const utilRecPrev     = utilPrevR.data     || null;
-  const rentRec         = rentR.data         || null;
-  const utilRecNext     = utilNextR.data     || null;
-  const rentRecPrev     = rentPrevR.data     || null;
-  const utilRecPrevPrev = utilPrevPrevR.data || null;
+  const allUtilArr = allUtilR.data || [];
+  const rentByKey = {}; allRentArr.forEach(r => { rentByKey[r.month_key] = r; });
+  const utilByKey = {}; allUtilArr.forEach(u => { utilByKey[u.month_key] = u; });
+  const prevKey = previousMonthFromKey(key).key;
+
+  const utilRec     = utilByKey[key]     || null;
+  const utilRecPrev = utilByKey[prevKey] || null;
+  const rentRec     = rentByKey[key]     || null;
+  const utilRecNext = utilNextR.data     || null;
 
   // Existing carry-forward credits stored in NEXT month's bills
   const existingCredits       = utilRecNext?.bills?.mess_credit    || {};
@@ -216,13 +214,10 @@ async function loadCollectMonth() {
   members.forEach(m => {
     const p = calcMemberSettlement(m, allMeals, allBazar, rentRec, utilRec, utilRecPrev, key);
 
-    // Carry-forward: outstanding net due from previous month
-    const prevP           = calcMemberSettlement(m, allMeals, allBazar, rentRecPrev, utilRecPrev, utilRecPrevPrev, prev.key);
-    const prevDuePaid     = round2(Number((utilRec?.payments || {})[m.name]?.prev_due_paid || 0));
-    const prevUtilStatus  = (utilRecPrev?.payments || {})[m.name]?.status || "unpaid";
-    const prevRentStatus  = (rentRecPrev?.entries  || []).find(e => e.name === m.name)?.status || "unpaid";
-    const prevFullyPaid   = prevUtilStatus === "paid" && prevRentStatus === "paid";
-    const prevDue         = prevFullyPaid ? 0 : round2(Math.max(0, prevP.netPayable - prevDuePaid));
+    // Carry-forward: outstanding net due, walked back through every unpaid
+    // month (not just the immediately-previous one — see calcPrevDueForMember).
+    const prevDue     = calcPrevDueForMember(m, allMeals, allBazar, allRentArr, allUtilArr, key);
+    const prevDuePaid = round2(Number((utilRec?.payments || {})[m.name]?.prev_due_paid || 0));
 
     perMember[m.id] = {
       name:          m.name,
@@ -245,7 +240,7 @@ async function loadCollectMonth() {
     };
   });
 
-  _collectCtx = { month, year, key, prevKey: prev.key, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits };
+  _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits };
   buildCollectTable();
   buildCreditTable();
   buildChangeTable();

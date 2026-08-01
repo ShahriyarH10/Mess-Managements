@@ -14,7 +14,6 @@ async function renderMyDashboard(el) {
   const key     = monthKey(year, month);
   const prevInfo = previousMonth(month, year);
   const prevKey  = prevInfo.key;
-  const prevPrevInfo = previousMonthFromKey(prevKey);
 
   const [
     allMeals,
@@ -24,8 +23,6 @@ async function renderMyDashboard(el) {
     rentRec,
     curUtilRes,
     prevUtilRes,
-    rentRecPrev,
-    prevPrevUtilRes,
   ] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
@@ -34,21 +31,18 @@ async function renderMyDashboard(el) {
     dbGetMonth("rent", key),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle(),
     getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevKey).maybeSingle(),
-    dbGetMonth("rent", prevKey),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrevInfo.key).maybeSingle(),
   ]);
 
   const utilRec     = curUtilRes.data;
   const prevUtilRec = prevUtilRes.data;
-  const prevPrevUtilRec = prevPrevUtilRes.data;
 
   // Use the canonical settlement calc
   const calc = calcMemberSettlement(member, allMeals, allBazar, rentRec, utilRec, prevUtilRec, key);
 
-  // Outstanding balance carried forward from settlements older than last month
-  // (mirrors calcPrevDueForMember used on the manager's Log page — previously
-  // omitted here, so members never saw dues older than one month back).
-  calc.prevDue = calcPrevDueForMember(member, allMeals, allBazar, utilRec, rentRecPrev, prevUtilRec, prevPrevUtilRec, key);
+  // Outstanding balance carried forward from ALL past unpaid settlements,
+  // not just the previous month (calcPrevDueForMember walks the full chain
+  // — see js/core/helpers.js for why a single-month lookback lost debt).
+  calc.prevDue = calcPrevDueForMember(member, allMeals, allBazar, allRent, allUtil, key);
   calc.netWithPrevDue = round2(calc.netPayable + calc.prevDue);
 
   const now = new Date();
@@ -876,6 +870,11 @@ async function loadMyProfile(member) {
   const bazarShare = allBazarTotal > 0 ? Math.round((s.totalBazar / allBazarTotal) * 100) : 0;
 
   const settlementCalc = calcMemberSettlement(member, allM, allB, profRentRes, curUtilRec, prevUtilRec, curKey);
+  // Outstanding balance from ALL past unpaid settlements (walks the full
+  // chain — see calcPrevDueForMember in helpers.js). Previously omitted
+  // here entirely, so the What-I-Owe panel on My Profile always showed ৳0
+  // prev due regardless of how much a member actually owed from before.
+  const prevDueForOwe = calcPrevDueForMember(member, allM, allB, allR, allU || [], curKey);
   // mealNet: positive = member is owed back (bazar+paid > mealCost), negative = member still owes
   const mealNet  = round2(settlementCalc.memberBazar + settlementCalc.mealPaid - settlementCalc.mealCost);
   const myRentEntry = profRentRes?.entries?.find(e => e.name === member.name) || {};
@@ -916,7 +915,7 @@ async function loadMyProfile(member) {
       </div>
     </div>`;
 
-  const whatIOweHTML = buildWhatIOweHTML(member, allM, allB, profRentRes, curUtilRec, prevUtilRec, curM, curY);
+  const whatIOweHTML = buildWhatIOweHTML(member, allM, allB, profRentRes, curUtilRec, prevUtilRec, curM, curY, prevDueForOwe);
   const isMultiPeriod = (period !== "1" && period !== "last");
   const multiPeriodBanner = isMultiPeriod ? `
     <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:9px 13px;margin-bottom:12px;font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px">

@@ -445,15 +445,6 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
   const currentRentRec  = allR.find(r => r.month_key === settlementKey) || null;
   const isSinglePeriod  = (period === "1" || period === "last");
 
-  // allR/allU are the FULL (unfiltered) histories, so we can look up
-  // whatever prior months calcPrevDueForMember needs without extra fetches.
-  const rentByKeyAll = {}; allR.forEach(r => { rentByKeyAll[r.month_key] = r; });
-  const utilByKeyAll = {}; allU.forEach(r => { utilByKeyAll[r.month_key] = r; });
-  const prevKeyForCard     = previousMonthFromKey(settlementKey).key;
-  const prevPrevKeyForCard = previousMonthFromKey(prevKeyForCard).key;
-  const rentRecPrevForCard = rentByKeyAll[prevKeyForCard] || null;
-  const utilRecPrevPrevForCard = utilByKeyAll[prevPrevKeyForCard] || null;
-
   grid.innerHTML=members.map((m,i)=>{
     const s   = getMemberStats(m, meals, bazar, rent, utility, filteredUtility);
     const col = avatarCol(i);
@@ -462,9 +453,9 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
     // card numbers in sync with Monthly Log + What-I-Owe detail panel.
     const p = calcMemberSettlement(m, allM, allB, currentRentRec, curUtilRec, prevUtilRec, settlementKey);
 
-    // Outstanding balance from settlements older than last month — previously
-    // omitted here, so profile cards understated what a member actually owes.
-    p.prevDue = calcPrevDueForMember(m, allM, allB, curUtilRec, rentRecPrevForCard, prevUtilRec, utilRecPrevPrevForCard, settlementKey);
+    // Outstanding balance from ALL past unpaid settlements — walks the
+    // full chain (calcPrevDueForMember), not just the previous month.
+    p.prevDue = calcPrevDueForMember(m, allM, allB, allR, allU, settlementKey);
     p.netWithPrevDue = round2(p.netPayable + p.prevDue);
 
     // Status badges always reflect the *current* settlement record
@@ -586,22 +577,15 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const monthlyNet = {};
   allMK.forEach(k => {
     const prevK = previousMonthFromKey(k).key;
-    const prevPrevK = previousMonthFromKey(prevK).key;
     const p = calcMemberSettlement(member, allM, allB, rentByKey[k] || null, utilByKey[k] || null, utilByKey[prevK] || null, k);
-    const prevDueForMonth = calcPrevDueForMember(member, allM, allB, utilByKey[k] || null, rentByKey[prevK] || null, utilByKey[prevK] || null, utilByKey[prevPrevK] || null, k);
+    const prevDueForMonth = calcPrevDueForMember(member, allM, allB, allR, allU, k);
     monthlyNet[k] = round2(p.netPayable + prevDueForMonth);
   });
 
-  // Outstanding balance from settlements older than last month, for the
+  // Outstanding balance from ALL past unpaid settlements, for the
   // currently-selected settlement month — feeds the What I Owe panel below.
   const currentKeyForOwe = monthKey(curY || thisMonth().year, curM !== undefined ? curM : thisMonth().month);
-  const currentKeyPrev     = previousMonthFromKey(currentKeyForOwe).key;
-  const currentKeyPrevPrev = previousMonthFromKey(currentKeyPrev).key;
-  const prevDueForOwe = calcPrevDueForMember(
-    member, allM, allB, currentUtilRec,
-    rentByKey[currentKeyPrev] || null, prevUtilRec, utilByKey[currentKeyPrevPrev] || null,
-    currentKeyForOwe
-  );
+  const prevDueForOwe = calcPrevDueForMember(member, allM, allB, allR, allU, currentKeyForOwe);
 
   // Fix 2: Recent months + What I Owe side by side
   const recentMonthsHTML =

@@ -441,17 +441,61 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
   };
 }
 
-/* Outstanding net due carried forward from the previous month's settlement,
-   net of whatever the member has already paid against it. Mirrors the
-   prevDue logic used in the Collect page. */
-function calcPrevDueForMember(member, allMeals, allBazar, currentUtilRec, rentRecPrev, utilRecPrev, utilRecPrevPrev, settlementKey) {
-  const prev         = previousMonth(monthIndexFromKey(settlementKey), yearFromKey(settlementKey));
-  const prevP        = calcMemberSettlement(member, allMeals, allBazar, rentRecPrev, utilRecPrev, utilRecPrevPrev, prev.key);
-  const prevDuePaid  = round2(Number((currentUtilRec?.payments || {})[member.name]?.prev_due_paid || 0));
-  const prevUtilStatus = (utilRecPrev?.payments || {})[member.name]?.status || "unpaid";
-  const prevRentStatus = (rentRecPrev?.entries  || []).find(e => e.name === member.name)?.status || "unpaid";
-  const prevFullyPaid  = prevUtilStatus === "paid" && prevRentStatus === "paid";
-  return prevFullyPaid ? 0 : round2(Math.max(0, prevP.netPayable - prevDuePaid));
+/* Outstanding net due carried forward from ALL past unpaid settlements —
+   not just the single immediately-previous month. Walks backward from
+   settlementKey through every month that has settlement data, accumulating
+   each month's own unpaid balance minus whatever was later paid down
+   against it (payments[name].prev_due_paid in the following month's record).
+   Without this walk, a member who misses two or more months in a row would
+   only ever see the most recent month's shortfall — older debt would
+   silently disappear from the Log, Collect, Dashboard, and Profile pages.
+
+   Deliberately does NOT use the rent/utility "status" text field to decide
+   whether a month is settled. That field is set once (either manually or
+   by the auto-status logic in Collect Payments, which compares against
+   whatever the bill total was AT THAT MOMENT) and is never revisited if
+   the bills are edited afterward — and bill entry is split across separate
+   "Save prepaid bills" / "Save postpaid bills" actions, so editing bills
+   after a payment was already recorded and marked "paid" is a completely
+   normal sequence, not an edge case. Trusting status here previously let
+   a stale "paid" flag zero out a real, freshly-computed balance. The
+   Math.max(0, ...) floor below already correctly reduces a genuinely
+   fully-paid month's contribution to 0 without needing the status field. */
+function calcPrevDueForMember(member, allMeals, allBazar, allRent, allUtil, settlementKey, maxLookback = 24) {
+  const rentByKey = {}; (allRent || []).forEach(r => { if (r) rentByKey[r.month_key] = r; });
+  const utilByKey = {}; (allUtil || []).forEach(u => { if (u) utilByKey[u.month_key] = u; });
+
+  // Always include the immediately previous month — even if it has no
+  // rent record yet (manager may have entered utility bills only so far).
+  const immPrev = previousMonthFromKey(settlementKey).key;
+  const chain = [immPrev];
+
+  // Walk further back through months with a rent record — the reliable
+  // indicator that a month had an actual settlement.
+  let k = previousMonthFromKey(immPrev).key;
+  let hops = 0;
+  while (hops < maxLookback && rentByKey[k]) {
+    chain.unshift(k);
+    k = previousMonthFromKey(k).key;
+    hops++;
+  }
+  chain.push(settlementKey);
+  // chain is now [oldest..., immPrev, settlementKey] — always ≥ 2 entries
+
+  let carry = 0;
+  for (let i = 1; i < chain.length; i++) {
+    const cur  = chain[i];
+    const prev = chain[i - 1];
+    const rentPrevRec     = rentByKey[prev] || null;
+    const utilPrevRec     = utilByKey[prev] || null;
+    const utilPrevPrevRec = utilByKey[previousMonthFromKey(prev).key] || null;
+
+    const netOwnPrev = calcMemberSettlement(member, allMeals, allBazar, rentPrevRec, utilPrevRec, utilPrevPrevRec, prev).netPayable;
+    const prevDuePaidThisStep = round2(Number((utilByKey[cur]?.payments || {})[member.name]?.prev_due_paid || 0));
+
+    carry = round2(Math.max(0, carry + netOwnPrev - prevDuePaidThisStep));
+  }
+  return carry;
 }
 
 function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForward = 5) {

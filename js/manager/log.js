@@ -75,37 +75,28 @@ async function loadLog() {
   const settlementKey = monthKey(year, month);
   const prev          = previousMonth(month, year);
   const sourceKey     = prev.key;
-  const prevPrev      = previousMonthFromKey(prev.key);
 
   const logContent = document.getElementById("log-content");
   logContent.innerHTML = '<div class="loading"><div class="spinner"></div>Generating settlement report…</div>';
 
-  const [
-    allMeals,
-    allBazar,
-    currentRentRec,
-    currentUtilRes,
-    previousUtilRes,
-    rentRecPrevRes,
-    utilRecPrevPrevRes,
-  ] = await Promise.all([
+  const [allMeals, allBazar, allRent, allUtilRes] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
-    dbGetMonth("rent", settlementKey),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
-    dbGetMonth("rent", prev.key),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrev.key).maybeSingle(),
+    dbGetAll("rent"),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()),
   ]);
 
-  const currentUtilRec   = currentUtilRes.data;
-  const previousUtilRec  = previousUtilRes.data;
-  const rentRecPrev      = rentRecPrevRes;
-  const utilRecPrevPrev  = utilRecPrevPrevRes.data;
+  const allUtil = allUtilRes.data || [];
+  const rentByKey = {}; allRent.forEach(r => { rentByKey[r.month_key] = r; });
+  const utilByKey = {}; allUtil.forEach(u => { utilByKey[u.month_key] = u; });
+
+  const currentRentRec   = rentByKey[settlementKey] || null;
+  const currentUtilRec   = utilByKey[settlementKey] || null;
+  const previousUtilRec  = utilByKey[sourceKey]     || null;
 
   const payData = members.map(m => {
     const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
-    p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, currentUtilRec, rentRecPrev, previousUtilRec, utilRecPrevPrev, settlementKey);
+    p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, allRent, allUtil, settlementKey);
     p.netWithPrevDue = round2(p.netPayable + p.prevDue);
     return p;
   });
@@ -566,28 +557,27 @@ async function doExportReport() {
   const settlementKey = monthKey(year, month);
   const prev          = previousMonth(month, year);
   const sourceKey     = prev.key;
-  const prevPrev      = previousMonthFromKey(prev.key);
 
   const btn = document.activeElement;
   if (btn) { btn.disabled = true; btn.textContent = "Preparing..."; }
 
   try {
-    const [allMeals, allBazar, currentRentRec, currentUtilRes, previousUtilRes, rentRecPrevRes, utilRecPrevPrevRes] = await Promise.all([
-      dbGetAll("meals"), dbGetAll("bazar"), dbGetMonth("rent", settlementKey),
-      getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", settlementKey).maybeSingle(),
-      getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", sourceKey).maybeSingle(),
-      dbGetMonth("rent", prev.key),
-      getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", prevPrev.key).maybeSingle(),
+    const [allMeals, allBazar, allRent, allUtilRes] = await Promise.all([
+      dbGetAll("meals"), dbGetAll("bazar"), dbGetAll("rent"),
+      getClient().from("utility_payments").select("*").eq("mess_id", messId()),
     ]);
 
-    const currentUtilRec  = currentUtilRes.data;
-    const previousUtilRec = previousUtilRes.data;
-    const rentRecPrev     = rentRecPrevRes;
-    const utilRecPrevPrev = utilRecPrevPrevRes.data;
+    const allUtil = allUtilRes.data || [];
+    const rentByKey = {}; allRent.forEach(r => { rentByKey[r.month_key] = r; });
+    const utilByKey = {}; allUtil.forEach(u => { utilByKey[u.month_key] = u; });
+
+    const currentRentRec  = rentByKey[settlementKey] || null;
+    const currentUtilRec  = utilByKey[settlementKey] || null;
+    const previousUtilRec = utilByKey[sourceKey]     || null;
 
     const payData = members.map(m => {
       const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
-      p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, currentUtilRec, rentRecPrev, previousUtilRec, utilRecPrevPrev, settlementKey);
+      p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, allRent, allUtil, settlementKey);
       p.netWithPrevDue = round2(p.netPayable + p.prevDue);
       return p;
     });
