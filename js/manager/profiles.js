@@ -48,6 +48,12 @@ async function refreshProfiles() { await loadProfiles(); }
    prev-month lookups — that always uses full allU. */
 function getFilteredUtilityOnly(allU, period) {
   if (period === "all") return allU;
+  if (period === "next") {
+    const now = new Date(); let m = now.getMonth() + 1, y = now.getFullYear();
+    if (m > 11) { m = 0; y++; }
+    const key = y + "-" + String(m + 1).padStart(2, "0");
+    return allU.filter(r => r.month_key === key);
+  }
   if (period === "last") {
     const now = new Date(); let m = now.getMonth() - 1, y = now.getFullYear();
     if (m < 0) { m = 11; y--; }
@@ -66,6 +72,12 @@ function getFilteredData(allM,allB,allR,period,allU=[]) {
   // the previous month's postpaid bills (Khala+Other) via utilByKey.
   // Filtering utility to a single month would break the postpaid calculation.
   if (period==="all") return {meals:allM,bazar:allB,rent:allR,utility:allU};
+  if (period==="next") {
+    const now=new Date(); let m=now.getMonth()+1,y=now.getFullYear();
+    if(m>11){m=0;y++;}
+    const key=y+"-"+String(m+1).padStart(2,"0");
+    return { meals:allM.filter(r=>r.date.slice(0,7)===key), bazar:allB.filter(r=>r.date.slice(0,7)===key), rent:allR.filter(r=>r.month_key===key), utility:allU };
+  }
   if (period==="last") {
     const now=new Date(); let m=now.getMonth()-1,y=now.getFullYear();
     if(m<0){m=11;y--;}

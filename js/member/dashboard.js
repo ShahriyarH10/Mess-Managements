@@ -812,6 +812,7 @@ async function renderMyProfile(el) {
     <div><div class="page-title">My Profile</div><div class="page-sub">Personal stats</div></div>
     <div class="topbar-actions">
       <select class="input" id="my-prof-period" onchange="refreshMyProfile()" style="width:180px">
+        <option value="next">Next month</option>
         <option value="1" selected>This month</option>
         <option value="last">Last month</option>
         <option value="3">Last 3 months</option>
@@ -834,6 +835,7 @@ async function loadMyProfile(member) {
   const period = document.getElementById("my-prof-period")?.value || "1";
   const { month, year } = thisMonth();
   let curM = month, curY = year;
+  if (period === "next") { curM = month === 11 ? 0 : month + 1; curY = month === 11 ? year + 1 : year; }
   if (period === "last") { curM = month === 0 ? 11 : month - 1; curY = month === 0 ? year - 1 : year; }
 
   const curKey = monthKey(curY, curM);
@@ -862,7 +864,7 @@ async function loadMyProfile(member) {
   const r8    = allMK.slice(-8);
   const maxM  = Math.max(...r8.map(k => allStats.byMonth[k]?.meals || 0), 1);
 
-  const periodLabel = { "1": "This month", "last": "Last month", "3": "Last 3 months", "6": "Last 6 months", "all": "All time" }[period] || "This month";
+  const periodLabel = { "next": "Next month", "1": "This month", "last": "Last month", "3": "Last 3 months", "6": "Last 6 months", "all": "All time" }[period] || "This month";
 
   const allMealsTotal = meals.reduce((sum, row) => sum + mealRowTotal(row.meals || {}), 0);
   const allBazarTotal = bazar.reduce((sum, row) => sum + Object.values(row.bazar || {}).reduce((a, v) => a + Number(v || 0), 0), 0);

@@ -66,6 +66,7 @@ const MEMBER_NAV = [
   { page:"my-meals",      label:"Meal Log",       icon:IC.meal },
   { page:"my-bazar",      label:"Bazar Log",      icon:IC.bazar },
   { page:"my-payments",   label:"Utility/Rent",   icon:IC.rent },
+  { page:"my-month-log",  label:"Monthly Log",    icon:IC.log },
   { page:"my-messages",   label:"Messages",       icon:IC.broadcast },
   { page:"my-rules",      label:"Mess Info",      icon:IC.rules },
 ];
@@ -464,6 +465,7 @@ async function renderPage(page) {
       case "my-meals":       await renderMyMeals(div);                break;
       case "my-bazar":       await renderMyBazar(div);                break;
       case "my-payments":    await renderMyPayments(div);             break;
+      case "my-month-log":         renderMyMonthLog(div);             break;
       case "mess-overview":  await renderMessOverview(div);           break;
 
       // ── New member pages ──
