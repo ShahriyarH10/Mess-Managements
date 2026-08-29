@@ -77,28 +77,16 @@ async function renderCollect(el) {
       </div>
     </div>
 
-    <!-- Mess Owes section -->
-    <div class="card" id="cp-credit-card" style="display:none;margin-top:14px">
+    <!-- Return Amount section — overpaid change + negative balance, merged -->
+    <div class="card" id="cp-return-card" style="display:none;margin-top:14px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--green-bg);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">🏦</div>
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--green-bg);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">💵</div>
         <div>
-          <div style="font-weight:700;font-size:14px;color:var(--green)">Mess Owes These Members</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:1px">Their balance is negative — the mess must pay them back</div>
+          <div style="font-weight:700;font-size:14px;color:var(--green)">Return Amount to These Members</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:1px">Overpaid change and negative balances — hand cash back now or carry it forward</div>
         </div>
       </div>
-      <div id="cp-credit-wrap"></div>
-    </div>
-
-    <!-- Change / Overpayment section -->
-    <div class="card" id="cp-change-card" style="display:none;margin-top:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">💸</div>
-        <div>
-          <div style="font-weight:700;font-size:14px;color:var(--accent)">Return Change to These Members</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:1px">They overpaid — enter how much cash to hand back now</div>
-        </div>
-      </div>
-      <div id="cp-change-wrap"></div>
+      <div id="cp-return-wrap"></div>
     </div>
 
   </div>
@@ -242,8 +230,7 @@ async function loadCollectMonth() {
 
   _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits };
   buildCollectTable();
-  buildCreditTable();
-  buildChangeTable();
+  buildReturnTable();
 }
 
 function buildCollectTable() {
@@ -382,17 +369,40 @@ function buildCollectTable() {
     if (total > 0) onCollectAmtInput(m.id);
   });
 }
-function buildCreditTable() {
-  const card = document.getElementById("cp-credit-card");
-  const wrap = document.getElementById("cp-credit-wrap");
+/* ═════════════════════════════════════════════════════════════════
+   Return Amount — one section per member, merging two old sources:
+     • overpaid change (bills.pending_change)  → carried as change_credit
+     • negative settlement the mess owes (netPayable < 0) → carried as mess_credit
+   The manager types one cash figure; it fills the overpaid change first,
+   then the negative balance, and whatever is left of either carries forward.
+   ═════════════════════════════════════════════════════════════════ */
+
+/* Money the mess still has to return to this member, split by source. */
+function returnAmountsFor(r) {
+  const changeRemaining = round2(Math.max(0, round2(r.pendingChange || 0) - round2(r.existingChangeCredit || 0)));
+  const settlementOwed  = round2(Math.abs(Math.min(0, r.netPayable || 0)));
+  const owesRemaining   = round2(Math.max(0, settlementOwed - round2(r.existingCarryCredit || 0)));
+  return {
+    changeRemaining,
+    owesRemaining,
+    settlementOwed,
+    alreadyCarried: round2(round2(r.existingChangeCredit || 0) + round2(r.existingCarryCredit || 0)),
+    total: round2(changeRemaining + owesRemaining),
+  };
+}
+
+function buildReturnTable() {
+  const card = document.getElementById("cp-return-card");
+  const wrap = document.getElementById("cp-return-wrap");
   if (!wrap || !card) return;
 
-  const creditMembers = members.filter(m => {
-    const r = _collectCtx.perMember[m.id];
-    return r && r.netPayable < 0;
-  });
+  const rows = members
+    .map(m => ({ m, r: _collectCtx.perMember[m.id] }))
+    .filter(x => x.r)
+    .map(x => ({ ...x, amts: returnAmountsFor(x.r) }))
+    .filter(x => x.amts.total > 0.01);
 
-  if (!creditMembers.length) { card.style.display = "none"; return; }
+  if (!rows.length) { card.style.display = "none"; return; }
 
   card.style.display = "";
   const { nextMonth: nm } = _collectCtx;
@@ -405,69 +415,67 @@ function buildCreditTable() {
     {bg:'rgba(224,82,82,.15)',color:'var(--red)'},
   ];
 
-  const cards = creditMembers.map((m, idx) => {
-    const r             = _collectCtx.perMember[m.id];
-    const messOwes      = round2(Math.abs(r.netPayable) + (r.creditPaid || 0));
-    const alreadyFwd    = round2(r.existingCarryCredit);
-    const remainingCred = round2(Math.max(0, messOwes - alreadyFwd - (r.creditPaid || 0)));
-
+  const cards = rows.map(({ m, amts }, idx) => {
+    const { changeRemaining, owesRemaining, alreadyCarried, total } = amts;
     const av       = avatarColors[idx % avatarColors.length];
     const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-    const pctFwd   = messOwes > 0 ? Math.round((alreadyFwd    / messOwes) * 100) : 0;
-    const pctRem   = messOwes > 0 ? Math.round((remainingCred / messOwes) * 100) : 100;
+    const pct = v => (total > 0 ? Math.round((v / total) * 100) : 0);
+
+    const breakdown = [];
+    if (changeRemaining > 0.01) breakdown.push(`
+          <div class="cp-brow">
+            <span class="cp-brow-ico">💸</span>
+            <span class="cp-brow-lbl">Overpaid change</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(changeRemaining)}%;background:var(--accent)"></div></div>
+            <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(changeRemaining)}</span>
+          </div>`);
+    if (owesRemaining > 0.01) breakdown.push(`
+          <div class="cp-brow">
+            <span class="cp-brow-ico">🏦</span>
+            <span class="cp-brow-lbl">Negative balance owed</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(owesRemaining)}%;background:var(--green)"></div></div>
+            <span class="cp-brow-val" style="color:var(--green)">${fmtTk(owesRemaining)}</span>
+          </div>`);
+    if (alreadyCarried > 0) breakdown.push(`
+          <div class="cp-brow">
+            <span class="cp-brow-ico">↩</span>
+            <span class="cp-brow-lbl">Already carried fwd</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:100%;background:var(--blue)"></div></div>
+            <span class="cp-brow-val" style="color:var(--blue)">${fmtTk(alreadyCarried)}</span>
+          </div>`);
 
     return `
-      <div class="cp-mcard" id="ccr-${m.id}">
+      <div class="cp-mcard" id="retr-${m.id}">
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
           <div>
             <div class="cp-mcard-name">${m.name}</div>
-            <div style="font-size:11px;color:var(--green);margin-top:1px">Mess owes this member</div>
+            <div style="font-size:11px;color:var(--green);margin-top:1px">Return money to this member</div>
           </div>
           <div class="cp-mcard-total">
-            <div class="cp-mcard-total-lbl">To pay back</div>
-            <div class="cp-mcard-total-val" id="cc-rem-${m.id}" style="color:var(--green)">${fmtTk(remainingCred)}</div>
+            <div class="cp-mcard-total-lbl">To return</div>
+            <div class="cp-mcard-total-val" id="ret-rem-${m.id}" style="color:var(--green)">${fmtTk(total)}</div>
           </div>
         </div>
 
-        <div class="cp-breakdown">
-          <div class="cp-brow">
-            <span class="cp-brow-ico">💰</span>
-            <span class="cp-brow-lbl">Total owed</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:100%;background:var(--green)"></div></div>
-            <span class="cp-brow-val" style="color:var(--green)">${fmtTk(messOwes)}</span>
-          </div>
-          ${alreadyFwd > 0 ? `
-          <div class="cp-brow">
-            <span class="cp-brow-ico">↩</span>
-            <span class="cp-brow-lbl">Already carried fwd</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctFwd}%;background:var(--blue)"></div></div>
-            <span class="cp-brow-val" id="cc-fwd-${m.id}" style="color:var(--blue)">${fmtTk(alreadyFwd)}</span>
-          </div>` : `<span id="cc-fwd-${m.id}" style="display:none"></span>`}
-          <div class="cp-brow">
-            <span class="cp-brow-ico">💵</span>
-            <span class="cp-brow-lbl">Remaining to settle</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRem}%;background:var(--accent)"></div></div>
-            <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(remainingCred)}</span>
-          </div>
-        </div>
+        <div class="cp-breakdown">${breakdown.join('')}</div>
 
         <div style="margin-bottom:10px">
-          <span id="cc-carry-${m.id}" style="font-size:12px;color:var(--blue);font-weight:600">↩ carry ${fmtTk(remainingCred)} → ${MONTHS[nm.month]} ${nm.year}</span>
+          <span id="ret-carry-${m.id}" style="font-size:12px;color:var(--blue);font-weight:600">↩ carry ${fmtTk(total)} → ${MONTHS[nm.month]} ${nm.year}</span>
         </div>
 
         <div class="cp-input-row">
           <div style="position:relative;flex:1">
             <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:var(--text3);pointer-events:none">৳</span>
-            <input type="number" class="input cp-amt-input" id="cc-amt-${m.id}"
-              min="0" max="${remainingCred}" step="1" placeholder="0.00"
+            <input type="number" class="input cp-amt-input" id="ret-amt-${m.id}"
+              min="0" max="${total}" step="1" placeholder="0.00"
               style="padding-left:26px!important"
-              oninput="onCreditAmtInput('${m.id}')"
+              oninput="onReturnAmtInput('${m.id}')"
               onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
               onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
           </div>
           <button class="btn cp-save-btn" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green)"
-            onclick="saveCreditRow('${m.id}')">Save</button>
+            onclick="saveReturnRow('${m.id}')">Save</button>
         </div>
       </div>`;
   }).join('');
@@ -475,221 +483,152 @@ function buildCreditTable() {
   wrap.innerHTML = `
     <div class="cp-cards-grid">${cards}</div>
     <div style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-      💡 Enter ৳0 and Save to carry everything to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
+      💡 Enter ৳0 and Save to carry the whole amount to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
     </div>`;
 }
 
-
-/* ═════════════════════════════════════════════════════════════════
-   Change & Carry Forward — overpayment section
-   ═════════════════════════════════════════════════════════════════ */
-function buildChangeTable() {
-  const card = document.getElementById("cp-change-card");
-  const wrap = document.getElementById("cp-change-wrap");
-  if (!wrap || !card) return;
-
-  const changeMembers = members.filter(m => {
-    const r = _collectCtx.perMember[m.id];
-    return r && (r.pendingChange > 0 || r.existingChangeCredit > 0);
-  });
-
-  if (!changeMembers.length) { card.style.display = "none"; return; }
-
-  card.style.display = "";
-  const { nextMonth: nm } = _collectCtx;
-
-  const avatarColors = [
-    {bg:'rgba(212,168,83,.15)',color:'var(--accent)'},
-    {bg:'rgba(91,155,213,.15)',color:'var(--blue)'},
-    {bg:'rgba(76,175,130,.15)',color:'var(--green)'},
-    {bg:'rgba(167,139,250,.15)',color:'var(--purple)'},
-    {bg:'rgba(224,82,82,.15)',color:'var(--red)'},
-  ];
-
-  const cards = changeMembers.map((m, idx) => {
-    const r           = _collectCtx.perMember[m.id];
-    const totalChange = round2(r.pendingChange || 0);
-    const alreadyFwd  = round2(r.existingChangeCredit);
-    const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
-
-    const av       = avatarColors[idx % avatarColors.length];
-    const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-    const pctFwd   = totalChange > 0 ? Math.round((alreadyFwd / totalChange) * 100) : 0;
-    const pctRem   = totalChange > 0 ? Math.round((remaining  / totalChange) * 100) : 100;
-
-    return `
-      <div class="cp-mcard" id="chgr-${m.id}">
-        <div class="cp-mcard-head">
-          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
-          <div>
-            <div class="cp-mcard-name">${m.name}</div>
-            <div style="font-size:11px;color:var(--accent);margin-top:1px">Overpaid — return the change</div>
-          </div>
-          <div class="cp-mcard-total">
-            <div class="cp-mcard-total-lbl">To return</div>
-            <div class="cp-mcard-total-val" id="chg-rem-${m.id}" style="color:var(--accent)">${fmtTk(remaining)}</div>
-          </div>
-        </div>
-
-        <div class="cp-breakdown">
-          <div class="cp-brow">
-            <span class="cp-brow-ico">💸</span>
-            <span class="cp-brow-lbl">Total overpaid</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:100%;background:var(--accent)"></div></div>
-            <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(totalChange)}</span>
-          </div>
-          ${alreadyFwd > 0 ? `
-          <div class="cp-brow">
-            <span class="cp-brow-ico">↩</span>
-            <span class="cp-brow-lbl">Already carried fwd</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctFwd}%;background:var(--blue)"></div></div>
-            <span class="cp-brow-val" id="chg-fwd-${m.id}" style="color:var(--blue)">${fmtTk(alreadyFwd)}</span>
-          </div>` : `<span id="chg-fwd-${m.id}" style="display:none"></span>`}
-          <div class="cp-brow">
-            <span class="cp-brow-ico">💵</span>
-            <span class="cp-brow-lbl">Remaining to return</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRem}%;background:var(--green)"></div></div>
-            <span class="cp-brow-val" style="color:var(--green)">${fmtTk(remaining)}</span>
-          </div>
-        </div>
-
-        <div style="margin-bottom:10px">
-          <span id="chg-carry-${m.id}" style="font-size:12px;color:var(--blue);font-weight:600">↩ carry ${fmtTk(remaining)} → ${MONTHS[nm.month]} ${nm.year}</span>
-        </div>
-
-        <div class="cp-input-row">
-          <div style="position:relative;flex:1">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:var(--text3);pointer-events:none">৳</span>
-            <input type="number" class="input cp-amt-input" id="chg-amt-${m.id}"
-              min="0" max="${remaining}" step="1" placeholder="0.00"
-              style="padding-left:26px!important"
-              oninput="onChangeAmtInput('${m.id}')"
-              onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
-              onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
-          </div>
-          <button class="btn cp-save-btn" style="background:var(--accent-bg);border:1px solid var(--accent);color:var(--accent)"
-            onclick="saveChangeRow('${m.id}')">Save</button>
-        </div>
-      </div>`;
-  }).join('');
-
-  wrap.innerHTML = `
-    <div class="cp-cards-grid">${cards}</div>
-    <div style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-      💡 Enter ৳0 and Save to carry the full change to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
-    </div>`;
-}
-
-
-function onChangeAmtInput(memberId) {
+/* Live carry / "to return" preview as the manager types. */
+function onReturnAmtInput(memberId) {
   if (!_collectCtx) return;
   const r = _collectCtx.perMember[memberId];
   if (!r) return;
-  const totalChange = round2(r.pendingChange || 0);
-  const alreadyFwd  = round2(r.existingChangeCredit);
-  const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
+  const { total } = returnAmountsFor(r);
 
-  const raw      = parseFloat(document.getElementById("chg-amt-" + memberId)?.value || 0);
-  const cashNow  = round2(Math.min(Math.max(0, raw), remaining));
-  const carryFwd = round2(remaining - cashNow);
+  const raw      = parseFloat(document.getElementById("ret-amt-" + memberId)?.value || 0);
+  const cashNow  = round2(Math.min(Math.max(0, raw), total));
+  const carryFwd = round2(total - cashNow);
 
-  const carryEl = document.getElementById("chg-carry-" + memberId);
+  const carryEl = document.getElementById("ret-carry-" + memberId);
   if (carryEl) {
     carryEl.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully returned";
     carryEl.style.color = carryFwd > 0 ? "var(--blue)" : "var(--green)";
   }
-  // Update card header "To return" value
-  const remEl = document.getElementById("chg-rem-" + memberId);
-  if (remEl) {
-    remEl.textContent  = cashNow > 0 ? fmtTk(cashNow) : fmtTk(remaining);
-    remEl.style.color  = cashNow > 0 ? "var(--green)" : "var(--accent)";
-  }
+  const remEl = document.getElementById("ret-rem-" + memberId);
+  if (remEl) remEl.textContent = cashNow > 0 ? fmtTk(cashNow) : fmtTk(total);
 }
 
-async function saveChangeRow(memberId) {
-  if (!requireManager('saveChangeRow')) return;
+/* ── Portion writers — same DB effects the old Save buttons had, no UI ── */
+
+/* Overpaid change: clear this month's pending_change, carry the unpaid rest
+   into next month's bills.change_credit. */
+async function _applyChangePortion(ctx, r, m, giveRaw) {
+  const totalChange = round2(r.pendingChange || 0);
+  const alreadyFwd  = round2(r.existingChangeCredit);
+  const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
+  const cashNow     = round2(Math.min(Math.max(0, giveRaw), remaining));
+  const newCarry    = round2(remaining - cashNow);
+
+  const nm = ctx.nextMonth;
+  const { data: latestNext } = await getClient().from("utility_payments")
+    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
+  const nextBills    = { ...(latestNext?.bills    || {}) };
+  const nextPayments = { ...(latestNext?.payments || {}) };
+  const changeCredits = { ...(nextBills.change_credit || {}) };
+  if (newCarry > 0) changeCredits[m.name] = newCarry;
+  else delete changeCredits[m.name];
+  nextBills.change_credit = changeCredits;
+  await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+
+  const { data: curUtil } = await getClient().from("utility_payments")
+    .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+  const curBills    = { ...(curUtil?.bills || {}) };
+  const curPayments = curUtil?.payments || {};
+  const pendingMap  = { ...(curBills.pending_change || {}) };
+  delete pendingMap[m.name];
+  if (Object.keys(pendingMap).length === 0) delete curBills.pending_change;
+  else curBills.pending_change = pendingMap;
+  await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
+
+  return { totalChange, cashNow, newCarry };
+}
+
+/* Negative balance the mess owes: record cash as credit_paid this month,
+   carry the rest into next month's bills.mess_credit. */
+async function _applyCreditPortion(ctx, r, m, giveRaw) {
+  const messOwes      = round2(Math.abs(r.netPayable));
+  const alreadyFwd    = round2(r.existingCarryCredit);
+  const remainingCred = round2(Math.max(0, messOwes - alreadyFwd));
+  const cashNow       = round2(Math.min(Math.max(0, giveRaw), remainingCred));
+  const newCarry      = round2(remainingCred - cashNow);
+
+  if (cashNow > 0) {
+    const { data: curUtil } = await getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+    const curBills    = curUtil?.bills || {};
+    const curPayments = { ...(curUtil?.payments || {}) };
+    const curPay      = { ...(curPayments[m.name] || {}) };
+    curPay.credit_paid = round2(Number(curPay.credit_paid || 0) + cashNow);
+    curPayments[m.name] = curPay;
+    await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
+  }
+
+  const nm = ctx.nextMonth;
+  const { data: latestNext } = await getClient().from("utility_payments")
+    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
+  const nextBills    = { ...(latestNext?.bills    || {}) };
+  const nextPayments = { ...(latestNext?.payments || {}) };
+  const existCredit = { ...(nextBills.mess_credit || {}) };
+  if (newCarry > 0) existCredit[m.name] = newCarry;
+  else delete existCredit[m.name];
+  nextBills.mess_credit = existCredit;
+  await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+
+  return { messOwes, cashNow, newCarry };
+}
+
+/* One Save button: fill overpaid change first, then the negative balance. */
+async function saveReturnRow(memberId) {
+  if (!requireManager('saveReturnRow')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
   const r   = ctx.perMember[memberId];
   const m   = members.find(x => x.id === memberId);
   if (!r || !m) return;
 
-  const totalChange = round2(r.pendingChange || 0);
-  const alreadyFwd  = round2(r.existingChangeCredit);
-  const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
-
-  const raw      = parseFloat(document.getElementById("chg-amt-" + memberId)?.value || 0);
-  const cashNow  = round2(Math.min(Math.max(0, raw), remaining));
-  const newCarry = round2(remaining - cashNow);
+  const { changeRemaining, owesRemaining } = returnAmountsFor(r);
+  const raw = parseFloat(document.getElementById("ret-amt-" + memberId)?.value || 0);
+  let cashLeft = round2(Math.max(0, raw));
 
   try {
-    const nm = ctx.nextMonth;
-    const { data: latestNext } = await getClient().from("utility_payments")
-      .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
-
-    const nextBills    = { ...(latestNext?.bills    || {}) };
-    const nextPayments = { ...(latestNext?.payments || {}) };
-
-    // Write change carry-forward into next month bills
-    const changeCredits = { ...(nextBills.change_credit || {}) };
-    if (newCarry > 0) {
-      changeCredits[m.name] = newCarry;
-    } else {
-      delete changeCredits[m.name];
+    let chgRes = null, credRes = null;
+    if (changeRemaining > 0.01) {
+      chgRes = await _applyChangePortion(ctx, r, m, Math.min(cashLeft, changeRemaining));
+      cashLeft = round2(Math.max(0, cashLeft - chgRes.cashNow));
     }
-    nextBills.change_credit = changeCredits;
-
-    await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
-
-    // Clear pending_change from current month bills — it's now resolved
-    const { data: curUtil } = await getClient().from("utility_payments")
-      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
-    const curBills    = { ...(curUtil?.bills    || {}) };
-    const curPayments = curUtil?.payments || {};
-    const pendingMap  = { ...(curBills.pending_change || {}) };
-    delete pendingMap[m.name];
-    if (Object.keys(pendingMap).length === 0) {
-      delete curBills.pending_change;
-    } else {
-      curBills.pending_change = pendingMap;
+    if (owesRemaining > 0.01) {
+      credRes = await _applyCreditPortion(ctx, r, m, Math.min(cashLeft, owesRemaining));
+      cashLeft = round2(Math.max(0, cashLeft - credRes.cashNow));
     }
-    await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
 
-    // Update in-memory
-    r.pendingChange        = 0;
-    r.existingChangeCredit = round2(alreadyFwd + newCarry);
-    ctx.existingChangeCredits[m.name] = newCarry;
+    await loadCollectMonth();
 
-    // Refresh row display
-    const fwdEl = document.getElementById("chg-fwd-" + memberId);
-    if (fwdEl) {
-      const total = round2(alreadyFwd + newCarry);
-      fwdEl.textContent = total > 0 ? fmtTk(total) : "—";
-    }
-    const remEl = document.getElementById("chg-rem-" + memberId);
-    if (remEl) remEl.textContent = fmtTk(Math.max(0, remaining - cashNow));
-
-    const amtEl = document.getElementById("chg-amt-" + memberId);
-    if (amtEl) amtEl.value = "";
-    onChangeAmtInput(memberId);
-
+    const nm         = ctx.nextMonth;
+    const cashTotal  = round2((chgRes?.cashNow  || 0) + (credRes?.cashNow  || 0));
+    const carryTotal = round2((chgRes?.newCarry || 0) + (credRes?.newCarry || 0));
     const parts = [];
-    if (cashNow  > 0) parts.push(`Cash returned: ${fmtTk(cashNow)}`);
-    if (newCarry > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(newCarry)}`);
-    toast("Change saved ✓  " + (parts.join("  ·  ") || "No change"), "success");
+    if (cashTotal  > 0) parts.push(`Cash returned: ${fmtTk(cashTotal)}`);
+    if (carryTotal > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(carryTotal)}`);
+    toast("Return saved ✓  " + (parts.join("  ·  ") || "Nothing to return"), "success");
 
-    showChangeReceipt({
-      member: m,
-      monthLabel:     monthLabelFromKey(ctx.key),
-      nextMonthLabel: MONTHS[nm.month] + " " + nm.year,
-      totalChange, cashNow, newCarry,
-      timestamp: new Date(),
-    });
-
+    const nextMonthLabel = MONTHS[nm.month] + " " + nm.year;
+    if (chgRes) {
+      showChangeReceipt({
+        member: m, monthLabel: monthLabelFromKey(ctx.key), nextMonthLabel,
+        totalChange: chgRes.totalChange, cashNow: chgRes.cashNow, newCarry: chgRes.newCarry,
+        timestamp: new Date(),
+      });
+    } else if (credRes) {
+      showCreditReceipt({
+        member: m, monthLabel: monthLabelFromKey(ctx.key), nextMonthLabel,
+        cashNow: credRes.cashNow, newCarry: credRes.newCarry, messOwes: credRes.messOwes,
+        timestamp: new Date(),
+      });
+    }
   } catch (e) {
     toast("Error: " + e.message, "error");
   }
 }
+
 
 /* ── Change receipt ── */
 function buildChangeReceiptText(d) {
@@ -935,107 +874,8 @@ function printChangeReceipt() {
   else { frame.onload = () => setTimeout(() => { w.focus(); w.print(); }, 250); }
 }
 
-/* ── Live preview for credit drawdown ── */
-function onCreditAmtInput(memberId) {
-  if (!_collectCtx) return;
-  const r = _collectCtx.perMember[memberId];
-  if (!r) return;
-  const messOwes      = round2(Math.abs(r.netPayable));
-  const alreadyFwd    = round2(r.existingCarryCredit);
-  const remainingCred = round2(Math.max(0, messOwes - alreadyFwd));
-
-  const raw     = parseFloat(document.getElementById("cc-amt-" + memberId)?.value || 0);
-  const cashNow = round2(Math.min(Math.max(0, raw), remainingCred));
-  const carryFwd = round2(remainingCred - cashNow);
-
-  const carry = document.getElementById("cc-carry-" + memberId);
-  if (carry) {
-    carry.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully settled";
-    carry.style.color = carryFwd > 0 ? "var(--blue)" : "var(--green)";
-  }
-  // Update card header "To pay back" value
-  const remEl = document.getElementById("cc-rem-" + memberId);
-  if (remEl) {
-    remEl.textContent = cashNow > 0 ? fmtTk(cashNow) : fmtTk(remainingCred);
-    remEl.style.color = cashNow > 0 ? "var(--accent)" : "var(--green)";
-  }
-}
-
-/* ── Save credit drawdown + carry-forward ── */
-async function saveCreditRow(memberId) {
-  if (!requireManager('saveCreditRow')) return;
-  if (!_collectCtx) return;
-  const ctx = _collectCtx;
-  const r   = ctx.perMember[memberId];
-  const m   = members.find(x => x.id === memberId);
-  if (!r || !m) return;
-
-  const messOwes      = round2(Math.abs(r.netPayable));
-  const alreadyFwd    = round2(r.existingCarryCredit);
-  const remainingCred = round2(Math.max(0, messOwes - alreadyFwd));
-
-  const raw     = parseFloat(document.getElementById("cc-amt-" + memberId)?.value || 0);
-  const cashNow = round2(Math.min(Math.max(0, raw), remainingCred));
-  const newCarry = round2(remainingCred - cashNow);
-
-try {
-    // ── 1) If cash was handed back, record it in CURRENT month payments ──
-    if (cashNow > 0) {
-      const { data: curUtil } = await getClient().from("utility_payments")
-        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
-      const curBills    = curUtil?.bills    || {};
-      const curPayments = { ...(curUtil?.payments || {}) };
-      const curPay      = { ...(curPayments[m.name] || {}) };
-      curPay.credit_paid = round2(Number(curPay.credit_paid || 0) + cashNow);
-      curPayments[m.name] = curPay;
-      await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
-    }
-
-    // ── 2) Write carry-forward to NEXT month bills ──
-    const nm = ctx.nextMonth;
-    const { data: latestNext } = await getClient().from("utility_payments")
-      .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
-
-    const nextBills    = { ...(latestNext?.bills    || {}) };
-    const nextPayments = { ...(latestNext?.payments || {}) };
-
-    const existCredit = { ...(nextBills.mess_credit || {}) };
-    if (newCarry > 0) {
-      existCredit[m.name] = newCarry;
-    } else {
-      delete existCredit[m.name];
-    }
-    nextBills.mess_credit = existCredit;
-    await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
-
-    // ── 3) Reload table from DB so everything is fresh ──
-    await loadCollectMonth();
-
-    // Refresh carry-fwd display in table
-    const fwdEl = document.getElementById("cc-fwd-" + memberId);
-    if (fwdEl) {
-      const total = round2(alreadyFwd + newCarry);
-      fwdEl.textContent = total > 0 ? fmtTk(total) : "—";
-    }
-    const remEl = document.getElementById("cc-rem-" + memberId);
-    if (remEl) remEl.textContent = fmtTk(Math.max(0, remainingCred - newCarry - alreadyFwd + alreadyFwd));
-
-    const amtEl = document.getElementById("cc-amt-" + memberId);
-    if (amtEl) amtEl.value = "";
-    onCreditAmtInput(memberId);
-
-    const parts = [];
-    if (cashNow > 0)  parts.push(`Cash handed back: ${fmtTk(cashNow)}`);
-    if (newCarry > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(newCarry)}`);
-    toast("Credit saved ✓  " + (parts.join("  ·  ") || "No change"), "success");
-
-    // Show credit receipt
-    showCreditReceipt({ member: m, monthLabel: monthLabelFromKey(ctx.key), cashNow, newCarry, nextMonthLabel: MONTHS[nm.month] + " " + nm.year, messOwes, timestamp: new Date() });
-
-  } catch (e) {
-    toast("Error: " + e.message, "error");
-  }
-}
+/* Live preview + save for the "Mess owes" drawdown now live in
+   saveReturnRow / _applyCreditPortion above (merged Return Amount section). */
 
 /* Priority-ordered split: Rent → Util → Meal.
    Fills each bucket fully before moving to the next.
@@ -1208,9 +1048,9 @@ async function saveCollectRow(memberId) {
     if (amtEl) amtEl.value = "";
     onCollectAmtInput(memberId);
 
-    // If member is now owed (netPayable < 0), rebuild credit table
+    // If member is now owed (netPayable < 0), rebuild the return section
     if (r.netPayable < 0) {
-      buildCreditTable();
+      buildReturnTable();
     }
 
     // If there's change to return, persist it to DB and show change table
@@ -1229,7 +1069,7 @@ async function saveCollectRow(memberId) {
         await dbUpsertUtility(ctx.month, ctx.year, ctx.key, freshBills, freshPayments);
       } catch (_) { /* non-critical — in-memory still works this session */ }
 
-      buildChangeTable();
+      buildReturnTable();
     }
 
     const parts = [];
