@@ -150,6 +150,11 @@ async function renderCollect(el) {
     /* credit applied note */
     .cp-credit-note{font-size:11px;color:var(--blue);display:flex;align-items:center;gap:5px;margin-top:4px;}
 
+    /* high-visibility carry-forward / applied-credit tag */
+    .cp-carry-tag{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.2px;border:1px solid var(--blue);background:var(--blue-bg,rgba(91,155,213,.14));color:var(--blue);}
+    .cp-carry-tag.is-green{border-color:var(--green);background:var(--green-bg);color:var(--green);}
+    .cp-carry-tag.is-accent{border-color:var(--accent);background:var(--accent-bg);color:var(--accent);}
+
     /* Mess-owes & Change tables (simplified) */
     .cp-simple-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg3);border-radius:var(--radius-sm);margin-bottom:8px;flex-wrap:wrap;}
     .cp-simple-name{font-weight:700;font-size:14px;color:var(--text);flex:1;min-width:80px;}
@@ -238,10 +243,12 @@ function buildCollectTable() {
   if (!wrap) return;
   if (!members.length) { wrap.innerHTML = '<div class="empty">No members in this mess</div>'; return; }
 
-  // Show members who owe this month OR have unpaid dues from last month
+  // Show members whose net (this month + any old unpaid dues) is positive.
+  // A meal surplus that more than covers their dues moves them to the
+  // "Return Amount" section instead — never both.
   const owing = members.filter(m => {
     const r = _collectCtx.perMember[m.id];
-    return r && (r.netPayable > 0 || r.prevDue > 0.01);
+    return r && round2(Number(r.netPayable || 0) + Number(r.prevDue || 0)) > 0.01;
   });
 
   if (!owing.length) {
@@ -288,7 +295,7 @@ function buildCollectTable() {
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
           <div>
             <div class="cp-mcard-name">${m.name}</div>
-            ${r.messCredit > 0 ? `<div style="font-size:11px;color:var(--blue);margin-top:1px">↩ ${fmtTk(r.messCredit)} credit applied</div>` : ''}
+            ${r.messCredit > 0 ? `<span class="cp-carry-tag is-green" title="Carry-forward credit from a previous month, reducing this month's total">↩ −${fmtTk(r.messCredit)} carried-forward credit</span>` : ''}
           </div>
           <div class="cp-mcard-total">
             <div class="cp-mcard-total-lbl">Total due</div>
@@ -377,10 +384,15 @@ function buildCollectTable() {
    then the negative balance, and whatever is left of either carries forward.
    ═════════════════════════════════════════════════════════════════ */
 
-/* Money the mess still has to return to this member, split by source. */
+/* Money the mess still has to return to this member, split by source.
+   Amounts already carried to next month are a separate committed credit —
+   reported for context, never re-resolved or netted against here. The
+   "negative balance" is taken AFTER old unpaid dues (prevDue), so a member who
+   still owes from before never shows up as owed money. */
 function returnAmountsFor(r) {
-  const changeRemaining = round2(Math.max(0, round2(r.pendingChange || 0) - round2(r.existingChangeCredit || 0)));
-  const settlementOwed  = round2(Math.abs(Math.min(0, r.netPayable || 0)));
+  const changeRemaining = round2(Math.max(0, round2(r.pendingChange || 0)));
+  const netAfterDues    = round2(Number(r.netPayable || 0) + Number(r.prevDue || 0));
+  const settlementOwed  = round2(Math.abs(Math.min(0, netAfterDues)));
   const owesRemaining   = round2(Math.max(0, settlementOwed - round2(r.existingCarryCredit || 0)));
   return {
     changeRemaining,
@@ -436,13 +448,6 @@ function buildReturnTable() {
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(owesRemaining)}%;background:var(--green)"></div></div>
             <span class="cp-brow-val" style="color:var(--green)">${fmtTk(owesRemaining)}</span>
           </div>`);
-    if (alreadyCarried > 0) breakdown.push(`
-          <div class="cp-brow">
-            <span class="cp-brow-ico">↩</span>
-            <span class="cp-brow-lbl">Already carried fwd</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:100%;background:var(--blue)"></div></div>
-            <span class="cp-brow-val" style="color:var(--blue)">${fmtTk(alreadyCarried)}</span>
-          </div>`);
 
     return `
       <div class="cp-mcard" id="retr-${m.id}">
@@ -460,8 +465,9 @@ function buildReturnTable() {
 
         <div class="cp-breakdown">${breakdown.join('')}</div>
 
-        <div style="margin-bottom:10px">
-          <span id="ret-carry-${m.id}" style="font-size:12px;color:var(--blue);font-weight:600">↩ carry ${fmtTk(total)} → ${MONTHS[nm.month]} ${nm.year}</span>
+        <div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px">
+          ${alreadyCarried > 0 ? `<span class="cp-carry-tag" title="Already moved to next month as account credit — shown for context">↩ ${fmtTk(alreadyCarried)} already carried → ${MONTHS[nm.month]} ${nm.year}</span>` : ''}
+          <span id="ret-carry-${m.id}" class="cp-carry-tag">↩ carry ${fmtTk(total)} → ${MONTHS[nm.month]} ${nm.year}</span>
         </div>
 
         <div class="cp-input-row">
@@ -500,8 +506,8 @@ function onReturnAmtInput(memberId) {
 
   const carryEl = document.getElementById("ret-carry-" + memberId);
   if (carryEl) {
-    carryEl.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully returned";
-    carryEl.style.color = carryFwd > 0 ? "var(--blue)" : "var(--green)";
+    carryEl.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully returned — nothing carried";
+    carryEl.classList.toggle("is-green", carryFwd <= 0);
   }
   const remEl = document.getElementById("ret-rem-" + memberId);
   if (remEl) remEl.textContent = cashNow > 0 ? fmtTk(cashNow) : fmtTk(total);
@@ -514,7 +520,9 @@ function onReturnAmtInput(memberId) {
 async function _applyChangePortion(ctx, r, m, giveRaw) {
   const totalChange = round2(r.pendingChange || 0);
   const alreadyFwd  = round2(r.existingChangeCredit);
-  const remaining   = round2(Math.max(0, totalChange - alreadyFwd));
+  // Only the fresh, unresolved overpayment is settled here; whatever was already
+  // carried forward is added to, never replaced.
+  const remaining   = round2(Math.max(0, totalChange));
   const cashNow     = round2(Math.min(Math.max(0, giveRaw), remaining));
   const newCarry    = round2(remaining - cashNow);
 
@@ -524,7 +532,8 @@ async function _applyChangePortion(ctx, r, m, giveRaw) {
   const nextBills    = { ...(latestNext?.bills    || {}) };
   const nextPayments = { ...(latestNext?.payments || {}) };
   const changeCredits = { ...(nextBills.change_credit || {}) };
-  if (newCarry > 0) changeCredits[m.name] = newCarry;
+  const totalCarry = round2(alreadyFwd + newCarry);
+  if (totalCarry > 0.001) changeCredits[m.name] = totalCarry;
   else delete changeCredits[m.name];
   nextBills.change_credit = changeCredits;
   await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
@@ -545,7 +554,8 @@ async function _applyChangePortion(ctx, r, m, giveRaw) {
 /* Negative balance the mess owes: record cash as credit_paid this month,
    carry the rest into next month's bills.mess_credit. */
 async function _applyCreditPortion(ctx, r, m, giveRaw) {
-  const messOwes      = round2(Math.abs(r.netPayable));
+  // Net of old unpaid dues: a member still behind on prevDue is not owed money.
+  const messOwes      = round2(Math.abs(Math.min(0, Number(r.netPayable || 0) + Number(r.prevDue || 0))));
   const alreadyFwd    = round2(r.existingCarryCredit);
   const remainingCred = round2(Math.max(0, messOwes - alreadyFwd));
   const cashNow       = round2(Math.min(Math.max(0, giveRaw), remainingCred));
@@ -568,7 +578,8 @@ async function _applyCreditPortion(ctx, r, m, giveRaw) {
   const nextBills    = { ...(latestNext?.bills    || {}) };
   const nextPayments = { ...(latestNext?.payments || {}) };
   const existCredit = { ...(nextBills.mess_credit || {}) };
-  if (newCarry > 0) existCredit[m.name] = newCarry;
+  const totalCarry = round2(alreadyFwd + newCarry);
+  if (totalCarry > 0.001) existCredit[m.name] = totalCarry;
   else delete existCredit[m.name];
   nextBills.mess_credit = existCredit;
   await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
