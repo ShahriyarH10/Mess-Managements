@@ -67,14 +67,14 @@
 #boot-splash.leaving{animation:splashOut .38s var(--ease-spring) both;pointer-events:none;}
 @keyframes splashOut{to{opacity:0;transform:scale(1.04);}}
 .splash-mark{position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:center;}
-.splash-mark .land-logo-icon{width:46px;height:46px;font-size:22px;border-radius:13px;position:relative;z-index:1;animation:markPulse 2s ease-in-out infinite;}
+.splash-logo{width:48px;height:48px;border-radius:13px;position:relative;z-index:1;animation:markPulse 2s ease-in-out infinite;}
 .splash-ring{position:absolute;inset:0;border-radius:50%;
   background:conic-gradient(from 0deg,transparent 0 30%,var(--accent) 100%);
   -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));
           mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));
   animation:spin 1.1s linear infinite;}
 .splash-ring.r2{inset:-9px;opacity:.35;animation-duration:1.9s;animation-direction:reverse;}
-@keyframes markPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(212,168,83,.35);}50%{transform:scale(1.06);box-shadow:0 0 0 14px rgba(212,168,83,0);}}
+@keyframes markPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 1px var(--border2),0 8px 24px var(--shadow),0 0 0 0 rgba(212,168,83,.35);}50%{transform:scale(1.06);box-shadow:0 0 0 1px var(--border2),0 8px 24px var(--shadow),0 0 0 14px rgba(212,168,83,0);}}
 .splash-name{font-family:var(--font-serif);font-size:22px;letter-spacing:-.4px;color:var(--text);}
 .splash-msg{font-size:12.5px;color:var(--text3);min-height:18px;display:flex;align-items:center;gap:8px;transition:opacity .25s;}
 .splash-msg.swap{opacity:0;}
@@ -146,7 +146,7 @@
 
 @media (prefers-reduced-motion:reduce){
   .reveal{opacity:1;transform:none;transition:none;}
-  .sk::after,.splash-track::after,.dots i,.splash-mark .land-logo-icon{animation:none;}
+  .sk::after,.splash-track::after,.dots i,.splash-logo{animation:none;}
   .spinner,.splash-ring{animation-duration:2.4s!important;animation-iteration-count:infinite!important;} /* a slow spin is still a progress signal */
   #route-bar{transition:none;}
 }

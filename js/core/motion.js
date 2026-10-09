@@ -35,7 +35,7 @@
     splash.setAttribute("role", "status");
     splash.setAttribute("aria-label", "Loading MessManager");
     splash.innerHTML = `
-      <div class="splash-mark"><div class="splash-ring r2"></div><div class="splash-ring"></div><div class="land-logo-icon">M</div></div>
+      <div class="splash-mark"><div class="splash-ring r2"></div><div class="splash-ring"></div><img class="splash-logo" src="assets/favicon.svg" alt="" width="48" height="48"></div>
       <div class="splash-name">MessManager</div>
       <div class="splash-track"></div>
       <div class="splash-msg" id="splash-msg">${MESSAGES[0]}</div>`;
