@@ -65,7 +65,7 @@
     <div class="land-nav-actions">
       <a class="btn btn-ghost btn-sm" href="#/login">Sign in</a>
       <a class="btn btn-primary btn-sm" href="#/demo">Live demo</a>
-      <a class="btn btn-ghost btn-sm live-only" href="#/create">Create Mess</a>
+      <a class="btn btn-ghost btn-sm" href="#/create">Create Mess</a>
     </div>
     <button class="land-nav-hamburger" onclick="openLandingDrawer()" aria-label="Open menu">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
@@ -101,7 +101,7 @@
         Try the live demo
       </a>
       <a class="btn btn-ghost btn-lg" href="#/demo/member">View as a member</a>
-      <a class="btn btn-ghost btn-lg live-only" href="#/create">Create your mess</a>
+      <a class="btn btn-ghost btn-lg" href="#/create">Create your own mess</a>
     </div>
     <div class="hero-stats">
       <div class="hero-stat"><span class="hero-stat-num">25+</span><span class="hero-stat-label">Screens</span></div>
@@ -299,7 +299,7 @@
           <div class="demo-role-cta">Enter as Member →</div>
         </a>
       </div>
-      <div class="demo-note">Everything runs in your browser. Changes are temporary and disappear on reload — nothing is sent to a server.<br/>You can switch roles or reset the data any time from the sidebar.</div>
+      <div class="demo-note">Everything runs in your browser — nothing is sent to a server. Changes last until you close the tab.<br/>Prefer to start from scratch? <a href="#/create">Create your own mess</a> and add members yourself.</div>
     </div>
   </div>
 </div>
@@ -313,6 +313,7 @@
       <div class="auth-logo"><div class="land-logo-icon">M</div><span>MessManager</span></div>
       <div class="auth-title">Create your mess</div>
       <div class="auth-sub">You'll be the first member and manager of this mess</div>
+      <div class="demo-note" id="create-demo-note" style="display:none;text-align:left;margin:0 0 14px">🧪 <b>Sandbox:</b> this mess is created only in your browser tab (nothing is sent anywhere). Add members from the <b>Members</b> page, then use <b>Switch to Member view</b> in the sidebar — or sign out and sign in as them.</div>
       <div id="create-error" class="auth-error" style="display:none"></div>
       <div class="field"><label>Mess name *</label><input type="text" class="input" id="cm-name" placeholder="e.g. Mirpur Bachelor Mess"/></div>
       <div class="field"><label>Your full name *</label><input type="text" class="input" id="cm-admin-name" placeholder="e.g. Shahriyar"/></div>
@@ -349,7 +350,7 @@
         </div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Sign in →</button>
-      <div class="auth-hint live-only">New here? <a href="#/create">Create a mess</a></div>
+      <div class="auth-hint">New here? <a href="#/create">Create a mess</a></div>
       <div class="auth-hint live-only" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
       <div class="demo-login">
         <div class="demo-login-title">Reviewing this project? Skip typing:</div>

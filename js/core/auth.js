@@ -38,7 +38,6 @@ async function signSessionJWT(memberId, messId, role) {
    CREATE MESS
 ═══════════════════════════════════════════ */
 async function doCreateMess() {
-  if (MM_MODE === "demo") { Router.go("demo"); return; } // demo has no real accounts
   const messName = cleanText(document.getElementById("cm-name")?.value);
   const myName   = cleanText(document.getElementById("cm-admin-name")?.value);
   const username = cleanText(document.getElementById("cm-username")?.value);
@@ -64,7 +63,7 @@ async function doCreateMess() {
     saveSession({ name: myName, username, role: "manager", memberId: member.id }, mess, jwt);
     await bootApp();
   } catch (e) {
-    showCreateError("Failed to create mess: " + (e.message || "Unknown error"));
+    showCreateError(e?.code === "23505" ? "That username is already taken — choose another." : "Failed to create mess: " + (e.message || "Unknown error"));
   } finally {
     btn.disabled = false; btn.textContent = "Create mess & continue →";
   }

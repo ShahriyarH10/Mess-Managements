@@ -49,8 +49,8 @@
     log(W().location.hash === "#/login" && visible("login-screen"), "unauthenticated #/app/dashboard → #/login");
     await openHash("#/admin/messes"); await until(() => W().location.hash === "#/login");
     log(W().location.hash === "#/login", "unauthenticated #/admin → #/login");
-    await openHash("#/create"); await until(() => W().location.hash === "#/demo");
-    log(W().location.hash === "#/demo", "#/create redirects to demo in demo-only build");
+    await openHash("#/create"); await until(() => visible("create-mess-screen"));
+    log(visible("create-mess-screen") && D().getElementById("create-demo-note").style.display !== "none", "#/create works in demo-only build, with sandbox note");
     await openHash("#/nope/zzz"); await until(() => W().location.hash === "#/");
     log(visible("landing-page"), "unknown route → landing");
 
@@ -169,7 +169,45 @@
     log(W().location.hash === "#/app/dashboard", "form login with demo_manager / Demo@1234");
     await openHash("#/login"); await sleep(300);
     log(W().location.hash === "#/app/dashboard", "signed-in user visiting #/login is sent to the app");
-    D().getElementById("login-user"); 
+
+    /* 8. full sandbox journey: create a mess → manager → add member → member view → persistence */
+    const setv = (id, v) => { D().getElementById(id).value = v; };
+    W().doLogout(); await until(() => visible("landing-page"));
+    await openHash("#/create"); await until(() => visible("create-mess-screen"));
+    setv("cm-name", "Smoke Test Mess"); setv("cm-admin-name", "Test Manager"); setv("cm-username", "smoke_mgr"); setv("cm-password", "secret12"); setv("cm-location", "Dhaka");
+    W().doCreateMess(); await until(() => W().location.hash === "#/app/dashboard" && D().querySelector("#main-content .stat-card"), 10000);
+    log(W().location.hash === "#/app/dashboard" && P().user().role === "manager" && P().user().username === "smoke_mgr", "created mess → signed in as its manager");
+    log(/Smoke Test Mess/.test(D().getElementById("app-mess-name").textContent), "new mess has its own branding");
+    await W().switchDemoRole(); await sleep(400);
+    log(/Add a member first/.test(D().getElementById("toast").textContent), "switch to member view with no members → helpful message");
+    await openHash("#/app/members"); await settle();
+    W().openAddMemberModal(); await sleep(150);
+    setv("mm-name", "Smoke Member"); setv("mm-user", "smoke_member"); setv("mm-pass", "memberpass1"); setv("mm-room", "A1");
+    await W().addMember(); await sleep(400);
+    const mm = await P().sb().from("members").select("*").eq("username", "smoke_member").maybeSingle();
+    log(!!mm.data && mm.data.password.startsWith("pbkdf2:"), "addMember() stores a PBKDF2-hashed member in the new mess");
+    await W().switchDemoRole(); await until(() => W().location.hash === "#/app/my-dashboard", 8000);
+    log(W().location.hash === "#/app/my-dashboard" && P().user().username === "smoke_member", "switch to member view → #/app/my-dashboard as the new member");
+    await settle();
+    log(!/Error loading page/.test(D().getElementById("main-content").innerText), "member dashboard of the new mess renders");
+    const loaded = new Promise(r => frame.onload = r); W().location.reload(); await loaded; await sleep(1500); hook(); await inject();
+    log(W().location.hash === "#/app/my-dashboard" && P().user() && P().user().username === "smoke_member", "page refresh keeps session + created data");
+    await W().switchDemoRole(); await until(() => W().location.hash === "#/app/dashboard", 8000);
+    log(P().user().role === "manager", "switch back to manager view");
+    W().doLogout(); await until(() => visible("landing-page"));
+    await openHash("#/login"); await until(() => visible("login-screen"));
+    setv("login-user", "smoke_member"); setv("login-pass", "memberpass1"); W().doLogin();
+    await until(() => W().location.hash === "#/app/my-dashboard", 10000);
+    log(W().location.hash === "#/app/my-dashboard", "sign in as the new member via the login form");
+    W().doLogout(); await until(() => visible("landing-page"));
+    await openHash("#/create"); await until(() => visible("create-mess-screen"));
+    setv("cm-name", "Dup"); setv("cm-admin-name", "Dup"); setv("cm-username", "demo_manager"); setv("cm-password", "secret12");
+    await W().doCreateMess(); await sleep(300);
+    log(/already taken/.test(D().getElementById("create-error").textContent), "duplicate username rejected: '" + D().getElementById("create-error").textContent + "'");
+    await openHash("#/demo/manager"); await until(() => W().location.hash === "#/app/dashboard", 8000);
+    await W().resetDemo(); await until(() => /Mirpur/.test(D().getElementById("app-mess-name").textContent), 8000);
+    const gone = await P().sb().from("members").select("*").eq("username", "smoke_member").maybeSingle();
+    log(!gone.data && /Mirpur/.test(D().getElementById("app-mess-name").textContent), "resetDemo() discards created data and returns to the sample mess");
   } catch (e) {
     log(false, "harness exception: " + (e && e.stack || e));
   }

@@ -11,17 +11,20 @@ The default build is **demo-only**: it never contacts a database. All queries ar
 | Link | What you get |
 |---|---|
 | `#/demo` | Role picker |
-| `#/demo/manager` | Straight into the manager dashboard |
-| `#/demo/member` | Straight into a member's dashboard |
-| `#/login` | Sign in with `demo_manager` or `demo_member`, password `Demo@1234` |
+| `#/demo/manager` | Straight into the sample mess as its manager |
+| `#/demo/member` | Straight into the sample mess as a member |
+| `#/create` | **Create your own mess** in the sandbox and become its manager |
+| `#/login` | Sign in with `demo_manager` or `demo_member`, password `Demo@1234` — or with any account you created in the sandbox |
 
-Everything is temporary: reload resets the data, closing the tab ends the session, and **Reset demo data** / **Switch role** live in the sidebar. The Content-Security-Policy sets `connect-src 'self'`, so the browser itself refuses any network call to a backend.
+The sandbox behaves like the real app end to end: create a mess → you're its manager → add members on the **Members** page (each gets a PBKDF2-hashed password) → **Switch to Member view** in the sidebar (or sign out and sign in as them). Meals, bazar, bills, rent, collections and settlements all work.
 
-Run it locally with any static server, e.g. `python3 -m http.server` → http://localhost:8000. It also works opened straight from disk.
+Everything stays in your browser. Data is kept in `sessionStorage`, so a refresh keeps what you built; closing the tab discards it, and **Reset demo data** returns to the sample mess. The Content-Security-Policy sets `connect-src 'self'`, so the browser itself refuses any network call to a backend.
+
+Run it locally with any static server, e.g. `python3 -m http.server` → http://localhost:8000.
 
 ### Going live again
 
-1. `js/core/env.js` → `demoOnly: false` (enables real sign-in / create-mess; the demo stays available).
+1. `js/core/env.js` → `demoOnly: false` (real sign-in / create-mess against Supabase; the sandbox stays available at `#/demo`).
 2. Add your Supabase origin to `connect-src` in the CSP — in `index.html`, `_headers` and `vercel.json`.
 
 ### Routes

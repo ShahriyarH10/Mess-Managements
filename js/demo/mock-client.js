@@ -5,7 +5,8 @@
    uses (select / insert / update / upsert / delete, eq / neq / gt / gte / lt /
    lte / in, order / range / limit, single / maybeSingle, count + head, and the
    `messes(*)` embed). Every call is served from a plain JS object — nothing
-   leaves the browser, and a page reload restores the seed data.
+   leaves the browser. The store is mirrored to sessionStorage so a refresh keeps
+   what you created; closing the tab (or "Reset demo data") discards it.
    ═══════════════════════════════════════════════ */
 (function () {
   "use strict";
@@ -19,7 +20,9 @@
 
   // Mirrors the unique(...) constraints from database.sql
   const UNIQUE = {
-    members:         ["mess_id", "username"],
+    // Stricter than the real schema (unique per mess): the sign-in form looks users up by
+    // username alone, so a demo-wide unique username keeps every login unambiguous.
+    members:         ["username"],
     meals:           ["mess_id", "date"],
     bazar:           ["mess_id", "date"],
     rent:            ["mess_id", "month_key"],
@@ -57,8 +60,8 @@
   }
 
   class Query {
-    constructor(db, table) {
-      this.db = db; this.table = table;
+    constructor(db, table, onChange) {
+      this.db = db; this.table = table; this.onChange = onChange;
       this.op = "select";
       this.cols = "*"; this.count = null; this.head = false; this.returning = false;
       this.filters = []; this.orders = [];
@@ -186,6 +189,7 @@
           if (res.error) return { data: null, error: res.error };
           done.push(res.rec);
         }
+        this.onChange && this.onChange();
         if (!this.returning) return { data: null, error: null };
         return this._shape(this._project(done));
       }
@@ -193,6 +197,7 @@
       if (this.op === "update") {
         const hit = this._matching();
         hit.forEach(r => Object.assign(r, clone(this.payload)));
+        this.onChange && this.onChange();
         if (!this.returning) return { data: null, error: null };
         return this._shape(this._project(hit));
       }
@@ -209,6 +214,7 @@
             this.db.notifications   = (this.db.notifications   || []).filter(x => x.from_id   !== r.id);
           }
         });
+        this.onChange && this.onChange();
         return { data: null, error: null };
       }
 
@@ -216,13 +222,32 @@
     }
   }
 
+  /* ── persistence: sessionStorage, debounced; every access guarded ── */
+  const STORE_KEY = "mm_demo_db";
+  let saveTimer = null;
+  function persist(db) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => flush(db), 150);
+    if (!persist.bound) { persist.bound = true; addEventListener("pagehide", () => flush(persist.db)); }
+    persist.db = db;
+  }
+  function flush(db) {
+    if (!db) return;
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch (_) { /* quota / blocked: still works in memory */ }
+  }
+  function load() {
+    try { const raw = sessionStorage.getItem(STORE_KEY); return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
+  }
+  function clear() { clearTimeout(saveTimer); persist.db = null; try { sessionStorage.removeItem(STORE_KEY); } catch (_) {} }
+
   function createClient(db) {
+    const onChange = () => persist(db);
     return {
-      from: (table) => new Query(db, table),
+      from: (table) => new Query(db, table, onChange),
       rpc: async () => err("rpc is not available in demo mode"),
       isDemo: true,
     };
   }
 
-  window.MMDemo = Object.assign(window.MMDemo || {}, { createClient });
+  window.MMDemo = Object.assign(window.MMDemo || {}, { createClient, load, clear });
 })();

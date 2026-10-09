@@ -20,7 +20,7 @@ async function useBackend(mode) {
   document.body.classList.toggle("is-demo", mode === "demo");
   if (mode === "demo") {
     await loadScripts(SCRIPT_GROUPS.demo);
-    if (!_demoDb) _demoDb = MMDemo.buildSeed();
+    if (!_demoDb) _demoDb = MMDemo.load() || MMDemo.buildSeed(); // refresh keeps your sandbox; new tab starts clean
     sb = MMDemo.createClient(_demoDb);
   } else {
     await loadScripts(SCRIPT_GROUPS.live);
@@ -28,7 +28,7 @@ async function useBackend(mode) {
   }
 }
 
-function resetDemoData() { _demoDb = null; }
+function resetDemoData() { _demoDb = null; if (window.MMDemo) MMDemo.clear(); }
 
 // Returns the mess-scoped client. Live: authenticated with the signed session JWT
 // (cached per token — it used to be re-created on every query). Demo: the mock.

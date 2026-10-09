@@ -139,9 +139,9 @@ const Router = (() => {
         return;
       }
       if (a === "create") {
-        if (MM_ENV.demoOnly) return go("demo", true);
         if (currentUser) return goAfterLogin();
-        await useBackend("live");
+        await useBackend(MM_ENV.demoOnly ? "demo" : "live"); // demo: creates a mess in the sandbox only
+        document.getElementById("create-demo-note").style.display = MM_MODE === "demo" ? "" : "none";
         if (stale()) return;
         showScreen("create-mess-screen"); setTitle("Create a mess"); window.scrollTo(0, 0);
         return;
@@ -204,14 +204,28 @@ const Router = (() => {
 const MMDemo_ROLES = ["manager", "member"];
 
 /* ── Demo controls (sidebar / mobile drawer) ── */
-function switchDemoRole() {
-  const isMgr = currentUser?.role === "manager" || currentUser?.role === "sub_manager";
-  Router.go("demo/" + (isMgr ? "member" : "manager"));
-}
-async function resetDemo() {
-  resetDemoData();
-  await useBackend("demo");
+
+/* Jump between the manager's view and a member's view of the CURRENT mess (no password
+   needed — it's a sandbox). Works for the sample mess and for a mess you created. */
+async function switchDemoRole() {
+  if (MM_MODE !== "demo" || !currentUser) return;
+  const toMember = currentUser.role === "manager" || currentUser.role === "sub_manager";
+  const { data: rows } = await getClient().from("members").select("*, messes(*)")
+    .eq("mess_id", currentMess.id).eq("role", toMember ? "member" : "manager").order("created_at");
+  const row = rows && rows[0];
+  if (!row) {
+    toast(toMember ? "Add a member first (Members page), then switch to their view." : "No manager found in this mess.", "error");
+    return;
+  }
   Router.resetShell();
-  Router.route();
-  toast("Demo data reset to the original sample", "success");
+  saveSession({ name: row.name, username: row.username, role: row.role, memberId: row.id }, row.messes, null);
+  Router.go("app/" + homePage());
+}
+
+async function resetDemo() {
+  resetDemoData();           // discards everything you created in this tab
+  await useBackend("demo");  // rebuild the client on a freshly seeded store
+  Router.resetShell();
+  Router.go("demo/manager"); // back to the sample mess
+  toast("Demo reset to the original sample data", "success");
 }
