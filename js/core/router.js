@@ -7,8 +7,8 @@
      #/login                             #/demo/login
      #/create        real signup         #/demo/create      sandbox signup
      #/app/<page>    the app             #/demo/app/<page>  the app, same code
-     #/admin/<page>  super-admin         #/demo             role picker
-                                         #/demo/manager | #/demo/member   one-click start
+     #/admin/<page>  super-admin         #/demo             one click → sample mess as manager
+                                         (role switching happens inside the app)
 
      #/ · #/features · #/how-it-works · #/engineering   landing page (+ scroll to section)
 
@@ -180,15 +180,11 @@ const Router = (() => {
       if (a === "demo") {
         selectWorld("demo");
 
-        if (!b) {                                           // role picker
-          showScreen("demo-screen"); setTitle("Live demo"); window.scrollTo(0, 0);
-          loadScripts(SCRIPT_GROUPS.demo).catch(() => {}); // warm up while the visitor chooses
-          return;
-        }
-        if (DEMO_ROLES.includes(b)) {                       // one-click start
+        if (!b) return go("demo/manager", true);             // one entry point: the sample mess, as its manager
+        if (DEMO_ROLES.includes(b)) {                       // (#/demo/member stays as a hidden deep link)
           await startDemo(b);
           if (stale()) return;
-          return go("demo/app/" + homePage(), true);
+          return go(takeReturn() || "demo/app/" + homePage(), true); // honours a deep link like #/demo/app/meals
         }
         if (b === "login" || b === "create") {
           if (currentUser) return goAfterLogin();
@@ -200,7 +196,7 @@ const Router = (() => {
           return;
         }
         if (b === "app") {
-          if (!currentUser) { rememberReturn(); return go("demo", true); }
+          if (!currentUser) { rememberReturn(); return go("demo", true); } // deep link → auto-start the sample demo
           return renderApp(c, stale);
         }
         return go("demo", true);

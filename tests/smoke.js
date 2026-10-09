@@ -219,8 +219,11 @@
     await openHash("#/demo/app/meals"); await until(() => W().location.hash === "#/demo/app/meals" && D().querySelector("#main-content .card"), 8000);
     log(W().location.hash === "#/demo/app/meals" && visible("app-shell"), "…while the sandbox session still opens #/demo/app/…");
     W().doLogout(); await until(() => visible("landing-page"));
-    await openHash("#/demo/app/dashboard"); await until(() => W().location.hash === "#/demo");
-    log(W().location.hash === "#/demo", "signed-out #/demo/app/… → sandbox picker");
+    await openHash("#/demo/app/meals"); await until(() => W().location.hash === "#/demo/app/meals" && D().querySelector("#main-content .card"), 10000);
+    log(W().location.hash === "#/demo/app/meals" && !!P().user(), "signed-out #/demo/app/meals deep link → starts the sample demo and opens that page");
+    await openHash("#/demo"); await until(() => W().location.hash === "#/demo/app/dashboard", 8000);
+    log(W().location.hash === "#/demo/app/dashboard", "#/demo is a single entry point (no role picker)");
+    log(!D().querySelector('a[href="#/demo/member"]') && !/view as a member/i.test(D().getElementById("landing-page").innerText), "no 'member demo' button anywhere in the UI");
     await openHash("#/demo/manager"); await until(() => W().location.hash === "#/demo/app/dashboard", 8000);
     await W().resetDemo(); await until(() => /Mirpur/.test(D().getElementById("app-mess-name").textContent), 8000);
     const gone = await P().sb().from("members").select("*").eq("username", "smoke_member").maybeSingle();

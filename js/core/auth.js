@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════
    CORE — Auth: login, create mess, logout, superadmin, boot
    ═══════════════════════════════════════════════ */
-const screens = ["landing-page","demo-screen","create-mess-screen","login-screen","superadmin-screen","app-shell"];
+const screens = ["landing-page","create-mess-screen","login-screen","superadmin-screen","app-shell"];
 function showScreen(id) { screens.forEach(s => { const el = document.getElementById(s); if (el) el.style.display = s === id ? "" : "none"; }); }
 // Navigation helpers used by inline handlers — they just change the route.
 function showLanding()    { Router.go(""); }

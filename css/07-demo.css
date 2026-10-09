@@ -35,7 +35,7 @@ body.is-demo #sidebar-change-pw,body.is-demo [data-page="change-pw"]{display:non
 .demo-note code,.demo-login code{background:var(--bg4);padding:1px 6px;border-radius:5px;font-size:11px;color:var(--text);}
 .demo-login{margin-top:18px;padding-top:16px;border-top:1px solid var(--border);}
 .demo-login-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-align:center;}
-.demo-login-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.demo-login-btns{display:grid;grid-template-columns:1fr;gap:8px;}
 .demo-login-btns .btn{justify-content:center;}
 .demo-creds{font-size:11px;color:var(--text3);text-align:center;margin-top:10px;line-height:1.7;}
 

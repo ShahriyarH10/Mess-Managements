@@ -4,16 +4,41 @@ A production-ready mess management web app for shared housing (mess/hostel) in B
 
 ---
 
+## 🖼️ Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/01-landing.png" alt="Landing page with a single 'Try the live demo' call to action"/><br/><sub><b>Landing</b> — one call to action: the live demo</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-dashboard.png" alt="Manager dashboard: totals, meal rate, rent and utility collection, meal heat-map"/><br/><sub><b>Manager dashboard</b> — meal rate, bazar, rent &amp; utility collection, activity heat-map</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/03-meal-entry.png" alt="Daily meal entry grid"/><br/><sub><b>Meal entry</b> — day/night meals per member, on/off absences</sub></td>
+    <td><img src="docs/screenshots/04-collect-payment.png" alt="Collect payment page with automatic allocation"/><br/><sub><b>Collect payment</b> — cash is split automatically: previous due → rent → utility → meal</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/05-monthly-settlement.png" alt="Monthly settlement report with per-member breakdown"/><br/><sub><b>Monthly settlement</b> — prepaid vs. postpaid, credits, carried-forward dues</sub></td>
+    <td><img src="docs/screenshots/06-meal-rate-chart.png" alt="Meal rate chart"/><br/><sub><b>Meal-rate chart</b> — trend across months</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/07-member-mobile.png" width="260" alt="Member dashboard on a phone"/><br/><sub><b>Member view (mobile)</b> — what I owe, announcements, bottom navigation</sub></td>
+    <td><img src="docs/screenshots/08-light-mode.png" alt="Dashboard in light mode"/><br/><sub><b>Light mode</b> — themes via CSS variables</sub></td>
+  </tr>
+</table>
+
+> Screenshots are taken from the built-in sandbox demo (fictional data).
+
+---
+
 ## 🎯 One site, two separate worlds
 
 | | **Real app** (Supabase) | **Sandbox demo** (in-memory) |
 |---|---|---|
-| Sign in | `#/login` | `#/demo/login` — or one click: `#/demo/manager`, `#/demo/member` |
+| Sign in | `#/login` | `#/demo/login` — or one click: `#/demo` |
 | Create a mess | `#/create` — a real mess | `#/demo/create` — a sandbox mess |
 | The app | `#/app/<page>` | `#/demo/app/<page>` |
 | Database | yes | **never** |
 | Session | `localStorage`, 30 days | `sessionStorage`, until the tab closes |
-| Picker / landing | `#/` | `#/demo` |
+| Landing | `#/` | `#/demo` → straight into the sample mess |
 
 The two worlds share the page code but nothing else: separate URL namespaces, separate sessions, separate backend clients. A sandbox session can't open `#/app/…`, a real session can't open `#/demo/app/…`, and signing out of one leaves the other untouched.
 
@@ -36,7 +61,7 @@ Hash-based, so it works on any static host without rewrite rules:
 |---|---|
 | `#/` · `#/features` · `#/how-it-works` · `#/engineering` | Landing page (+ scroll to section) |
 | `#/login` · `#/create` · `#/app/<page>` · `#/admin/<page>` | Real world. App pages need a session, are guarded by role, remember where you were heading, and support back/forward |
-| `#/demo` · `#/demo/manager` · `#/demo/member` · `#/demo/login` · `#/demo/create` · `#/demo/app/<page>` | Sandbox world (same guards, own session) |
+| `#/demo` · `#/demo/login` · `#/demo/create` · `#/demo/app/<page>` | Sandbox world (same guards, own session). `#/demo` opens the sample mess as its manager; switch to a member's view from the sidebar. A deep link like `#/demo/app/meals` auto-starts the demo |
 
 ### Security posture
 
@@ -55,8 +80,218 @@ The landing page needs ~32 KB of gzipped JS (11 small deferred scripts) plus ~13
 
 ---
 
+## 🧱 System design
+
+### 1. Architecture
+
+A static, build-free single-page app. The same page modules run against **one of two backends**, chosen by the URL namespace: Supabase for the real app, or an in-memory client for the sandbox demo.
+
+```mermaid
+flowchart LR
+  Host["Static host<br/>(Vercel / Netlify / Pages)<br/>CSP + security headers"] --> Browser
+
+  subgraph Browser["Browser — vanilla JS SPA, no build step"]
+    direction TB
+    Router["Hash router + guards<br/>router.js"]
+    Loader["On-demand loader<br/>loader.js"]
+    Events["CSP-safe event dispatcher<br/>events.js"]
+    Pages["Page modules<br/>manager/ · member/"]
+    Engine["Settlement engine<br/>pure functions in helpers.js"]
+    Data["Data layer<br/>db.js · db-ext.js"]
+    Router --> Loader --> Pages
+    Events -.-> Pages
+    Pages --> Engine
+    Pages --> Data
+  end
+
+  Data -->|"world = real<br/>#/app/…"| SB[("Supabase<br/>Postgres + RLS")]
+  Data -->|"world = sandbox<br/>#/demo/app/…"| Mock["In-memory PostgREST-style client<br/>seeded sample mess<br/>(sessionStorage mirror)"]
+  Browser -->|"sign-in"| EF1["Edge Function<br/>sign-session-jwt"]
+  SB -->|"INSERT trigger → pg_net"| EF2["Edge Function<br/>send-push"]
+  EF2 --> Expo["Expo Push → mobile app"]
+```
+
+**Key idea:** every page talks to the database through `getClient().from(table)…`. Swapping that one function between the Supabase SDK and `js/demo/mock-client.js` is what lets the *unchanged* app code power the sandbox, so the demo can never drift from the real product.
+
+### 2. Routing &amp; access control
+
+```mermaid
+flowchart TD
+  A["hashchange"] --> B{"first URL segment"}
+  B -->|"empty / landing section"| L["Landing page"]
+  B -->|"demo"| D1["select SANDBOX world<br/>own session · mock backend"]
+  B -->|"login · create · app · admin"| R1["select REAL world<br/>own session · Supabase client"]
+
+  D1 --> D2{"#/demo/app/… ?"}
+  D2 -->|"no session"| D3["auto-start the sample mess<br/>and return to the deep link"]
+  D2 -->|"session"| G
+
+  R1 --> R2{"session?"}
+  R2 -->|"no"| R3["remember target → #/login"]
+  R2 -->|"yes"| G
+
+  G["load page modules for the role<br/>(manager bundle or member bundle)"] --> H["verify the member still exists<br/>refresh role · build shell once"]
+  H --> I{"guardPage(role, page)"}
+  I -->|"not allowed"| J["redirect to the role's home page"]
+  I -->|"allowed"| K["render page"]
+```
+
+The two worlds share page code but nothing else: separate URL namespaces, session storage (`localStorage` vs `sessionStorage`), backend clients and sign-out behaviour.
+
+### 3. Sign-in &amp; data access (real world)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant SPA as Browser (SPA)
+  participant DB as Supabase REST (anon key)
+  participant EF as Edge Function<br/>sign-session-jwt
+
+  U->>SPA: username + password
+  SPA->>DB: SELECT member by username
+  DB-->>SPA: member row (PBKDF2 salt + hash)
+  SPA->>SPA: re-derive hash with stored salt, compare
+  SPA->>EF: POST memberId, messId, role
+  EF-->>SPA: HS256 JWT (mess_id claim, 30 days)
+  SPA->>DB: queries with Authorization: Bearer JWT
+  Note over DB: RLS policies read mess_id from the JWT<br/>so every query is scoped to one mess
+```
+
+### 4. Monthly settlement (domain core)
+
+All screens (dashboard, profiles, collect-payment, monthly log, member view) call the same pure functions — `calcSettlementTotals`, `calcMemberSettlement`, `calcPrevDueForMember` — so numbers can't disagree between pages.
+
+```mermaid
+flowchart LR
+  subgraph S["Source month M−1"]
+    A["Meals per member"] --> C["Meal rate = Σ bazar ÷ Σ meals"]
+    B["Bazar spent per member"] --> C
+    A --> D["Meal cost = member meals × rate"]
+    C --> D
+  end
+  subgraph M["Settlement month M"]
+    E["Room rent"]
+    F["Prepaid utilities<br/>(elec + gas + wifi) ÷ members"]
+  end
+  G["Postpaid utilities of M−1<br/>(khala + other) ÷ members"]
+  D --> H["Total charges"]
+  E --> H
+  F --> H
+  G --> H
+  H --> I["Net payable = charges − bazar spent<br/>− rent / utility / meal payments − credits"]
+  P["Unpaid balance carried<br/>from earlier months"] --> K
+  I --> K["Amount to collect (or return)"]
+```
+
+### 5. Data model
+
+```mermaid
+erDiagram
+  messes ||--o{ members : has
+  messes ||--o{ meals : records
+  messes ||--o{ bazar : records
+  messes ||--o{ rent : bills
+  messes ||--o{ utility_payments : bills
+  messes ||--o{ announcements : posts
+  messes ||--o{ chores : assigns
+  messes ||--o{ broadcasts : sends
+  messes ||--o| mess_rules : has
+  messes ||--o{ audit_log : logs
+  members ||--o{ notifications : raises
+  members ||--o{ meal_attendance : toggles
+  members ||--o{ push_tokens : registers
+
+  messes {
+    uuid id PK
+    text name
+    text location
+  }
+  members {
+    uuid id PK
+    uuid mess_id FK
+    text username "unique per mess"
+    text password "PBKDF2-SHA-256"
+    text role "manager, sub_manager, member"
+    numeric rent
+  }
+  meals {
+    uuid mess_id FK
+    date date "unique per mess + date"
+    jsonb meals "name_day / name_night"
+  }
+  bazar {
+    uuid mess_id FK
+    date date
+    jsonb bazar "name to amount"
+  }
+  rent {
+    uuid mess_id FK
+    text month_key "YYYY-MM"
+    jsonb entries "rent, paid, status"
+  }
+  utility_payments {
+    uuid mess_id FK
+    text month_key "YYYY-MM"
+    jsonb bills "elec, gas, wifi, khala, other"
+    jsonb payments "per member"
+  }
+```
+
+Monthly records are JSONB documents keyed by `(mess_id, month_key)` / `(mess_id, date)`: one round-trip loads a whole month, and the settlement engine can run client-side without joins.
+
+### 6. Push notifications
+
+```mermaid
+sequenceDiagram
+  participant App as Web / mobile app
+  participant DB as Postgres
+  participant EF as Edge Function send-push
+  participant X as Expo Push service
+
+  App->>DB: INSERT into notifications / broadcasts
+  DB->>EF: trigger → pg_net HTTP POST
+  EF->>DB: members of the mess (minus the author) + their push_tokens
+  EF->>X: batched Expo push messages
+  X-->>App: notification on every other member's phone
+```
+
+### 7. Sandbox demo internals
+
+| Piece | How it works |
+|---|---|
+| `js/demo/mock-client.js` | Implements the slice of the PostgREST builder the app uses: `select / insert / update / upsert / delete`, `eq neq gt gte lt lte in`, `order range limit`, `single / maybeSingle`, `count + head`, the `messes(*)` embed, unique constraints and cascade deletes |
+| `js/demo/seed.js` | Deterministic seeded generator (PRNG), dates relative to *today* so data always looks current: 6 members, ~3 months of meals/bazar, rent, bills, payments, mess-fund log, announcements, requests, audit trail |
+| Persistence | Debounced mirror to `sessionStorage`: refresh keeps your sandbox, closing the tab discards it |
+| Isolation | URL namespace `#/demo/…`, separate session key, `connect-src` never used by the sandbox |
+| Tests | `tests/smoke.html` drives the real app in an iframe: guards, every page for both roles, mutations, CSP violations, create-mess → add-member → member-view journey, world isolation |
+
+### 8. Design decisions &amp; trade-offs
+
+| Decision | Why | Trade-off |
+|---|---|---|
+| Vanilla JS, no framework or build step | Zero toolchain, deploys anywhere, tiny first load | No component model; HTML is built with template strings (all dynamic values are escaped) |
+| Hash routing | Works on any static host and from `file://` without rewrite rules | URLs contain `#/` |
+| Lazy script groups instead of a bundler | Landing needs ~32 KB gzipped JS; page modules load per role | More requests than one bundle (HTTP/2 + prefetch hide it) |
+| Strict CSP + whitelist event dispatcher | Blocks injected inline script without rewriting ~200 legacy `onclick` attributes | A small interpreter to maintain; long-term goal is `addEventListener` |
+| JSONB month documents | One query per month; settlement logic stays in testable client functions | No relational constraints inside the JSON |
+| Mock client mirrors PostgREST | One code path for real and sandbox | Mock must be kept in step with any new query operators the app starts to use |
+
+### 9. Known limitations &amp; roadmap
+
+- **Move credential verification server-side.** Today the browser compares the password hash and then asks `sign-session-jwt` for a token; the function should verify credentials itself (service role) or the app should adopt Supabase Auth.
+- **Tighten RLS.** Apply `supabase/rls-policies.sql` everywhere and remove the permissive `allow_anon_all` policies from the bootstrap schema.
+- **Unit tests for the settlement functions** (they are pure, so they are easy to cover); the browser smoke test currently covers behaviour end to end.
+- **Optional build step** (minify + content-hashed filenames) for immutable caching of JS/CSS.
+- **Replace inline handler attributes** with `addEventListener` and drop the dispatcher.
+
+---
+
 ## 📋 Table of Contents
 
+- [Screenshots](#️-screenshots)
+- [One site, two worlds](#-one-site-two-separate-worlds)
+- [System design](#-system-design)
 - [Quick Setup](#-quick-setup)
 - [File Structure](#-file-structure)
 - [User Roles](#-user-roles)

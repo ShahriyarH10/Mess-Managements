@@ -97,12 +97,10 @@
     <h1 class="hero-title">Manage your mess<br/><em>the smart way</em></h1>
     <p class="hero-sub">Track meals, bazar, rent & utilities — all in one place. Give every member their own dashboard. Run your shared home like a pro.</p>
     <div class="hero-actions">
-      <a class="btn btn-primary btn-lg" href="#/demo/manager">
+      <a class="btn btn-primary btn-lg" href="#/demo">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg>
         Try the live demo
       </a>
-      <a class="btn btn-ghost btn-lg" href="#/demo/member">View as a member</a>
-      <a class="btn btn-ghost btn-lg" href="#/create">Create your own mess</a>
     </div>
     <div class="hero-stats">
       <div class="hero-stat"><span class="hero-stat-num">25+</span><span class="hero-stat-label">Screens</span></div>
@@ -277,34 +275,6 @@
 </div>
 
 
-<!-- ═══════════ DEMO PICKER ═══════════ -->
-<div id="demo-screen" style="display:none">
-  <div class="auth-screen">
-    <div class="auth-bg"></div>
-    <div class="auth-card demo-card">
-      <a class="auth-back" href="#/">← Back</a>
-      <div class="auth-logo"><div class="land-logo-icon">M</div><span>MessManager</span></div>
-      <div class="auth-title">Explore the live demo</div>
-      <div class="auth-sub">A sample mess in Mirpur, Dhaka with three months of meals, bazar, rent and bills. Pick a role:</div>
-      <div class="demo-grid">
-        <a class="demo-role" href="#/demo/manager">
-          <div class="demo-role-title">Manager</div>
-          <div class="demo-role-blurb">Run the whole mess.</div>
-          <ul><li>Enter meals &amp; bazar, set utility bills</li><li>Collect payments, print receipts</li><li>Monthly settlement, meal-rate chart, audit log</li></ul>
-          <div class="demo-role-cta">Enter as Manager →</div>
-        </a>
-        <a class="demo-role" href="#/demo/member">
-          <div class="demo-role-title">Member</div>
-          <div class="demo-role-blurb">See what a roommate sees.</div>
-          <ul><li>Personal dashboard &amp; "what I owe"</li><li>Meal on/off requests, bazar log</li><li>Announcements, chores, house rules</li></ul>
-          <div class="demo-role-cta">Enter as Member →</div>
-        </a>
-      </div>
-      <div class="demo-note">Everything runs in your browser — nothing is sent to a server. Changes last until you close the tab.<br/>Prefer to start from scratch? <a href="#/demo/create">Create your own sandbox mess</a> and add members yourself.</div>
-    </div>
-  </div>
-</div>
-
 <!-- ═══════════ CREATE MESS SCREEN ═══════════ -->
 <div id="create-mess-screen" style="display:none">
   <div class="auth-screen">
@@ -356,12 +326,11 @@
       <div class="auth-hint in-real" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
       <div class="auth-hint in-demo">Want a blank sandbox? <a href="#/demo/create">Create a sandbox mess</a></div>
       <div class="demo-login in-demo">
-        <div class="demo-login-title">Reviewing this project? Skip typing:</div>
+        <div class="demo-login-title">Skip typing:</div>
         <div class="demo-login-btns">
-          <a class="btn btn-primary" href="#/demo/manager">Manager demo</a>
-          <a class="btn btn-ghost" href="#/demo/member">Member demo</a>
+          <a class="btn btn-primary" href="#/demo">Open the sample mess</a>
         </div>
-        <div class="demo-creds">Or type the sandbox login: <code>demo_manager</code> / <code>demo_member</code><br/>password <code>Demo@1234</code></div>
+        <div class="demo-creds">Or sign in as <code>demo_manager</code> · password <code>Demo@1234</code></div>
       </div>
     </div>
     <button class="auth-theme-btn" onclick="toggleTheme()">

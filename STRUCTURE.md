@@ -9,6 +9,7 @@ mess-manager/
 ├── assets/                       ← favicon, self-hosted fonts
 ├── vendor/supabase.min.js        ← vendored SDK, loaded only in live builds
 ├── tests/                        ← browser smoke test (smoke.html + smoke.js)
+├── docs/screenshots/             ← images used by the README
 │
 ├── css/
 │   ├── 01-variables.css          ← CSS tokens, dark/light theme, reset
