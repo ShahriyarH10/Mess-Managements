@@ -9,5 +9,5 @@
                      (Also allow your Supabase origin in the CSP — see README.)
    ═══════════════════════════════════════════════ */
 window.MM_ENV = Object.freeze({
-  demoOnly: true,
+  demoOnly: false, // LIVE branch: real Supabase sign-in enabled (the sandbox stays at #/demo)
 });
