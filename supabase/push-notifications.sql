@@ -1,7 +1,6 @@
 -- ============================================================
---  Push notifications — schema + trigger
---  Run against the SHARED Supabase project (same one the app + web app use).
---  Supabase Dashboard → SQL Editor → paste → Run.
+--  Push notifications — schema + delivery trigger
+--  Run against the SHARED Supabase project. Dashboard → SQL Editor → Run.
 -- ============================================================
 
 create extension if not exists "uuid-ossp";
@@ -27,48 +26,47 @@ create policy "allow_anon_all" on push_tokens for all using (true) with check (t
 
 
 -- ============================================================
---  Delivery trigger  (OPTION B — alternative to a Dashboard Webhook)
+--  Delivery trigger — calls the send-push edge function on every
+--  INSERT into notifications / broadcasts.
 --
---  If you'd rather wire delivery in the Dashboard, skip everything below and
---  create two Database Webhooks instead (see PUSH_SETUP.md step 6).
+--  Use this INSTEAD of Dashboard "Database Webhooks" (which have been flaky
+--  here). It is self-contained: nothing else to configure.
 --
---  To use this trigger, set these once (SQL editor), using YOUR project ref
---  and the same secret you pass to `supabase secrets set PUSH_HOOK_SECRET`:
---
---    alter database postgres
---      set app.send_push_url    = 'https://<PROJECT-REF>.functions.supabase.co/send-push';
---    alter database postgres
---      set app.send_push_secret = '<PUSH_HOOK_SECRET value>';
+--  Needs the pg_net extension. If `create extension pg_net` errors, enable it
+--  first: Dashboard → Database → Extensions → search "pg_net" → toggle on.
 -- ============================================================
 
 create extension if not exists pg_net;
 
 create or replace function public.tg_send_push() returns trigger
-language plpgsql security definer as $$
-declare
-  fn_url text := current_setting('app.send_push_url', true);
-  secret text := current_setting('app.send_push_secret', true);
+language plpgsql
+security definer
+as $$
 begin
-  if fn_url is null or fn_url = '' then
-    return new;                       -- delivery not configured yet: no-op
-  end if;
   perform net.http_post(
-    url     := fn_url,
+    url     := 'https://lrzotklutnyzcadutgwf.supabase.co/functions/v1/send-push',
     headers := jsonb_build_object(
-                 'Content-Type', 'application/json',
-                 'x-push-secret', coalesce(secret, '')
-               ),
-    body    := jsonb_build_object('table', tg_table_name, 'record', to_jsonb(new))
+      'Content-Type',  'application/json',
+      'Authorization', 'Bearer sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb'
+    ),
+    body    := jsonb_build_object(
+      'type',   'INSERT',
+      'table',  tg_table_name,
+      'record', to_jsonb(new)
+    )
   );
   return new;
 end $$;
 
-drop trigger if exists trg_send_push_broadcasts on broadcasts;
-create trigger trg_send_push_broadcasts
-  after insert on broadcasts
+drop trigger if exists trg_send_push_notifications on public.notifications;
+create trigger trg_send_push_notifications
+  after insert on public.notifications
   for each row execute function public.tg_send_push();
 
-drop trigger if exists trg_send_push_notifications on notifications;
-create trigger trg_send_push_notifications
-  after insert on notifications
+drop trigger if exists trg_send_push_broadcasts on public.broadcasts;
+create trigger trg_send_push_broadcasts
+  after insert on public.broadcasts
   for each row execute function public.tg_send_push();
+
+-- ---- verify it's wired ----
+-- select tgname, tgrelid::regclass from pg_trigger where tgname like 'trg_send_push%';
