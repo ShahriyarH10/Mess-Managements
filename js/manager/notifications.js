@@ -44,6 +44,11 @@ function notifCard(n) {
     utility_update: { icon: "⚡", label: "updated utility payment" },
     rent_update:    { icon: "🏠", label: "updated room rent payment" },
 
+    // Give Payment flow (member request → manager confirm / reject)
+    payment_request:   { icon: "💵", label: "wants to give a payment — confirm in Collect" },
+    payment_confirmed: { icon: "✅", label: "confirmed a member payment" },
+    payment_rejected:  { icon: "✖️", label: "rejected a member payment" },
+
     // old rows support
     meal_request:   { icon: "🍽️", label: "meal entry" },
     bazar_request:  { icon: "🛒", label: "bazar entry" },
@@ -123,6 +128,20 @@ function notifCard(n) {
       </span>`;
   }
 
+  else if (n.type === "payment_request" || n.type === "payment_confirmed" || n.type === "payment_rejected") {
+    const tag = n.type === "payment_request" ? "Pending" : n.type === "payment_confirmed" ? "Confirmed" : "Rejected";
+    dataHtml = `
+      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">💵 ${tag}</span>
+
+      <span style="font-size:13px;font-weight:600;color:var(--green)">
+        ${fmtTk(data.amount || 0)}
+      </span>
+
+      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+        ${data.monthName || ""} ${data.year || ""}
+      </span>`;
+  }
+
   else if (n.type === "bill_payment") {
     dataHtml = `
       <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
@@ -164,11 +183,18 @@ function notifCard(n) {
         }
       </div>
 
-      ${
-        isNew
-          ? `<button class="btn btn-ghost btn-sm" onclick="markNotificationSeen('${n.id}')">Mark seen</button>`
-          : ""
-      }
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${
+          n.type === "payment_request"
+            ? `<button class="btn btn-primary btn-sm" onclick="navigate('collect')">Review in Collect</button>`
+            : ""
+        }
+        ${
+          isNew
+            ? `<button class="btn btn-ghost btn-sm" onclick="markNotificationSeen('${n.id}')">Mark seen</button>`
+            : ""
+        }
+      </div>
     </div>
   </div>`;
 }

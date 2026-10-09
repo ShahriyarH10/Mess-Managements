@@ -37,6 +37,7 @@
     announcements: () => ({ pinned: false }),
     chores:        () => ({ assignee: "", frequency: "daily", status: "pending" }),
     notifications: () => ({ status: "pending", note: "" }),
+    member_payments: () => ({ status: "pending", split: null, still_due: null, confirmed_by: null, confirmed_at: null }),
     broadcasts:    () => ({ priority: "normal", pinned: false }),
     meals:         () => ({ meals: {} }),
     bazar:         () => ({ bazar: {}, utility: {} }),
@@ -150,6 +151,8 @@
       if (keys && rows.some(x => keys.every(k => x[k] === rec[k]))) {
         return { error: { message: `duplicate key value violates unique constraint on ${this.table}`, code: "23505" } };
       }
+      // `receipt_no bigint generated always as identity`
+      if (this.table === "member_payments") rec.receipt_no = rows.reduce((mx, x) => Math.max(mx, x.receipt_no || 0), 0) + 1;
       rows.push(rec);
       return { rec };
     }
@@ -212,6 +215,7 @@
           } else if (this.table === "members") {
             this.db.meal_attendance = (this.db.meal_attendance || []).filter(x => x.member_id !== r.id);
             this.db.notifications   = (this.db.notifications   || []).filter(x => x.from_id   !== r.id);
+            this.db.member_payments = (this.db.member_payments || []).filter(x => x.member_id !== r.id);
           }
         });
         this.onChange && this.onChange();

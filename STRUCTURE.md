@@ -51,13 +51,15 @@ mess-manager/
     │   ├── log.js                ← Room rent entry + Monthly settlement log (prepaid/postpaid split)
     │   ├── announcements.js      ← Post/delete announcements, mark-read badge system
     │   ├── notifications.js      ← View/approve/reject member requests (meal, bazar, bill payment)
+    │   ├── payment-requests.js   ← Confirm/reject members' Give Payment requests (listed on the Collect page)
     │   └── members.js            ← Add/edit/delete members, transfer role, settings page
     │
     └── member/                   ← Only loaded/used when role === "member"
         ├── dashboard.js          ← My Dashboard: settlement stats, today's meals, What I Owe
         │                            My Profile: stats, history, mess share, recent months
-        └── pages.js              ← My Meals (request), My Bazar (request), My Payments,
-                                     Mess Overview, submit helpers (submitMealRequest etc.)
+        ├── pages.js              ← My Meals (request), My Bazar (request), My Payments,
+        │                            Mess Overview, submit helpers (submitMealRequest etc.)
+        └── give-payment.js       ← Give Payment page + receipt builders/modal (also used by the manager)
 ```
 
 ## Script load order in index.html
@@ -108,6 +110,7 @@ mess-manager/
 | `my-meals`      | renderMyMeals         | member/pages.js             |
 | `my-bazar`      | renderMyBazar         | member/pages.js             |
 | `my-payments`   | renderMyPayments      | member/pages.js             |
+| `give-payment`  | renderGivePayment     | member/give-payment.js      |
 | `mess-overview` | renderMessOverview    | member/pages.js             |
 | `my-announce`   | renderAnnouncements   | manager/announcements.js    |
 | `my-chores`     | renderChores          | manager/announcements.js    |

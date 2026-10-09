@@ -312,6 +312,7 @@ sequenceDiagram
 1. Go to [supabase.com](https://supabase.com) and create a free project
 2. Open **SQL Editor** → paste and run `database.sql`
 3. For v7 features (attendance, broadcasts, mess rules, audit log) also run `supabase/migration-v7-features.sql`
+   — and `supabase/member-payments.sql` for **Give Payment** (member payment requests the manager confirms; the mobile app shares this table, so skip it if you already ran it)
 4. Go to **Project Settings → API** and copy your **Project URL** and **Anon/Public key**
 
 ### Step 2 — Configure
@@ -367,6 +368,7 @@ MessManager-v6/
 │   │   ├── bazar.js        # Daily bazar entry per member
 │   │   ├── utility.js      # Monthly utility bills (elec, gas, wifi, khala, other)
 │   │   ├── collect.js      # Collect payment from member + print payment receipt
+│   │   ├── payment-requests.js # Confirm / reject members' Give Payment requests (inside Collect)
 │   │   ├── log.js          # Monthly settlement report + print PDF layout
 │   │   ├── announcements.js # Post, pin, delete mess-wide notices
 │   │   ├── notifications.js # Approve/reject member requests (meal, bazar, bill)
@@ -377,10 +379,12 @@ MessManager-v6/
 │   │
 │   └── member/
 │       ├── dashboard.js    # Personal dashboard: net payable, heatmap, broadcasts, mess snapshot
-│       └── pages.js        # Meal log (with absence range picker), bazar log, payments, profile
+│       ├── pages.js        # Meal log (with absence range picker), bazar log, payments, profile
+│       └── give-payment.js # Give Payment: member sends a payment request; shared receipt builders
 │
 └── supabase/
     ├── migration-v7-features.sql           # New tables: audit_log, meal_attendance, mess_rules, broadcasts
+    ├── member-payments.sql                 # member_payments table for Give Payment requests
     ├── rls-policies.sql                    # Row Level Security policies (optional — see Security section)
     └── functions/
         └── sign-session-jwt/
@@ -539,6 +543,12 @@ The route guards are a UX layer. In live mode real enforcement is Supabase RLS (
 | `meal_attendance` | Member absence records — `member_id`, `date`, `day_meal`, `night_meal` |
 | `mess_rules` | Pinned info — `wifi_pass`, `bank_info`, `rules_text`, `contacts` |
 | `broadcasts` | Urgent banners — `message`, `priority`, `author`, `expires_at` |
+
+### Give Payment table (from `supabase/member-payments.sql`)
+
+| Table | Purpose |
+|---|---|
+| `member_payments` | A member's payment request — `member_id`, `month_key`, `amount`, `status` (pending/confirmed/rejected), `split` (JSONB), `still_due`, `receipt_no`, `confirmed_by` |
 
 ---
 

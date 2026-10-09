@@ -69,6 +69,9 @@ async function renderCollect(el) {
       </div>
     </div>
 
+    <!-- Member "Give Payment" requests waiting for confirmation -->
+    <div id="cp-pending-wrap"></div>
+
     <!-- Member payment cards -->
     <div id="cp-table-wrap">
       <div class="empty" style="padding:32px;text-align:center">
@@ -236,6 +239,7 @@ async function loadCollectMonth() {
   _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits };
   buildCollectTable();
   buildReturnTable();
+  await loadPendingPayments();
 }
 
 function buildCollectTable() {
@@ -888,40 +892,8 @@ function printChangeReceipt() {
 /* Live preview + save for the "Mess owes" drawdown now live in
    saveReturnRow / _applyCreditPortion above (merged Return Amount section). */
 
-/* Priority-ordered split: Rent → Util → Meal.
-   Fills each bucket fully before moving to the next.
-   Excess (amount > totalRem) → change.
-   Negative mealRem (bazar surplus) is clamped to 0 —
-   the surplus is already baked into netPayable so the
-   member simply pays less. */
-/* Priority order: prevDue (old debt) → Rent → Util → Meal */
-function computeSplit3(amount, mealRem, utilRem, rentRem, prevDue = 0) {
-  amount   = Math.max(0, round2(amount  || 0));
-  const m  = Math.max(0, round2(mealRem || 0));
-  const u  = Math.max(0, round2(utilRem || 0));
-  const r  = Math.max(0, round2(rentRem || 0));
-  const pd = Math.max(0, round2(prevDue || 0));
-  const totalRem = round2(m + u + r + pd);
-
-  if (amount <= 0)        return { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: 0 };
-  if (totalRem <= 0)      return { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: amount };
-  if (amount >= totalRem) return { allocMeal: m, allocUtil: u, allocRent: r, allocPrevDue: pd, change: round2(amount - totalRem) };
-
-  let remaining = amount;
-
-  const allocPrevDue = round2(Math.min(remaining, pd));
-  remaining = round2(remaining - allocPrevDue);
-
-  const allocRent = round2(Math.min(remaining, r));
-  remaining = round2(remaining - allocRent);
-
-  const allocUtil = round2(Math.min(remaining, u));
-  remaining = round2(remaining - allocUtil);
-
-  const allocMeal = round2(Math.min(remaining, m));
-
-  return { allocMeal, allocUtil, allocRent, allocPrevDue, change: 0 };
-}
+/* computeSplit3 (the Prev.Due → Rent → Util → Meal waterfall) lives in core/helpers.js —
+   members' Give Payment page uses it too. */
 
 function onCollectAmtInput(memberId) {
   if (!_collectCtx) return;

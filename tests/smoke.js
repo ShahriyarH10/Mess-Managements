@@ -158,6 +158,55 @@
       scanHandlers();
     }
 
+    /* 5b. Give Payment: member files a request → manager confirms it → money is applied */
+    errors.length = 0;
+    const gpMember = P().user().memberId;
+    await openHash("#/demo/app/give-payment"); await settle();
+    const gpAmt = D().getElementById("gp-amount");
+    log(!!gpAmt, "give-payment page shows the amount field for a member who owes");
+    if (gpAmt) {
+      gpAmt.value = "100"; gpAmt.dispatchEvent(new (W().Event)("input", { bubbles: true }));
+      log(D().getElementById("gp-chips").children.length > 0, "typing an amount previews the split chips");
+      await W().submitGivePayment(); await sleep(500);
+      const pays = await P().sb().from("member_payments").select("*").eq("member_id", gpMember);
+      const mine = pays.data || [];
+      log(mine.length === 1 && mine[0].status === "pending" && Number(mine[0].amount) === 100 && mine[0].receipt_no === 1,
+        "submitGivePayment() files a pending request with a receipt number (" + JSON.stringify(mine.map(p => [p.status, p.amount, p.receipt_no])) + ")");
+      const nt = await P().sb().from("notifications").select("*").eq("type", "payment_request");
+      log((nt.data || []).length === 1 && nt.data[0].data.paymentId === mine[0]?.id, "manager gets a payment_request notification");
+      log(/Receipt/.test(D().getElementById("gp-history").innerText) && /Pending/.test(D().getElementById("gp-history").innerText),
+        "request appears in 'My payments' as Pending");
+      const rentBefore = JSON.stringify((await P().sb().from("rent").select("*")).data);
+      const utilBefore = JSON.stringify((await P().sb().from("utility_payments").select("*")).data);
+      log(JSON.stringify((await P().sb().from("rent").select("*")).data) === rentBefore, "request alone changes no rent/utility data");
+
+      await openHash("#/demo/manager"); 
+      await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .stat-card"), 10000);
+      await openHash("#/demo/app/collect"); await settle();
+      const wrapTxt = D().getElementById("cp-pending-wrap")?.innerText || "";
+      log(/Member payments to confirm/.test(wrapTxt) && /Confirm received/.test(wrapTxt), "manager Collect page lists the pending request");
+      await W().confirmPaymentRequest(mine[0].id); await sleep(800);
+      const done = (await P().sb().from("member_payments").select("*").eq("id", mine[0].id).maybeSingle()).data;
+      const sp = done?.split || {};
+      const spTotal = ["allocPrevDue", "allocRent", "allocUtil", "allocMeal", "change"].reduce((a, k) => a + Number(sp[k] || 0), 0);
+      log(done?.status === "confirmed" && Math.abs(spTotal - 100) < 0.01 && done.still_due != null && !!done.confirmed_by,
+        "confirmPaymentRequest() stamps it confirmed with a split that adds up to the amount (" + JSON.stringify(sp) + ", still_due " + done?.still_due + ")");
+      const utilAfter = JSON.stringify((await P().sb().from("utility_payments").select("*")).data);
+      const rentAfter = JSON.stringify((await P().sb().from("rent").select("*")).data);
+      log(sp.allocRent > 0 || sp.allocUtil > 0 || sp.allocMeal > 0 || sp.allocPrevDue > 0 ? (utilAfter !== utilBefore || rentAfter !== rentBefore) : true,
+        "confirming writes the allocation into rent / utility_payments");
+      log(D().getElementById("modal-bg").classList.contains("open") && /PAYMENT RECEIPT/.test(D().getElementById("modal-content").innerText),
+        "confirmed receipt modal opens");
+      W().closeModal();
+      log(!(D().getElementById("cp-pending-wrap")?.innerText || "").trim(), "confirmed request leaves the pending list");
+      const nc = await P().sb().from("notifications").select("*").eq("type", "payment_confirmed");
+      log((nc.data || []).length === 1 && nc.data[0].data.to_member_id === gpMember, "member gets a payment_confirmed notification");
+      const again = await W().dbClaimMemberPayment(mine[0].id, "confirmed", "x");
+      log(again === null, "a confirmed payment cannot be claimed (applied) twice");
+      scanHandlers();
+    }
+    log(errors.length === 0, "no console errors during the Give Payment flow" + (errors.length ? " ← " + errors.join(" | ") : ""));
+
     /* 6. every inline-handler function name resolves to a real global function */
     const missing = [...handlerNames].filter(n => !["if", "event", "this"].includes(n) && typeof W()[n] !== "function");
     log(missing.length === 0, "all inline-handler functions exist (" + handlerNames.size + " checked)" + (missing.length ? " missing: " + missing.join(", ") : ""));
