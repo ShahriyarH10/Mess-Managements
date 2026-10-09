@@ -1,32 +1,67 @@
 /* ═══════════════════════════════════════════════
-   CORE — Config: Supabase client, global state, constants
+   CORE — Config: backend selection, global state, constants
    ═══════════════════════════════════════════════ */
 /* ═══════════════════════════════════════════
-   SUPABASE
+   BACKEND
+   "demo" → in-memory mock (js/demo/*), no network, resets on reload
+   "live" → Supabase (only reachable when MM_ENV.demoOnly === false)
 ═══════════════════════════════════════════ */
 const SUPABASE_URL = "https://lrzotklutnyzcadutgwf.supabase.co";
-const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb";
+const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb"; // publishable (anon) key — safe to ship; protect data with RLS
 
-// Anon client — used ONLY during login and mess creation (before JWT exists)
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let MM_MODE = "demo";   // current backend mode
+let sb = null;          // anon client (live) or mock client (demo) — set by useBackend()
+let _demoDb = null;     // demo data store; null → re-seed on next useBackend("demo")
+let _authedClient = null, _authedToken = null;
 
-// Returns a mess-scoped authenticated client using the signed session JWT.
-// Falls back to anon client if no token (during login flow).
+async function useBackend(mode) {
+  if (MM_ENV.demoOnly) mode = "demo"; // hard guarantee: demo-only builds never build a live client
+  MM_MODE = mode;
+  document.body.classList.toggle("is-demo", mode === "demo");
+  if (mode === "demo") {
+    await loadScripts(SCRIPT_GROUPS.demo);
+    if (!_demoDb) _demoDb = MMDemo.buildSeed();
+    sb = MMDemo.createClient(_demoDb);
+  } else {
+    await loadScripts(SCRIPT_GROUPS.live);
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+}
+
+function resetDemoData() { _demoDb = null; }
+
+// Returns the mess-scoped client. Live: authenticated with the signed session JWT
+// (cached per token — it used to be re-created on every query). Demo: the mock.
 function getClient() {
+  if (MM_MODE === "demo") return sb;
   const token = _getSessionToken();
   if (!token) return sb;
-  return supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false },
-  });
+  if (_authedToken !== token) {
+    _authedToken = token;
+    _authedClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false },
+    });
+  }
+  return _authedClient;
 }
 
 function _getSessionToken() {
+  const payload = readStoredSession("live");
+  return payload?.jwt || null;
+}
+
+/* Session storage. Live sessions persist (localStorage, 30 days). Demo sessions
+   live in sessionStorage only: closing the tab ends the demo, and a demo can never
+   be mistaken for a real login. Every access is guarded — storage can throw
+   in private windows / blocked-cookie browsers. */
+const SESSION_KEY      = "mm_session";
+const DEMO_SESSION_KEY = "mm_demo_session";
+function readStoredSession(mode) {
   try {
-    const raw = localStorage.getItem("mm_session");
-    if (!raw) return null;
-    const payload = JSON.parse(raw);
-    return payload.jwt || null;
+    const st = mode === "demo" ? sessionStorage : localStorage;
+    const raw = st.getItem(mode === "demo" ? DEMO_SESSION_KEY : SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
@@ -90,7 +125,6 @@ function hexToBytes(hex) {
 ═══════════════════════════════════════════ */
 const SUPERADMIN = {
   username: "superadmin",
-  // PBKDF2-SHA-256 of "super@admin2025"
   passwordHash: "pbkdf2:a3f1b2c4d5e6f708a9b0c1d2e3f40516:7fb3ccf24ee474f31ef17a269c153be6f58febae8d39de86b4259227a01529d2",
   role: "superadmin",
 };

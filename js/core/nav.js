@@ -205,6 +205,16 @@ function buildNav() {
       '</button>';
   }
 
+  if (MM_MODE === "demo") {
+    drawerItemsHTML += `
+    <button class="mob-drawer-item" onclick="closeMobileMore();switchDemoRole()" data-page="demo-switch">
+      ${IC.transfer}<span>Switch to ${isManager || isSubMgr ? "Member" : "Manager"} view</span>
+    </button>
+    <button class="mob-drawer-item" onclick="closeMobileMore();resetDemo()" data-page="demo-reset">
+      ${IC.audit}<span>Reset demo data</span>
+    </button>`;
+  }
+
   drawerItemsHTML += `
     <button class="mob-drawer-item" onclick="toggleTheme();closeMobileMore()" data-page="theme">
       ${IC.moon}
@@ -219,7 +229,7 @@ function buildNav() {
 
     <button class="mob-drawer-item mob-drawer-signout" onclick="doLogout()" data-page="logout">
       ${IC.logout}
-      <span>Sign out</span>
+      <span>${MM_MODE === "demo" ? "Exit demo" : "Sign out"}</span>
     </button>`;
 
   const drawer = document.createElement("div");
@@ -239,9 +249,9 @@ function buildNav() {
       </div>
 
       <div>
-        <div style="font-weight:600;font-size:14px">${currentUser.name}</div>
+        <div style="font-weight:600;font-size:14px">${escapeHtml(currentUser.name)}</div>
         <div style="font-size:11px;color:var(--text3)">
-          ${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"} · @${currentUser.username}
+          ${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"} · @${escapeHtml(currentUser.username)}
         </div>
       </div>
     </div>
@@ -253,7 +263,9 @@ function buildNav() {
   document.body.appendChild(drawer);
 
   const logoutBtn = document.getElementById("sidebar-logout");
-  if (logoutBtn) logoutBtn.innerHTML = IC.logout + "Sign out";
+  if (logoutBtn) logoutBtn.innerHTML = IC.logout + (MM_MODE === "demo" ? "Exit demo" : "Sign out");
+  const swapBtn = document.getElementById("demo-switch-label");
+  if (swapBtn) swapBtn.textContent = "Switch to " + (isManager || isSubMgr ? "Member" : "Manager") + " view";
 
   if (isManager || isSubMgr) refreshNotifBadge();
   else refreshMemberAnnounceBadge();
@@ -355,7 +367,7 @@ function updateSidebarUser() {
     </div>
 
     <div class="su-info">
-      <div class="su-name">${currentUser.name}</div>
+      <div class="su-name">${escapeHtml(currentUser.name)}</div>
       <div class="su-role">${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"}</div>
     </div>`;
 
@@ -371,7 +383,10 @@ function updateSidebarUser() {
 /* ═══════════════════════════════════════════
    PAGE ROUTING
 ═══════════════════════════════════════════ */
-function navigate(page) {
+// Changing page = changing the URL (#/app/<page>); the router calls showPage().
+function navigate(page) { Router.openPage(page); }
+
+function showPage(page) {
   currentPage = page;
 
   closeMobileMore();
@@ -395,11 +410,32 @@ function navigate(page) {
       Loading…
     </div>`;
 
-  renderPage(page);
+  return renderPage(page);
+}
+
+// Single source of truth for who may open what (also used by the router guard).
+const FULL_MANAGER_ONLY_PAGES = ["members", "transfer", "manager-roles"];
+const MANAGER_OR_SUB_PAGES = [
+  "dashboard", "profiles", "meals", "bazar", "utility", "rent",
+  "collect", "log", "notifications",
+  "rate-chart", "audit-log",
+  "messages", "mess-rules", "month-lock", "mess-fund",
+];
+function guardPage(page, role) {
+  const isManager = role === "manager", isSubMgr = role === "sub_manager";
+  if (!isManager && FULL_MANAGER_ONLY_PAGES.includes(page)) return isSubMgr ? "dashboard" : "my-dashboard";
+  if (!isManager && !isSubMgr && MANAGER_OR_SUB_PAGES.includes(page)) return "my-dashboard";
+  return page;
+}
+function pageLabel(page) {
+  const hit = [...MANAGER_NAV, ...MEMBER_NAV].find(i => i.page === page);
+  return hit ? hit.label : "";
 }
 
 async function renderPage(page) {
+  const token = (renderPage._t = (renderPage._t || 0) + 1); // drop out-of-order renders
   members = await dbGetMembers(); buildInitialsMap(members);
+  if (token !== renderPage._t) return;
 
   updateSidebarUser();
 
@@ -407,25 +443,7 @@ async function renderPage(page) {
   const isManager = currentUser.role === "manager";
   const isSubMgr  = currentUser.role === "sub_manager";
 
-  // Pages only full manager can access
-  const fullManagerOnly = [
-    "members", "transfer", "manager-roles",
-  ];
-
-  // Pages manager OR sub_manager can access
-  const managerOrSubOnly = [
-    "dashboard", "profiles", "meals", "bazar", "utility", "rent",
-    "collect", "log", "notifications",
-    "rate-chart", "audit-log",
-    "messages", "mess-rules", "month-lock", "mess-fund",
-  ];
-
-  if (!isManager && fullManagerOnly.includes(page)) {
-    page = isSubMgr ? "dashboard" : "my-dashboard";
-  }
-  if (!isManager && !isSubMgr && managerOrSubOnly.includes(page)) {
-    page = "my-dashboard";
-  }
+  page = guardPage(page, currentUser.role);
 
   main.innerHTML = "";
 
@@ -478,7 +496,7 @@ async function renderPage(page) {
   } catch (e) {
     div.innerHTML = `
       <div class="content">
-        <div class="empty">Error loading page: ${e.message}</div>
+        <div class="empty">Error loading page: ${escapeHtml(e.message)}</div>
       </div>`;
 
     console.error(e);

@@ -1,17 +1,22 @@
 /* ═══════════════════════════════════════════════
    CORE — Auth: login, create mess, logout, superadmin, boot
    ═══════════════════════════════════════════════ */
-const screens = ["landing-page","create-mess-screen","login-screen","superadmin-screen","app-shell"];
-function showScreen(id) { screens.forEach(s => { document.getElementById(s).style.display = s === id ? "" : "none"; }); }
-function showLanding()    { showScreen("landing-page"); }
-function showLogin()      { showScreen("login-screen"); }
-function showCreateMess() { showScreen("create-mess-screen"); }
+const screens = ["landing-page","demo-screen","create-mess-screen","login-screen","superadmin-screen","app-shell"];
+function showScreen(id) { screens.forEach(s => { const el = document.getElementById(s); if (el) el.style.display = s === id ? "" : "none"; }); }
+// Navigation helpers used by inline handlers — they just change the route.
+function showLanding()    { Router.go(""); }
+function showLogin()      { Router.go("login"); }
+function showCreateMess() { Router.go("create"); }
+function homePage() { return (currentUser?.role === "manager" || currentUser?.role === "sub_manager") ? "dashboard" : "my-dashboard"; }
+// Legacy name: after a successful sign-in, hand over to the router.
+async function bootApp() { Router.goAfterLogin(); }
 
 /* ═══════════════════════════════════════════
    JWT SIGNING — calls Edge Function to get
    a mess-scoped JWT for RLS
 ═══════════════════════════════════════════ */
 async function signSessionJWT(memberId, messId, role) {
+  if (MM_MODE === "demo") return null; // demo never calls the network
   try {
     const res = await fetch(
       `${SUPABASE_URL}/functions/v1/sign-session-jwt`,
@@ -33,6 +38,7 @@ async function signSessionJWT(memberId, messId, role) {
    CREATE MESS
 ═══════════════════════════════════════════ */
 async function doCreateMess() {
+  if (MM_MODE === "demo") { Router.go("demo"); return; } // demo has no real accounts
   const messName = cleanText(document.getElementById("cm-name")?.value);
   const myName   = cleanText(document.getElementById("cm-admin-name")?.value);
   const username = cleanText(document.getElementById("cm-username")?.value);
@@ -80,7 +86,7 @@ async function doLogin() {
   if (!user || !pass) { showLoginError("Enter username and password."); return; }
 
   // Brute-force protection
-  const lockUntil = parseInt(localStorage.getItem(LOGIN_LOCKOUT_KEY) || "0");
+  const lockUntil = parseInt(lsGet(LOGIN_LOCKOUT_KEY) || "0");
   if (Date.now() < lockUntil) {
     const remaining = Math.ceil((lockUntil - Date.now()) / 1000);
     showLoginError(`Too many failed attempts. Try again in ${remaining}s.`);
@@ -90,12 +96,12 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = "Signing in…";
   try {
     // Superadmin check
-    if (user === SUPERADMIN.username) {
+    if (user === SUPERADMIN.username && MM_MODE === "live") {
       const match = await comparePassword(pass, SUPERADMIN.passwordHash);
       if (match) {
         resetLoginAttempts();
         saveSession({ name: "Super Admin", username: user, role: "superadmin", memberId: null }, null);
-        bootSuperAdmin(); return;
+        Router.goAfterLogin(); return;
       }
     }
 
@@ -126,11 +132,11 @@ async function doLogin() {
     }
 
     // Failed
-    const attempts = parseInt(localStorage.getItem(LOGIN_ATTEMPTS_KEY) || "0") + 1;
-    localStorage.setItem(LOGIN_ATTEMPTS_KEY, attempts);
+    const attempts = parseInt(lsGet(LOGIN_ATTEMPTS_KEY) || "0") + 1;
+    lsSet(LOGIN_ATTEMPTS_KEY, attempts);
     if (attempts >= LOGIN_MAX_ATTEMPTS) {
-      localStorage.setItem(LOGIN_LOCKOUT_KEY, Date.now() + LOGIN_LOCKOUT_MS);
-      localStorage.removeItem(LOGIN_ATTEMPTS_KEY);
+      lsSet(LOGIN_LOCKOUT_KEY, Date.now() + LOGIN_LOCKOUT_MS);
+      lsRemove(LOGIN_ATTEMPTS_KEY);
       showLoginError("Too many failed attempts. Locked for 5 minutes.");
     } else {
       showLoginError(`Invalid username or password. (${LOGIN_MAX_ATTEMPTS - attempts} attempt${LOGIN_MAX_ATTEMPTS - attempts === 1 ? "" : "s"} remaining)`);
@@ -143,9 +149,13 @@ async function doLogin() {
 }
 
 function resetLoginAttempts() {
-  localStorage.removeItem(LOGIN_ATTEMPTS_KEY);
-  localStorage.removeItem(LOGIN_LOCKOUT_KEY);
+  lsRemove(LOGIN_ATTEMPTS_KEY);
+  lsRemove(LOGIN_LOCKOUT_KEY);
 }
+// localStorage can throw (private mode, blocked cookies) — never let that break login.
+function lsGet(k)    { try { return localStorage.getItem(k); } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+function lsRemove(k) { try { localStorage.removeItem(k); } catch {} }
 
 function showLoginError(msg) {
   const el = document.getElementById("login-error");
@@ -156,21 +166,20 @@ function doLogout() {
   const drawer = document.getElementById("mobile-nav-drawer");
   if (drawer) drawer.classList.remove("open");
   clearSession();
-  showLanding();
+  Router.resetShell();
+  Router.go("");
 }
 
 /* ═══════════════════════════════════════════
    SUPERADMIN
 ═══════════════════════════════════════════ */
-function bootSuperAdmin() {
+function bootSuperAdmin(page = "messes") {
   showScreen("superadmin-screen");
   document.getElementById("sa-sidebar-user").innerHTML = `<div class="su-avatar" style="background:#2a2218;color:#d4a853">SA</div><div><div class="su-name">Super Admin</div><div class="su-role">System</div></div>`;
-  saNavigate("messes");
-}
-function saNavigate(page) {
   document.querySelectorAll("[data-sapage]").forEach(b => b.classList.toggle("active", b.dataset.sapage === page));
   renderSAPage(page);
 }
+function saNavigate(page) { Router.go("admin/" + page); }
 async function renderSAPage(page) {
   const main = document.getElementById("sa-main");
   if (page === "messes")  await renderSAMesses(main);
@@ -235,25 +244,31 @@ async function renderSAMetrics(main) {
 /* ═══════════════════════════════════════════
    BOOT APP
 ═══════════════════════════════════════════ */
-async function bootApp() {
-  showScreen("app-shell");
+// Builds the app shell for the signed-in user (called by the router, once per user).
+async function prepareShell() {
   members = await dbGetMembers();
-  buildInitialsMap(members); // build collision-aware initials map
+  buildInitialsMap(members); // collision-aware initials map
   buildNav();
   updateSidebarUser();
   updateMessBranding();
-  checkDB(); // non-blocking — don't await, let it update the dot in background
-  navigate(currentUser.role === "manager" || currentUser.role === "sub_manager" ? "dashboard" : "my-dashboard");
+  checkDB(); // non-blocking — updates the status dot in the background
 }
 
 function updateMessBranding() {
   const n = currentMess?.name||"MessManager", l = currentMess?.location||"";
   const el1=document.getElementById("app-mess-name"), el2=document.getElementById("app-mess-location"), el3=document.getElementById("mob-mess-name");
   if(el1) el1.textContent=n; if(el2) el2.textContent=l||""; if(el3) el3.textContent=n;
+  document.title = n + " · MessManager";
   const li=document.getElementById("app-logo-icon"); if(li) li.textContent=(n[0]||"M").toUpperCase();
 }
 
 async function checkDB() {
+  if (MM_MODE === "demo") {
+    const lbl = document.getElementById("db-label"), dot = document.getElementById("db-dot");
+    if (lbl) lbl.textContent = "Demo · sample data";
+    if (dot) { dot.style.background = "var(--accent)"; dot.classList.add("live"); }
+    return;
+  }
   try {
     await getClient().from("messes").select("id",{count:"exact",head:true});
     const dot = document.getElementById("db-dot");

@@ -4,6 +4,54 @@ A production-ready mess management web app for shared housing (mess/hostel) in B
 
 ---
 
+## 🎯 Live demo (for reviewers)
+
+The default build is **demo-only**: it never contacts a database. All queries are answered by an in-memory, PostgREST-style client (`js/demo/`) seeded with a fictional Dhaka mess — three months of meals, bazar, rent, utility bills, announcements, requests and an audit log. The real page code runs unchanged on top of it.
+
+| Link | What you get |
+|---|---|
+| `#/demo` | Role picker |
+| `#/demo/manager` | Straight into the manager dashboard |
+| `#/demo/member` | Straight into a member's dashboard |
+| `#/login` | Sign in with `demo_manager` or `demo_member`, password `Demo@1234` |
+
+Everything is temporary: reload resets the data, closing the tab ends the session, and **Reset demo data** / **Switch role** live in the sidebar. The Content-Security-Policy sets `connect-src 'self'`, so the browser itself refuses any network call to a backend.
+
+Run it locally with any static server, e.g. `python3 -m http.server` → http://localhost:8000. It also works opened straight from disk.
+
+### Going live again
+
+1. `js/core/env.js` → `demoOnly: false` (enables real sign-in / create-mess; the demo stays available).
+2. Add your Supabase origin to `connect-src` in the CSP — in `index.html`, `_headers` and `vercel.json`.
+
+### Routes
+
+Hash-based, so it works on any static host without rewrite rules:
+
+| Route | Notes |
+|---|---|
+| `#/` · `#/features` · `#/how-it-works` · `#/engineering` | Landing page (+ scroll to section) |
+| `#/login` · `#/create` | Auth screens (`#/create` is live builds only) |
+| `#/app/<page>` | The app, e.g. `#/app/meals`, `#/app/my-dashboard`. Requires a session; wrong role → your home page; return-to after sign-in; back/forward work |
+| `#/admin/<page>` | Super-admin (live builds only) |
+
+### Security posture
+
+- **Strict CSP** (`script-src 'self'`, no `unsafe-inline`/`eval` for scripts, no third-party origins). Legacy inline `onclick="…"` attributes are moved to `data-on-*` on insertion and run by a tiny whitelist interpreter (`js/core/events.js`) — it understands a fixed grammar and dispatches to existing functions, never `eval`.
+- Real response headers in `_headers` (Netlify/Cloudflare) and `vercel.json`: HSTS, `frame-ancestors 'none'`, `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, COOP/CORP.
+- User-controlled strings are escaped before reaching `innerHTML`; PBKDF2-SHA-256 password hashing; login lockout; demo session in `sessionStorage` only; all storage access guarded for private-mode browsers.
+- Self-hosted fonts and a vendored Supabase SDK — no CDN dependencies.
+
+### Performance
+
+The landing page needs ~32 KB of gzipped JS (11 small deferred scripts) plus ~13 KB CSS. Page modules (~110 KB gz), the demo backend and the Supabase SDK are fetched on demand per role, and prefetched while the landing page is idle. Fonts are self-hosted, preloaded, `font-display: swap`. Below-the-fold sections use `content-visibility: auto`.
+
+### Smoke test
+
+`tests/smoke.html` drives the real app in an iframe (guards, every page for both roles, interactions, CSP violations, mock-store mutations). Serve the repo and open `/tests/smoke.html`; it prints PASS/FAIL lines.
+
+---
+
 ## 📋 Table of Contents
 
 - [Quick Setup](#-quick-setup)
@@ -214,14 +262,16 @@ Negative → mess owes the member
 
 ## 🧭 Navigation & Routing
 
-All routing is client-side via `renderPage(page)` in `nav.js`. The URL does not change — the app is a true SPA.
+Route-based via `js/core/router.js` (see **Routes** above). `navigate(page)` now changes the URL to `#/app/<page>`; the router runs the guards, loads the page modules for the role, and calls `showPage()` in `nav.js`.
 
 **Access control:**
 
 - `manager` role → sees full manager nav; blocked from member-only pages
 - `sub_manager` role → sees manager nav minus: Members, Transfer Role, Manager Roles
 - `member` role → sees member nav only; redirected away from any manager page
-- `superadmin` → special login that shows a separate admin panel (all messes, metrics)
+- `superadmin` → live builds only; separate admin panel (all messes, metrics)
+
+The route guards are a UX layer. In live mode real enforcement is Supabase RLS (see Security below).
 
 **Mobile nav** shows the 5 most-used pages as bottom tabs. All other pages are reachable via the **More** drawer.
 

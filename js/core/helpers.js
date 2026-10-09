@@ -129,14 +129,16 @@ function mealMemberTotal(mObj, memberName) {
 }
 
 
-/* THEME */
+/* THEME — storage can throw (private mode / blocked cookies): fall back to dark */
 function loadTheme() {
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("mm_theme") || "dark");
+  let t = "dark";
+  try { t = localStorage.getItem("mm_theme") || "dark"; } catch (_) {}
+  document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
 }
 function toggleTheme() {
   const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
-  localStorage.setItem("mm_theme", next);
+  try { localStorage.setItem("mm_theme", next); } catch (_) {}
 }
 function togglePw() {
   const i = document.getElementById("login-pass");
@@ -158,28 +160,32 @@ function closeLandingDrawer() {
   document.body.style.overflow = "";
 }
 
-/* SESSION — localStorage only (sessionStorage copy removed) */
+/* SESSION — live: localStorage (30 days) · demo: sessionStorage (tab lifetime) */
 function saveSession(u, m, jwt = null) {
   currentUser = u; currentMess = m;
+  const demo = MM_MODE === "demo";
   const payload = { u, m, jwt, exp: Date.now() + SESSION_TTL_MS };
-  localStorage.setItem("mm_session", JSON.stringify(payload));
+  try {
+    (demo ? sessionStorage : localStorage).setItem(demo ? DEMO_SESSION_KEY : SESSION_KEY, JSON.stringify(payload));
+  } catch (_) { /* storage blocked — session lives in memory for this page only */ }
 }
 function loadSession() {
-  try {
-    const raw = localStorage.getItem("mm_session");
-    if (!raw) return;
-    const payload = JSON.parse(raw);
-    if (!payload.exp || Date.now() > payload.exp) { clearSession(); return; }
-    if (payload.u) currentUser = payload.u;
-    if (payload.m) currentMess = payload.m;
-  } catch (e) { currentUser = null; currentMess = null; }
+  // A demo session wins; a live session is ignored entirely in demo-only builds.
+  let mode = "demo", payload = readStoredSession("demo");
+  if (!payload && !MM_ENV.demoOnly) { mode = "live"; payload = readStoredSession("live"); }
+  if (!payload) return;
+  if (!payload.exp || Date.now() > payload.exp || !payload.u) { MM_MODE = mode; clearSession(); return; }
+  MM_MODE = mode;
+  currentUser = payload.u;
+  currentMess = payload.m || null;
 }
 function clearSession() {
   currentUser = null; currentMess = null; members = [];
-  localStorage.removeItem("mm_session");
-  // Legacy key cleanup
-  localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess");
-  sessionStorage.clear();
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess"); // legacy keys
+    sessionStorage.removeItem(DEMO_SESSION_KEY);
+  } catch (_) {}
 }
 
 /* ROLE GUARD */

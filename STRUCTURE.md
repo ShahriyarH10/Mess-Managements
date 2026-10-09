@@ -3,8 +3,12 @@
 ```
 mess-manager/
 │
-├── index.html
+├── index.html                    ← shell: strict CSP, landing, auth + demo screens, app shell
+├── _headers / vercel.json        ← real security + cache headers for Netlify/Cloudflare / Vercel
 ├── STRUCTURE.md
+├── assets/                       ← favicon, self-hosted fonts
+├── vendor/supabase.min.js        ← vendored SDK, loaded only in live builds
+├── tests/                        ← browser smoke test (smoke.html + smoke.js)
 │
 ├── css/
 │   ├── 01-variables.css          ← CSS tokens, dark/light theme, reset
@@ -17,11 +21,20 @@ mess-manager/
 └── js/
     │
     ├── core/                     ← Shared by both manager and member
+    │   ├── env.js                ← demoOnly flag (default true → no backend access)
+    │   ├── loader.js             ← on-demand script loading + prefetch
+    │   ├── events.js             ← CSP-safe handler for inline on* attributes
+    │   ├── router.js             ← hash router, guards, demo controls
+    │   ├── boot.js               ← Router.start()
     │   ├── config.js             ← Supabase client, global state, constants (MONTHS, PALETTE)
     │   ├── helpers.js            ← Utils (fmtTk, round2, today…), theme, session, modal, toast
     │   ├── db.js                 ← All Supabase query functions (meals, bazar, rent, util, members…)
     │   ├── auth.js               ← Login, create mess, logout, superadmin panel, bootApp
     │   └── nav.js                ← Nav icons, sidebar build, mobile drawer, page routing
+    │
+    ├── demo/                     ← In-memory Supabase stand-in + seed data (loaded on demand)
+    │   ├── mock-client.js
+    │   └── seed.js
     │
     ├── manager/                  ← Only loaded/used when role === "manager"
     │   ├── dashboard.js          ← Dashboard: stats, today's meals, bazar leaders, rent status
@@ -45,6 +58,8 @@ mess-manager/
 ```
 
 ## Script load order in index.html
+
+> Updated: core scripts are now `defer`red and page modules are loaded on demand per role by `js/core/loader.js` (`SCRIPT_GROUPS`). The list below shows the logical dependency order.
 
 ```html
 <!-- Core (always loaded) -->
