@@ -29,7 +29,7 @@ const SCRIPT_GROUPS = {
   live: ["vendor/supabase.min.js"],
   shared: [
     "js/manager/profiles.js", "js/manager/announcements.js", "js/manager/features.js",
-    "js/manager/log.js", "js/member/dashboard.js", "js/member/pages.js", "js/member/give-payment.js",
+    "js/manager/log.js", "js/member/dashboard.js", "js/member/pages.js", "js/member/give-payment.js", "js/member/collect-receipt.js",
   ],
   manager: [
     "js/manager/dashboard.js", "js/manager/meals.js", "js/manager/bazar.js",

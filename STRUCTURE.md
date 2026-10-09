@@ -59,7 +59,8 @@ mess-manager/
         │                            My Profile: stats, history, mess share, recent months
         ├── pages.js              ← My Meals (request), My Bazar (request), My Payments,
         │                            Mess Overview, submit helpers (submitMealRequest etc.)
-        └── give-payment.js       ← Give Payment page + receipt builders/modal (also used by the manager)
+        ├── give-payment.js       ← Give Payment page + receipt builders/modal (also used by the manager)
+        └── collect-receipt.js    ← Collect-style receipt modal/copy/print (shared; used by Collect + Give Payment)
 ```
 
 ## Script load order in index.html

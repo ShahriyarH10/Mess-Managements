@@ -445,7 +445,24 @@ async function submitGivePayment() {
     } catch (_) { /* the request itself is saved; the manager still sees it in Collect */ }
     ctx.sent = payment;
     toast("Payment sent to the manager ✓", "success");
+    const r = ctx.row;
+    const sp = computeSplit3(value, r.mealRem, r.utilRem, r.rentRem, r.prevDue);
+    const newMealRem = round2(r.mealRem - sp.allocMeal);
+    const newUtilRem = round2(r.utilRem - sp.allocUtil);
+    const newRentRem = round2(r.rentRem - sp.allocRent);
+    const newNet     = round2(r.total - round2(value - sp.change));
     await loadGivePayment(false);
+    /* Same receipt the manager gets after Collect Payment → Save (projected, until confirmed). */
+    showCollectReceipt({
+      member: { ...ctx.member, phone: "" }, // WhatsApp opens the contact picker, not the member's own number
+      monthLabel: monthLabelFromKey(ctx.key),
+      amountReceived: value,
+      allocMeal: sp.allocMeal, allocUtil: sp.allocUtil, allocRent: sp.allocRent,
+      allocPrevDue: sp.allocPrevDue, change: sp.change,
+      newUtilRem, newRentRem, newMealRem, newNet,
+      timestamp: new Date(payment.created_at || Date.now()),
+      pending: true,
+    });
   } catch (e) {
     toast("Error: " + e.message, "error");
   } finally {
