@@ -133,14 +133,14 @@ const Router = (() => {
       /* ── auth screens ── */
       if (a === "login") {
         if (currentUser) return goAfterLogin();
-        await useBackend(MM_ENV.demoOnly ? "demo" : "live");
+        await useBackend(MM_ENV.liveLogin ? "live" : "demo");
         if (stale()) return;
         showScreen("login-screen"); setTitle("Sign in"); window.scrollTo(0, 0);
         return;
       }
       if (a === "create") {
         if (currentUser) return goAfterLogin();
-        await useBackend(MM_ENV.demoOnly ? "demo" : "live"); // demo: creates a mess in the sandbox only
+        await useBackend(MM_ENV.liveSignup ? "live" : "demo"); // default: a sandbox mess, never a real one
         document.getElementById("create-demo-note").style.display = MM_MODE === "demo" ? "" : "none";
         if (stale()) return;
         showScreen("create-mess-screen"); setTitle("Create a mess"); window.scrollTo(0, 0);
@@ -149,7 +149,7 @@ const Router = (() => {
 
       /* ── super-admin (live builds only) ── */
       if (a === "admin") {
-        if (currentUser?.role !== "superadmin" || MM_ENV.demoOnly) { go("login", true); return; }
+        if (currentUser?.role !== "superadmin" || !MM_ENV.liveLogin) { go("login", true); return; }
         await ensureBackend();
         if (stale()) return;
         setTitle("Super Admin");
@@ -188,7 +188,7 @@ const Router = (() => {
   }
 
   function start() {
-    if (!MM_ENV.demoOnly) document.documentElement.classList.add("live-enabled");
+    if (MM_ENV.liveLogin) document.documentElement.classList.add("live-enabled");
     loadTheme();
     loadSession();
     window.addEventListener("hashchange", route);

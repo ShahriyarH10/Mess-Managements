@@ -21,7 +21,7 @@ mess-manager/
 └── js/
     │
     ├── core/                     ← Shared by both manager and member
-    │   ├── env.js                ← demoOnly flag (default true → no backend access)
+    │   ├── env.js                ← liveLogin / liveSignup feature flags
     │   ├── loader.js             ← on-demand script loading + prefetch
     │   ├── events.js             ← CSP-safe handler for inline on* attributes
     │   ├── router.js             ← hash router, guards, demo controls

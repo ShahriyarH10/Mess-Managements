@@ -172,19 +172,20 @@ function saveSession(u, m, jwt = null) {
 function loadSession() {
   // A demo session wins; a live session is ignored entirely in demo-only builds.
   let mode = "demo", payload = readStoredSession("demo");
-  if (!payload && !MM_ENV.demoOnly) { mode = "live"; payload = readStoredSession("live"); }
+  if (!payload && MM_ENV.liveLogin) { mode = "live"; payload = readStoredSession("live"); }
   if (!payload) return;
   if (!payload.exp || Date.now() > payload.exp || !payload.u) { MM_MODE = mode; clearSession(); return; }
   MM_MODE = mode;
   currentUser = payload.u;
   currentMess = payload.m || null;
 }
+// Clears only the ACTIVE world's session, so leaving the sandbox never signs you out of a real
+// account in the same browser (and vice-versa).
 function clearSession() {
   currentUser = null; currentMess = null; members = [];
   try {
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess"); // legacy keys
-    sessionStorage.removeItem(DEMO_SESSION_KEY);
+    if (MM_MODE === "demo") sessionStorage.removeItem(DEMO_SESSION_KEY);
+    else { localStorage.removeItem(SESSION_KEY); localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess"); }
   } catch (_) {}
 }
 

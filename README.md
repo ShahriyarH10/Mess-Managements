@@ -4,28 +4,26 @@ A production-ready mess management web app for shared housing (mess/hostel) in B
 
 ---
 
-## 🎯 Live demo (for reviewers)
+## 🎯 One site, real app + sandbox demo
 
-The default build is **demo-only**: it never contacts a database. All queries are answered by an in-memory, PostgREST-style client (`js/demo/`) seeded with a fictional Dhaka mess — three months of meals, bazar, rent, utility bills, announcements, requests and an audit log. The real page code runs unchanged on top of it.
+| Where | What it does | Touches the database? |
+|---|---|---|
+| **`#/login`** | Real sign-in for existing Supabase accounts | Yes (read/write as that user) |
+| **`#/demo`**, `#/demo/manager`, `#/demo/member` | Sample mess, role picker | **Never** |
+| **`#/create`** | Create **your own sandbox mess**, become its manager, add members, switch to a member's view | **Never** |
 
-| Link | What you get |
-|---|---|
-| `#/demo` | Role picker |
-| `#/demo/manager` | Straight into the sample mess as its manager |
-| `#/demo/member` | Straight into the sample mess as a member |
-| `#/create` | **Create your own mess** in the sandbox and become its manager |
-| `#/login` | Sign in with `demo_manager` or `demo_member`, password `Demo@1234` — or with any account you created in the sandbox |
+The sandbox is an in-memory, PostgREST-style client (`js/demo/`) seeded with a fictional Dhaka mess (three months of meals, bazar, rent, bills, announcements, requests, audit log). The real page code runs unchanged on top of it, so it behaves like the real app end to end: create a mess → you're its manager → add members (PBKDF2-hashed passwords) → **Switch to Member view** (or sign out and sign in as them).
 
-The sandbox behaves like the real app end to end: create a mess → you're its manager → add members on the **Members** page (each gets a PBKDF2-hashed password) → **Switch to Member view** in the sidebar (or sign out and sign in as them). Meals, bazar, bills, rent, collections and settlements all work.
+Sandbox data lives in `sessionStorage`: a refresh keeps it, closing the tab discards it, and **Reset demo data** returns to the sample mess. The sign-in form checks sandbox accounts locally first (`demo_manager` / `demo_member`, password `Demo@1234`, or anything you created in the sandbox) and only then asks Supabase, so demo logins never leave the browser.
 
-Everything stays in your browser. Data is kept in `sessionStorage`, so a refresh keeps what you built; closing the tab discards it, and **Reset demo data** returns to the sample mess. The Content-Security-Policy sets `connect-src 'self'`, so the browser itself refuses any network call to a backend.
+Feature flags live in `js/core/env.js`:
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `liveLogin` | `true` | Sign-in form can authenticate real Supabase accounts. `false` = sandbox-only site; also drop the Supabase origin from the CSP `connect-src` (in `index.html`, `_headers`, `vercel.json`) |
+| `liveSignup` | `false` | `#/create` makes a REAL mess. Keep `false` on a public link so visitors can't create accounts in your database |
 
 Run it locally with any static server, e.g. `python3 -m http.server` → http://localhost:8000.
-
-### Going live again
-
-1. `js/core/env.js` → `demoOnly: false` (real sign-in / create-mess against Supabase; the sandbox stays available at `#/demo`).
-2. Add your Supabase origin to `connect-src` in the CSP — in `index.html`, `_headers` and `vercel.json`.
 
 ### Routes
 
@@ -40,7 +38,7 @@ Hash-based, so it works on any static host without rewrite rules:
 
 ### Security posture
 
-- **Strict CSP** (`script-src 'self'`, no `unsafe-inline`/`eval` for scripts, no third-party origins). Legacy inline `onclick="…"` attributes are moved to `data-on-*` on insertion and run by a tiny whitelist interpreter (`js/core/events.js`) — it understands a fixed grammar and dispatches to existing functions, never `eval`.
+- **Strict CSP** (`script-src 'self'`, no `unsafe-inline`/`eval` for scripts, no third-party origins; `connect-src` allows only your Supabase project). Legacy inline `onclick="…"` attributes are moved to `data-on-*` on insertion and run by a tiny whitelist interpreter (`js/core/events.js`) — it understands a fixed grammar and dispatches to existing functions, never `eval`.
 - Real response headers in `_headers` (Netlify/Cloudflare) and `vercel.json`: HSTS, `frame-ancestors 'none'`, `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, COOP/CORP.
 - User-controlled strings are escaped before reaching `innerHTML`; PBKDF2-SHA-256 password hashing; login lockout; demo session in `sessionStorage` only; all storage access guarded for private-mode browsers.
 - Self-hosted fonts and a vendored Supabase SDK — no CDN dependencies.

@@ -41,7 +41,7 @@
     log(visible("landing-page"), "landing page visible at #/");
     const early = [...D().scripts].map(s => s.getAttribute("src")).filter(Boolean);
     log(!early.some(s => /manager\/|member\/|demo\/|vendor\//.test(s)), "landing loads no page/demo/vendor scripts (" + early.length + " core scripts)");
-    log(P().env().demoOnly === true, "demoOnly defaults to true");
+    log(P().env().liveLogin === true && P().env().liveSignup === false, "flags: real login on, real signup off");
     log(P().sb() === null, "no backend client built on landing");
 
     /* 2. guards */

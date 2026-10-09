@@ -12,10 +12,11 @@
 <meta property="og:title" content="MessManager — live demo"/>
 <meta property="og:description" content="Meals, bazar, rent, utilities and monthly settlements for shared housing. Try the sandboxed demo — no sign-up."/>
 
-<!-- Security: strict CSP. No inline <script>, no eval, no third-party origins, no network
-     egress (connect-src 'self'). Inline onclick="…" attributes are handled by js/core/events.js.
+<!-- Security: strict CSP. No inline <script>, no eval, no third-party origins; the only network
+     origin allowed is the Supabase project (real sign-in). The sandbox demo never calls it.
+     Inline onclick="…" attributes are handled by js/core/events.js.
      frame-ancestors / HSTS etc. are sent as real headers (see _headers / vercel.json). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://lrzotklutnyzcadutgwf.supabase.co wss://lrzotklutnyzcadutgwf.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'"/>
 
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg"/>
 
@@ -350,7 +351,7 @@
         </div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Sign in →</button>
-      <div class="auth-hint">New here? <a href="#/create">Create a mess</a></div>
+      <div class="auth-hint">Just exploring? <a href="#/create">Create a sandbox mess</a></div>
       <div class="auth-hint live-only" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
       <div class="demo-login">
         <div class="demo-login-title">Reviewing this project? Skip typing:</div>
@@ -358,7 +359,7 @@
           <a class="btn btn-primary" href="#/demo/manager">Manager demo</a>
           <a class="btn btn-ghost" href="#/demo/member">Member demo</a>
         </div>
-        <div class="demo-creds">Or sign in with <code>demo_manager</code> or <code>demo_member</code><br/>password <code>Demo@1234</code></div>
+        <div class="demo-creds">Or type the sandbox login: <code>demo_manager</code> / <code>demo_member</code><br/>password <code>Demo@1234</code></div>
       </div>
     </div>
     <button class="auth-theme-btn" onclick="toggleTheme()">
