@@ -52,7 +52,7 @@ async function renderAuditLog(el) {
       </div>
     </div>
 
-    <div class="card" id="audit-list"><div class="empty" style="padding:24px">Loading…</div></div>
+    <div class="card" id="audit-list"><div class="loading"><div class="spinner"></div>Loading…</div></div>
     <div style="text-align:center;margin-top:12px" id="audit-more-wrap"></div>
   </div>`;
   window._auditOffset = 0;
@@ -70,7 +70,7 @@ async function loadAuditEntries(reset = false) {
   const wrap    = document.getElementById("audit-list");
   const moreWrap= document.getElementById("audit-more-wrap");
   if (!wrap) return;
-  if (reset) wrap.innerHTML = '<div class="empty" style="padding:16px">Loading…</div>';
+  if (reset) wrap.innerHTML = '<div class="loading"><div class="spinner"></div>Loading…</div>';
 
   try {
     // Build query with all server-side filters

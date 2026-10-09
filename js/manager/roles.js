@@ -38,7 +38,7 @@ async function renderManagerRoles(el) {
     </div>
     <div class="card" id="roles-member-list">
       <div class="card-title">Members</div>
-      <div class="empty">Loading…</div>
+      <div class="loading"><div class="spinner"></div>Loading…</div>
     </div>
   </div>`;
   renderRolesList();

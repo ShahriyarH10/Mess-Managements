@@ -17,13 +17,15 @@ mess-manager/
 │   ├── 03-auth.css               ← Login & create-mess screens
 │   ├── 04-layout.css             ← App shell, sidebar, mobile nav, drawer
 │   ├── 05-components.css         ← Cards, buttons, inputs, tables, badges, modals, toast
-│   └── 06-animations-responsive.css  ← Keyframes + all @media breakpoints
+│   ├── 06-animations-responsive.css  ← Keyframes + all @media breakpoints
+│   └── 08-motion.css         ← Spinner, skeletons, splash, progress bar, entrance choreography
 │
 └── js/
     │
     ├── core/                     ← Shared by both manager and member
     │   ├── env.js                ← liveLogin / liveSignup feature flags
     │   ├── loader.js             ← on-demand script loading + prefetch
+    │   ├── motion.js             ← route progress bar, boot splash, skeletons, button loading, scroll reveal
     │   ├── events.js             ← CSP-safe handler for inline on* attributes
     │   ├── router.js             ← hash router, guards, demo controls
     │   ├── boot.js               ← Router.start()

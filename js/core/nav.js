@@ -404,7 +404,7 @@ function showPage(page) {
 
   const main = document.getElementById("main-content");
 
-  main.innerHTML = `
+  main.innerHTML = typeof pageSkeleton === "function" ? pageSkeleton() : `
     <div class="loading" style="min-height:200px">
       <div class="spinner"></div>
       Loading…

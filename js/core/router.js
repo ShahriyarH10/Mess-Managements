@@ -156,7 +156,15 @@ const Router = (() => {
     window.scrollTo(0, 0);
   }
 
+  /* Wraps every navigation with the progress bar; entering the app earns the branded splash. */
   async function route() {
+    const [a, b] = parse();
+    const intoApp = (a === "demo" && b !== "login" && b !== "create") || a === "app" || a === "admin";
+    window.MMMotion?.begin({ splash: intoApp });
+    try { await routeInner(); } finally { window.MMMotion?.end(); }
+  }
+
+  async function routeInner() {
     const my = ++token;
     const stale = () => my !== token;
     const [a, b, c] = parse();

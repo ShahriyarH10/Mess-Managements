@@ -114,7 +114,10 @@
       if (typeof fn !== "function") throw new Error("Unknown handler function: " + m[1]);
       const args = m[2].trim() ? splitTop(m[2], ",").map(t => arg(t, el, ev)) : [];
       const r = fn.apply(window, args);
-      if (r && typeof r.catch === "function") r.catch(e => console.error("[handler]", m[1], e));
+      if (r && typeof r.catch === "function") {
+        if (ev.type === "click") window.MMMotion?.trackButton(el, r);
+        r.catch(e => console.error("[handler]", m[1], e));
+      }
       return;
     }
     throw new Error("Unsupported handler statement: " + stmt);
