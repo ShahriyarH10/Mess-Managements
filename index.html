@@ -300,7 +300,7 @@
           <div class="demo-role-cta">Enter as Member →</div>
         </a>
       </div>
-      <div class="demo-note">Everything runs in your browser — nothing is sent to a server. Changes last until you close the tab.<br/>Prefer to start from scratch? <a href="#/create">Create your own mess</a> and add members yourself.</div>
+      <div class="demo-note">Everything runs in your browser — nothing is sent to a server. Changes last until you close the tab.<br/>Prefer to start from scratch? <a href="#/demo/create">Create your own sandbox mess</a> and add members yourself.</div>
     </div>
   </div>
 </div>
@@ -312,7 +312,7 @@
     <div class="auth-card">
       <a class="auth-back" href="#/">← Back</a>
       <div class="auth-logo"><div class="land-logo-icon">M</div><span>MessManager</span></div>
-      <div class="auth-title">Create your mess</div>
+      <div class="auth-title" id="create-title">Create your mess</div>
       <div class="auth-sub">You'll be the first member and manager of this mess</div>
       <div class="demo-note" id="create-demo-note" style="display:none;text-align:left;margin:0 0 14px">🧪 <b>Sandbox:</b> this mess is created only in your browser tab (nothing is sent anywhere). Add members from the <b>Members</b> page, then use <b>Switch to Member view</b> in the sidebar — or sign out and sign in as them.</div>
       <div id="create-error" class="auth-error" style="display:none"></div>
@@ -326,7 +326,8 @@
       <button class="btn btn-primary" style="width:100%;margin-top:4px;justify-content:center" onclick="doCreateMess()" id="cm-btn">
         Create mess & continue →
       </button>
-      <div class="auth-hint">Already have a mess? <a href="#/login">Sign in</a></div>
+      <div class="auth-hint in-real">Already have a mess? <a href="#/login">Sign in</a></div>
+      <div class="auth-hint in-demo">Already have a sandbox account? <a href="#/demo/login">Sign in</a></div>
     </div>
   </div>
 </div>
@@ -338,8 +339,8 @@
     <div class="auth-card">
       <a class="auth-back" href="#/">← Back</a>
       <div class="auth-logo"><div class="land-logo-icon">M</div><span>MessManager</span></div>
-      <div class="auth-title">Welcome back</div>
-      <div class="auth-sub">Sign in to your mess account</div>
+      <div class="auth-title" id="login-title">Welcome back</div>
+      <div class="auth-sub" id="login-sub">Sign in to your mess account</div>
       <div id="login-error" class="auth-error" style="display:none"></div>
       <div class="field"><label>Username</label><input type="text" class="input" id="login-user" placeholder="your username" autocomplete="username" maxlength="64" autocapitalize="none" spellcheck="false"/></div>
       <div class="field"><label>Password</label>
@@ -351,9 +352,10 @@
         </div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Sign in →</button>
-      <div class="auth-hint">Just exploring? <a href="#/create">Create a sandbox mess</a></div>
-      <div class="auth-hint live-only" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
-      <div class="demo-login">
+      <div class="auth-hint in-real">New here? <a href="#/create">Create a mess</a> &nbsp;·&nbsp; Just looking? <a href="#/demo">Try the demo</a></div>
+      <div class="auth-hint in-real" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
+      <div class="auth-hint in-demo">Want a blank sandbox? <a href="#/demo/create">Create a sandbox mess</a></div>
+      <div class="demo-login in-demo">
         <div class="demo-login-title">Reviewing this project? Skip typing:</div>
         <div class="demo-login-btns">
           <a class="btn btn-primary" href="#/demo/manager">Manager demo</a>

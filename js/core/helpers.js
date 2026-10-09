@@ -160,7 +160,8 @@ function closeLandingDrawer() {
   document.body.style.overflow = "";
 }
 
-/* SESSION — live: localStorage (30 days) · demo: sessionStorage (tab lifetime) */
+/* SESSION — one per world. live: localStorage (30 days) · sandbox: sessionStorage (tab lifetime).
+   Loading is done by Router.selectWorld(). */
 function saveSession(u, m, jwt = null) {
   currentUser = u; currentMess = m;
   const demo = MM_MODE === "demo";
@@ -168,16 +169,6 @@ function saveSession(u, m, jwt = null) {
   try {
     (demo ? sessionStorage : localStorage).setItem(demo ? DEMO_SESSION_KEY : SESSION_KEY, JSON.stringify(payload));
   } catch (_) { /* storage blocked — session lives in memory for this page only */ }
-}
-function loadSession() {
-  // A demo session wins; a live session is ignored entirely in demo-only builds.
-  let mode = "demo", payload = readStoredSession("demo");
-  if (!payload && MM_ENV.liveLogin) { mode = "live"; payload = readStoredSession("live"); }
-  if (!payload) return;
-  if (!payload.exp || Date.now() > payload.exp || !payload.u) { MM_MODE = mode; clearSession(); return; }
-  MM_MODE = mode;
-  currentUser = payload.u;
-  currentMess = payload.m || null;
 }
 // Clears only the ACTIVE world's session, so leaving the sandbox never signs you out of a real
 // account in the same browser (and vice-versa).

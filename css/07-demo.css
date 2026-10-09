@@ -53,3 +53,7 @@ body.is-demo #sidebar-change-pw,body.is-demo [data-page="change-pw"]{display:non
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important;}
 }
 a.auth-back{display:inline-block;text-decoration:none;}
+
+/* Sign-in / sign-up screens are shared between the real app and the sandbox. */
+body:not(.is-demo) .in-demo{display:none !important;}
+body.is-demo .in-real{display:none !important;}

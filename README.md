@@ -4,24 +4,27 @@ A production-ready mess management web app for shared housing (mess/hostel) in B
 
 ---
 
-## 🎯 One site, real app + sandbox demo
+## 🎯 One site, two separate worlds
 
-| Where | What it does | Touches the database? |
+| | **Real app** (Supabase) | **Sandbox demo** (in-memory) |
 |---|---|---|
-| **`#/login`** | Real sign-in for existing Supabase accounts | Yes (read/write as that user) |
-| **`#/demo`**, `#/demo/manager`, `#/demo/member` | Sample mess, role picker | **Never** |
-| **`#/create`** | Create **your own sandbox mess**, become its manager, add members, switch to a member's view | **Never** |
+| Sign in | `#/login` | `#/demo/login` — or one click: `#/demo/manager`, `#/demo/member` |
+| Create a mess | `#/create` — a real mess | `#/demo/create` — a sandbox mess |
+| The app | `#/app/<page>` | `#/demo/app/<page>` |
+| Database | yes | **never** |
+| Session | `localStorage`, 30 days | `sessionStorage`, until the tab closes |
+| Picker / landing | `#/` | `#/demo` |
 
-The sandbox is an in-memory, PostgREST-style client (`js/demo/`) seeded with a fictional Dhaka mess (three months of meals, bazar, rent, bills, announcements, requests, audit log). The real page code runs unchanged on top of it, so it behaves like the real app end to end: create a mess → you're its manager → add members (PBKDF2-hashed passwords) → **Switch to Member view** (or sign out and sign in as them).
+The two worlds share the page code but nothing else: separate URL namespaces, separate sessions, separate backend clients. A sandbox session can't open `#/app/…`, a real session can't open `#/demo/app/…`, and signing out of one leaves the other untouched.
 
-Sandbox data lives in `sessionStorage`: a refresh keeps it, closing the tab discards it, and **Reset demo data** returns to the sample mess. The sign-in form checks sandbox accounts locally first (`demo_manager` / `demo_member`, password `Demo@1234`, or anything you created in the sandbox) and only then asks Supabase, so demo logins never leave the browser.
+The sandbox is an in-memory, PostgREST-style client (`js/demo/`) seeded with a fictional Dhaka mess (three months of meals, bazar, rent, bills, announcements, requests, audit log). It behaves like the real app end to end: create a sandbox mess → you're its manager → add members (PBKDF2-hashed passwords) → **Switch to Member view** (or sign out and sign in as them at `#/demo/login`; the sample accounts are `demo_manager` / `demo_member`, password `Demo@1234`). A refresh keeps the sandbox data, closing the tab discards it, and **Reset demo data** returns to the sample mess.
 
 Feature flags live in `js/core/env.js`:
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `liveLogin` | `true` | Sign-in form can authenticate real Supabase accounts. `false` = sandbox-only site; also drop the Supabase origin from the CSP `connect-src` (in `index.html`, `_headers`, `vercel.json`) |
-| `liveSignup` | `false` | `#/create` makes a REAL mess. Keep `false` on a public link so visitors can't create accounts in your database |
+| `liveLogin` | `true` | Real sign-in works. `false` = sandbox-only site; also drop the Supabase origin from the CSP `connect-src` (in `index.html`, `_headers`, `vercel.json`) |
+| `liveSignup` | `true` | `#/create` makes a REAL mess. `false` = `#/create` redirects to the sandbox (`#/demo/create`) so a public link can't create real accounts |
 
 Run it locally with any static server, e.g. `python3 -m http.server` → http://localhost:8000.
 
@@ -32,9 +35,8 @@ Hash-based, so it works on any static host without rewrite rules:
 | Route | Notes |
 |---|---|
 | `#/` · `#/features` · `#/how-it-works` · `#/engineering` | Landing page (+ scroll to section) |
-| `#/login` · `#/create` | Auth screens (`#/create` is live builds only) |
-| `#/app/<page>` | The app, e.g. `#/app/meals`, `#/app/my-dashboard`. Requires a session; wrong role → your home page; return-to after sign-in; back/forward work |
-| `#/admin/<page>` | Super-admin (live builds only) |
+| `#/login` · `#/create` · `#/app/<page>` · `#/admin/<page>` | Real world. App pages need a session, are guarded by role, remember where you were heading, and support back/forward |
+| `#/demo` · `#/demo/manager` · `#/demo/member` · `#/demo/login` · `#/demo/create` · `#/demo/app/<page>` | Sandbox world (same guards, own session) |
 
 ### Security posture
 
@@ -263,7 +265,7 @@ Negative → mess owes the member
 
 ## 🧭 Navigation & Routing
 
-Route-based via `js/core/router.js` (see **Routes** above). `navigate(page)` now changes the URL to `#/app/<page>`; the router runs the guards, loads the page modules for the role, and calls `showPage()` in `nav.js`.
+Route-based via `js/core/router.js` (see **Routes** above). `navigate(page)` now changes the URL to `#/app/<page>` (or `#/demo/app/<page>` in the sandbox); the router runs the guards, loads the page modules for the role, and calls `showPage()` in `nav.js`.
 
 **Access control:**
 

@@ -1,25 +1,31 @@
 /* ═══════════════════════════════════════════════
    CORE — Router (hash based: works on any static host, even file://)
 
-     #/                      landing page
-     #/features | #/how-it-works | #/engineering   landing page, scrolled to a section
-     #/demo                  pick a demo role
-     #/demo/manager|member   start a sandboxed demo session, then → #/app/<home>
-     #/login                 sign in (demo accounts in demo-only builds)
-     #/create                create a mess (live builds only)
-     #/app/<page>            the app — requires a session, guarded by role
-     #/admin/<page>          super-admin (live builds only)
+   Two separate worlds, so the sandbox can never be confused with the real app:
 
-   Guards run on every navigation: no session → #/login (and we remember where
-   you were heading), wrong role → your home page. Page modules are fetched the
-   first time they are needed.
+     REAL (Supabase)                     SANDBOX (in-memory, never touches the database)
+     #/login                             #/demo/login
+     #/create        real signup         #/demo/create      sandbox signup
+     #/app/<page>    the app             #/demo/app/<page>  the app, same code
+     #/admin/<page>  super-admin         #/demo             role picker
+                                         #/demo/manager | #/demo/member   one-click start
+
+     #/ · #/features · #/how-it-works · #/engineering   landing page (+ scroll to section)
+
+   Each world has its own session (real: localStorage, 30 days · sandbox: sessionStorage,
+   tab lifetime), its own backend client and its own URLs. Guards run on every navigation:
+   no session → that world's sign-in (we remember where you were heading), wrong role →
+   your home page. Page modules are fetched the first time they are needed.
    ═══════════════════════════════════════════════ */
 const Router = (() => {
   const SLUG = /^[a-z0-9-]+$/;
   const LANDING_SECTIONS = { features: "features", "how-it-works": "how-it-works", engineering: "engineering" };
   const RETURN_KEY = "mm_return";
+  const RETURN_RE = /^(demo\/)?app\/[a-z0-9-]+$/;
+  const DEMO_ROLES = ["manager", "member"];
   let token = 0;        // bumps on every navigation so stale async work can bail out
   let shellKey = null;  // "<memberId>:<role>" the app shell was built for
+  let world = null;     // "live" | "demo": whose session/backend is currently loaded
   let firstRoute = true;
 
   const parse = () => {
@@ -27,6 +33,7 @@ const Router = (() => {
     return raw.split("/").filter(Boolean);
   };
   const isHome = () => ["", "#", "#/"].includes(location.hash);
+  const prefix = () => (MM_MODE === "demo" ? "demo/app/" : "app/");
 
   function go(path, replace = false) {
     const target = "#/" + path;
@@ -36,19 +43,22 @@ const Router = (() => {
   }
 
   /* app page change (sidebar, buttons). Same page again = re-render. */
-  function openPage(page) { if (SLUG.test(String(page))) go("app/" + page); }
+  function openPage(page) { if (SLUG.test(String(page))) go(prefix() + page); }
 
   function rememberReturn() {
     const p = parse().join("/");
-    if (/^app\/[a-z0-9-]+$/.test(p)) { try { sessionStorage.setItem(RETURN_KEY, p); } catch (_) {} }
+    if (RETURN_RE.test(p)) { try { sessionStorage.setItem(RETURN_KEY, p); } catch (_) {} }
   }
   function takeReturn() {
-    try { const v = sessionStorage.getItem(RETURN_KEY); sessionStorage.removeItem(RETURN_KEY); return /^app\/[a-z0-9-]+$/.test(v || "") ? v : null; }
-    catch (_) { return null; }
+    try {
+      const v = sessionStorage.getItem(RETURN_KEY); sessionStorage.removeItem(RETURN_KEY);
+      // only honour a return path that belongs to the world we just signed in to
+      return RETURN_RE.test(v || "") && v.startsWith("demo/") === (MM_MODE === "demo") ? v : null;
+    } catch (_) { return null; }
   }
   function goAfterLogin() {
     if (currentUser?.role === "superadmin") return go("admin/messes", true);
-    go(takeReturn() || "app/" + homePage(), true);
+    go(takeReturn() || prefix() + homePage(), true);
   }
 
   function resetShell() {
@@ -58,11 +68,36 @@ const Router = (() => {
     if (main) main.innerHTML = "";
   }
 
+  /* Switch to a world: load ITS session (or none) and mark the backend mode. */
+  function selectWorld(w) {
+    if (world === w) return;
+    world = w; MM_MODE = w;
+    resetShell();
+    const p = readStoredSession(w);
+    const valid = !!(p && p.u && p.exp && Date.now() <= p.exp);
+    currentUser = valid ? p.u : null;
+    currentMess = valid ? (p.m || null) : null;
+    members = [];
+    if (p && !valid) clearSession();
+    document.body.classList.toggle("is-demo", w === "demo");
+  }
+
   const setTitle = (t) => { document.title = t ? `${t} · MessManager` : "MessManager · Mess management for shared homes"; };
 
   async function ensureBackend() {
     const wantDemo = MM_MODE === "demo";
     if (!sb || !!sb.isDemo !== wantDemo) await useBackend(MM_MODE);
+  }
+
+  /* Sign-in / sign-up screens are shared markup; the copy follows the world. */
+  function applyAuthCopy() {
+    const demo = MM_MODE === "demo";
+    const set = (id, t) => { const el = document.getElementById(id); if (el) el.textContent = t; };
+    set("login-title", demo ? "Sandbox sign-in" : "Welcome back");
+    set("login-sub", demo ? "Use a demo account, or one you created in the sandbox" : "Sign in to your mess account");
+    const note = document.getElementById("create-demo-note");
+    if (note) note.style.display = demo ? "" : "none";
+    set("create-title", demo ? "Create a sandbox mess" : "Create your mess");
   }
 
   /* Build the app shell once per user; verify the member still exists and refresh the role. */
@@ -72,7 +107,7 @@ const Router = (() => {
     if (currentUser.memberId) {
       try {
         const { data: fresh } = await getClient().from("members").select("role,name,username").eq("id", currentUser.memberId).maybeSingle();
-        if (!fresh) { clearSession(); resetShell(); go("login", true); return false; }
+        if (!fresh) { clearSession(); resetShell(); go(MM_MODE === "demo" ? "demo" : "login", true); return false; }
         if (fresh.role !== currentUser.role) {
           currentUser.role = fresh.role;
           saveSession(currentUser, currentMess, _getSessionToken());
@@ -101,83 +136,103 @@ const Router = (() => {
     else window.scrollTo(0, 0);
   }
 
+  /* The app proper — identical for both worlds. */
+  async function renderApp(pageSlug, stale) {
+    await ensureBackend();
+    if (stale()) return;
+    await loadAppScripts(currentUser.role);
+    if (stale()) return;
+    if (!(await ensureShell()) || stale()) return;
+
+    const wanted = pageSlug && SLUG.test(pageSlug) ? pageSlug : homePage();
+    const allowed = guardPage(wanted, currentUser.role);
+    if (allowed !== wanted || !pageSlug) return go(prefix() + allowed, true);
+
+    showScreen("app-shell");
+    setTitle(pageLabel(allowed));
+    await showPage(allowed);
+    if (stale()) return;
+    document.getElementById("main-content")?.scrollTo?.(0, 0);
+    window.scrollTo(0, 0);
+  }
+
   async function route() {
     const my = ++token;
     const stale = () => my !== token;
-    const [a, b] = parse();
+    const [a, b, c] = parse();
     const wasFirst = firstRoute; firstRoute = false;
     closeLandingDrawer();
 
     try {
       /* ── landing ── */
       if (!a || LANDING_SECTIONS[a]) {
-        if (!a && wasFirst && currentUser) return go(currentUser.role === "superadmin" ? "admin/messes" : "app/" + homePage(), true);
+        if (!a && wasFirst && MM_ENV.liveLogin) {          // returning, signed-in real user → straight to the app
+          selectWorld("live");
+          if (currentUser) return go(currentUser.role === "superadmin" ? "admin/messes" : "app/" + homePage(), true);
+        }
+        document.body.classList.remove("is-demo");
         showScreen("landing-page"); setTitle("");
         scrollToSection(LANDING_SECTIONS[a]);
         return;
       }
 
-      /* ── demo ── */
+      /* ═════════ SANDBOX WORLD ═════════ */
       if (a === "demo") {
-        if (b) {
-          if (!MMDemo_ROLES.includes(b)) return go("demo", true);
+        selectWorld("demo");
+
+        if (!b) {                                           // role picker
+          showScreen("demo-screen"); setTitle("Live demo"); window.scrollTo(0, 0);
+          loadScripts(SCRIPT_GROUPS.demo).catch(() => {}); // warm up while the visitor chooses
+          return;
+        }
+        if (DEMO_ROLES.includes(b)) {                       // one-click start
           await startDemo(b);
           if (stale()) return;
-          return go("app/" + homePage(), true);
+          return go("demo/app/" + homePage(), true);
         }
-        showScreen("demo-screen"); setTitle("Live demo"); window.scrollTo(0, 0);
-        loadScripts(SCRIPT_GROUPS.demo).catch(() => {}); // warm up while the visitor chooses
-        return;
+        if (b === "login" || b === "create") {
+          if (currentUser) return goAfterLogin();
+          await useBackend("demo");
+          if (stale()) return;
+          applyAuthCopy();
+          showScreen(b === "login" ? "login-screen" : "create-mess-screen");
+          setTitle(b === "login" ? "Sandbox sign-in" : "Create a sandbox mess"); window.scrollTo(0, 0);
+          return;
+        }
+        if (b === "app") {
+          if (!currentUser) { rememberReturn(); return go("demo", true); }
+          return renderApp(c, stale);
+        }
+        return go("demo", true);
       }
 
-      /* ── auth screens ── */
-      if (a === "login") {
-        if (currentUser) return goAfterLogin();
-        await useBackend(MM_ENV.liveLogin ? "live" : "demo");
-        if (stale()) return;
-        showScreen("login-screen"); setTitle("Sign in"); window.scrollTo(0, 0);
-        return;
-      }
-      if (a === "create") {
-        if (currentUser) return goAfterLogin();
-        await useBackend(MM_ENV.liveSignup ? "live" : "demo"); // default: a sandbox mess, never a real one
-        document.getElementById("create-demo-note").style.display = MM_MODE === "demo" ? "" : "none";
-        if (stale()) return;
-        showScreen("create-mess-screen"); setTitle("Create a mess"); window.scrollTo(0, 0);
-        return;
-      }
+      /* ═════════ REAL WORLD ═════════ */
+      if (["login", "create", "app", "admin"].includes(a)) {
+        if (!MM_ENV.liveLogin) return go("demo", true);     // sandbox-only build
+        selectWorld("live");
 
-      /* ── super-admin (live builds only) ── */
-      if (a === "admin") {
-        if (currentUser?.role !== "superadmin" || !MM_ENV.liveLogin) { go("login", true); return; }
-        await ensureBackend();
-        if (stale()) return;
-        setTitle("Super Admin");
-        bootSuperAdmin(b === "metrics" ? "metrics" : "messes");
-        return;
-      }
-
-      /* ── the app ── */
-      if (a === "app") {
+        if (a === "login" || a === "create") {
+          if (currentUser) return goAfterLogin();
+          if (a === "create" && !MM_ENV.liveSignup) return go("demo/create", true);
+          await useBackend("live");
+          if (stale()) return;
+          applyAuthCopy();
+          showScreen(a === "login" ? "login-screen" : "create-mess-screen");
+          setTitle(a === "login" ? "Sign in" : "Create a mess"); window.scrollTo(0, 0);
+          return;
+        }
+        if (a === "admin") {
+          if (currentUser?.role !== "superadmin") return go("login", true);
+          await ensureBackend();
+          if (stale()) return;
+          setTitle("Super Admin");
+          bootSuperAdmin(b === "metrics" ? "metrics" : "messes");
+          return;
+        }
+        // a === "app"
         if (!currentUser) { rememberReturn(); return go("login", true); }
         if (currentUser.role === "superadmin") return go("admin/messes", true);
-        await ensureBackend();
-        if (stale()) return;
-        await loadAppScripts(currentUser.role);
-        if (stale()) return;
-        if (!(await ensureShell()) || stale()) return;
-
-        const wanted = b && SLUG.test(b) ? b : homePage();
-        const allowed = guardPage(wanted, currentUser.role);
-        if (allowed !== wanted || !b) return go("app/" + allowed, true);
-
-        showScreen("app-shell");
-        setTitle(pageLabel(allowed));
-        await showPage(allowed);
-        if (stale()) return;
-        document.getElementById("main-content")?.scrollTo?.(0, 0);
-        window.scrollTo(0, 0);
-        return;
+        return renderApp(b, stale);
       }
 
       go("", true); // unknown route → landing
@@ -190,7 +245,6 @@ const Router = (() => {
   function start() {
     if (MM_ENV.liveLogin) document.documentElement.classList.add("live-enabled");
     loadTheme();
-    loadSession();
     window.addEventListener("hashchange", route);
     route();
     // After first paint + idle, warm the cache for the demo so "Try the demo" is instant.
@@ -201,11 +255,9 @@ const Router = (() => {
   return { start, go, openPage, goAfterLogin, resetShell, route };
 })();
 
-const MMDemo_ROLES = ["manager", "member"];
-
 /* ── Demo controls (sidebar / mobile drawer) ── */
 
-/* Jump between the manager's view and a member's view of the CURRENT mess (no password
+/* Jump between the manager's view and a member's view of the CURRENT sandbox mess (no password
    needed — it's a sandbox). Works for the sample mess and for a mess you created. */
 async function switchDemoRole() {
   if (MM_MODE !== "demo" || !currentUser) return;
@@ -219,7 +271,7 @@ async function switchDemoRole() {
   }
   Router.resetShell();
   saveSession({ name: row.name, username: row.username, role: row.role, memberId: row.id }, row.messes, null);
-  Router.go("app/" + homePage());
+  Router.go("demo/app/" + homePage());
 }
 
 async function resetDemo() {

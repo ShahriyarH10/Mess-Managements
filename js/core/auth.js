@@ -94,11 +94,6 @@ async function doLogin() {
 
   btn.disabled = true; btn.textContent = "Signing in…";
   try {
-    // 1) Sandbox accounts (sample mess + anything created in this tab): verified locally, no network.
-    if (await trySandboxLogin(user, pass)) { resetLoginAttempts(); return; }
-    // 2) Real accounts: Supabase (or, in sandbox-only builds, nothing more to try).
-    await useBackend(MM_ENV.liveLogin ? "live" : "demo");
-
     // Superadmin check
     if (user === SUPERADMIN.username && MM_MODE === "live") {
       const match = await comparePassword(pass, SUPERADMIN.passwordHash);
@@ -150,17 +145,6 @@ async function doLogin() {
   } finally {
     btn.disabled = false; btn.textContent = "Sign in →";
   }
-}
-
-async function trySandboxLogin(user, pass) {
-  try {
-    await useBackend("demo");
-    const { data: row } = await sb.from("members").select("*, messes(*)").eq("username", user).maybeSingle();
-    if (!row || !(await comparePassword(pass, row.password))) return false;
-    saveSession({ name: row.name, username: row.username, role: row.role, memberId: row.id }, row.messes, null);
-    Router.goAfterLogin();
-    return true;
-  } catch (e) { console.warn("[sandbox login]", e); return false; }
 }
 
 function resetLoginAttempts() {
