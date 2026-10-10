@@ -4,37 +4,81 @@
 /* ═════════════════════════════════════════════════════════════════
    Shareable receipt — opens in modal after a successful save.
    ═════════════════════════════════════════════════════════════════ */
+/* d.status: "confirmed" (default — a manager collection) | "pending" | "rejected" — member payment requests.
+   Optional: d.receiptNo, d.confirmedBy, d.confirmedAt, d.hasBreakdown === false, newMealRem/newNet == null
+   (history rows only store part of the settlement, so the sections they can't fill are hidden). */
+function _rcptStatus(d) { return d.status || (d.pending ? "pending" : "confirmed"); }
+function _rcptShape(d) {
+  const st = _rcptStatus(d), ok = st !== "rejected";
+  return {
+    st,
+    showAlloc: ok && d.hasBreakdown !== false,
+    showBal:   ok && d.newMealRem != null && d.newUtilRem != null && d.newRentRem != null,
+    showNet:   ok && d.newNet != null,
+    isSettled: d.newNet != null && d.newNet <= 0,
+    received:  st === "confirmed",
+  };
+}
+function _rcptNo(d) {
+  return d.receiptNo || ("RCP-"
+    + d.timestamp.getFullYear()
+    + String(d.timestamp.getMonth()+1).padStart(2,"0")
+    + String(d.timestamp.getDate()).padStart(2,"0")
+    + "-" + String(d.timestamp.getHours()).padStart(2,"0")
+    + String(d.timestamp.getMinutes()).padStart(2,"0"));
+}
+function _rcptDate(t) {
+  return t.toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", hour12:true });
+}
+function _rcptBanner(d, st, color) {
+  const [bg, fg] = color;
+  const box = txt => `<div style="background:${bg};color:${fg};border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;margin-bottom:8px">${txt}</div>`;
+  if (st === "pending")  return box("⚠ Pending — not official until the manager confirms it.");
+  if (st === "rejected") return box(`✖ Rejected${d.confirmedBy ? " by " + d.confirmedBy : ""} — this payment was not counted.`);
+  return d.confirmedBy ? box(`✓ Confirmed by ${d.confirmedBy}${d.confirmedAt ? " · " + _rcptDate(d.confirmedAt) : ""}`) : "";
+}
+
 function buildReceiptText(d) {
   const messName = currentMess?.name || "Mess";
-  const dt = d.timestamp.toLocaleString("en-IN", {
-    day:"2-digit", month:"short", year:"numeric",
-    hour:"2-digit", minute:"2-digit", hour12:true
-  });
+  const dt = _rcptDate(d.timestamp);
+  const sh = _rcptShape(d);
   const lines = [];
-  lines.push(`💵 PAYMENT RECEIPT`);
+  lines.push(sh.st === "rejected" ? `✖ PAYMENT REJECTED` : sh.st === "pending" ? `🕓 PAYMENT REQUEST` : `💵 PAYMENT RECEIPT`);
   lines.push(`─────────────────────`);
+  if (d.receiptNo) lines.push(`Receipt: ${d.receiptNo}`);
   lines.push(`Mess:    ${messName}`);
   lines.push(`Member:  ${d.member.name}`);
   lines.push(`Month:   ${d.monthLabel}`);
   lines.push(`Date:    ${dt}`);
   lines.push(``);
-  lines.push(`Amount received:  ${fmtTk(d.amountReceived)}`);
+  lines.push(`Amount ${sh.received ? "received" : "offered"}:  ${fmtTk(d.amountReceived)}`);
   lines.push(`─────────────────────`);
-  if (d.allocPrevDue > 0) lines.push(`→ Prev. Due: ${fmtTk(d.allocPrevDue)}`);
-  if (d.allocMeal    > 0) lines.push(`→ Meal:      ${fmtTk(d.allocMeal)}`);
-  if (d.allocUtil    > 0) lines.push(`→ Utility:   ${fmtTk(d.allocUtil)}`);
-  if (d.allocRent    > 0) lines.push(`→ Rent:      ${fmtTk(d.allocRent)}`);
-  if (d.change       > 0) lines.push(`Change returned: ${fmtTk(d.change)}`);
-  lines.push(`─────────────────────`);
-  const netLine = d.newNet > 0
-    ? `Still due:  ${fmtTk(d.newNet)}`
-    : d.newNet < 0
-      ? `Mess owes you: ${fmtTk(Math.abs(d.newNet))}`
-      : `✓ Fully settled for ${d.monthLabel}`;
-  lines.push(netLine);
-  lines.push(``);
-  if (d.pending) lines.push(`⚠ Not yet confirmed by the manager — not proof of payment received.`);
-  else lines.push(`— sent from ${messName} manager`);
+  if (sh.showAlloc) {
+    if (d.allocPrevDue > 0) lines.push(`→ Prev. Due: ${fmtTk(d.allocPrevDue)}`);
+    if (d.allocMeal    > 0) lines.push(`→ Meal:      ${fmtTk(d.allocMeal)}`);
+    if (d.allocUtil    > 0) lines.push(`→ Utility:   ${fmtTk(d.allocUtil)}`);
+    if (d.allocRent    > 0) lines.push(`→ Rent:      ${fmtTk(d.allocRent)}`);
+    if (d.change       > 0) lines.push(`Change returned: ${fmtTk(d.change)}`);
+    lines.push(`─────────────────────`);
+  }
+  if (sh.showNet) {
+    lines.push(d.newNet > 0
+      ? `Still due:  ${fmtTk(d.newNet)}`
+      : d.newNet < 0
+        ? `Mess owes you: ${fmtTk(Math.abs(d.newNet))}`
+        : `✓ Fully settled for ${d.monthLabel}`);
+    lines.push(``);
+  }
+  if (sh.st === "pending") {
+    lines.push(`⚠ Not yet confirmed by the manager.`);
+    lines.push(`This is NOT proof of payment received.`);
+  } else if (sh.st === "rejected") {
+    lines.push(`Rejected${d.confirmedBy ? " by " + d.confirmedBy : ""} — not counted.`);
+  } else if (d.confirmedBy) {
+    lines.push(`Confirmed by ${d.confirmedBy}${d.confirmedAt ? " · " + _rcptDate(d.confirmedAt) : ""}`);
+  } else {
+    lines.push(`— sent from ${messName} manager`);
+  }
   return lines.join("\n");
 }
 
@@ -48,19 +92,10 @@ function showCollectReceipt(d) {
     ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
     : `https://wa.me/?text=${encodeURIComponent(text)}`;
 
-  const dt = d.timestamp.toLocaleString("en-IN", {
-    day:"2-digit", month:"short", year:"numeric",
-    hour:"2-digit", minute:"2-digit", hour12:true,
-  });
-
+  const dt = _rcptDate(d.timestamp);
   const messName = currentMess?.name || "Mess";
-
-  const receiptNo = "RCP-"
-    + d.timestamp.getFullYear()
-    + String(d.timestamp.getMonth()+1).padStart(2,"0")
-    + String(d.timestamp.getDate()).padStart(2,"0")
-    + "-" + String(d.timestamp.getHours()).padStart(2,"0")
-    + String(d.timestamp.getMinutes()).padStart(2,"0");
+  const receiptNo = _rcptNo(d);
+  const sh = _rcptShape(d), st = sh.st;
 
   const allocItems = [];
   if (d.allocPrevDue > 0) allocItems.push({ icon:"⏪",  label:"Prev. Month Due", val:d.allocPrevDue, color:"var(--red)"    });
@@ -77,7 +112,7 @@ function showCollectReceipt(d) {
       note: d.newRentRem > 0 ? "Still pending" : "Cleared" },
   ];
 
-  const isSettled = d.newNet <= 0;
+  const isSettled = sh.isSettled;
   const netColor  = d.newNet > 0 ? "var(--red)" : "var(--green)";
   const netLabel  = d.newNet > 0
     ? `Pay ${fmtTk(d.newNet)}`
@@ -95,6 +130,7 @@ function showCollectReceipt(d) {
     .rcpt-badge{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
     .rcpt-badge-settled{background:var(--green-bg);color:var(--green);border:1px solid rgba(76,175,130,.3);}
     .rcpt-badge-due{background:var(--red-bg);color:var(--red);border:1px solid rgba(224,82,82,.3);}
+    .rcpt-badge-pend{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);}
     .rcpt-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px;}
     .rcpt-ml{display:flex;flex-direction:column;gap:1px;}
     .rcpt-ml span:first-child{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);}
@@ -132,8 +168,8 @@ function showCollectReceipt(d) {
       <div class="rcpt-head-icon">🏠</div>
       <div class="rcpt-head-name">${messName}</div>
       <div class="rcpt-head-sub">Official Payment Receipt</div>
-      <span class="rcpt-badge ${isSettled ? 'rcpt-badge-settled' : 'rcpt-badge-due'}">
-        ${isSettled ? "✓ Settled" : "Partially Paid"}
+      <span class="rcpt-badge ${st === "pending" ? 'rcpt-badge-pend' : st === "rejected" ? 'rcpt-badge-due' : (!sh.showNet || isSettled) ? 'rcpt-badge-settled' : 'rcpt-badge-due'}">
+        ${st === "pending" ? "🕓 Pending" : st === "rejected" ? "✖ Rejected" : !sh.showNet ? "✓ Confirmed" : isSettled ? "✓ Settled" : "Partially Paid"}
       </span>
     </div>
 
@@ -160,13 +196,14 @@ function showCollectReceipt(d) {
     <!-- ── Amount received ── -->
     <div class="rcpt-hero">
       <div>
-        <div class="rcpt-hero-lbl">Amount Received</div>
-        <div class="rcpt-hero-sub">Cash handed over by member</div>
+        <div class="rcpt-hero-lbl">Amount ${sh.received ? "Received" : "Offered"}</div>
+        <div class="rcpt-hero-sub">${sh.received ? "Cash handed over by member" : "Offered to the manager"}</div>
       </div>
       <div class="rcpt-hero-amt">${fmtTk(d.amountReceived)}</div>
     </div>
 
     <!-- ── Payment breakdown ── -->
+    ${sh.showAlloc ? `
     <div class="rcpt-sec">Payment Breakdown</div>
     ${allocItems.length ? allocItems.map(r => `
       <div class="rcpt-alloc-row">
@@ -180,10 +217,10 @@ function showCollectReceipt(d) {
       <div class="rcpt-alloc-row" style="color:var(--text3);font-size:12px">
         Member already settled — no allocation needed.
       </div>
-    `}
+    `}` : ""}
 
     <!-- ── Change to return ── -->
-    ${d.change > 0 ? `
+    ${sh.showAlloc && d.change > 0 ? `
       <div class="rcpt-change">
         <div>
           <div style="font-weight:700;color:var(--green);font-size:13px">💸 Change to Return</div>
@@ -193,11 +230,11 @@ function showCollectReceipt(d) {
       </div>
     ` : ""}
 
-    <hr class="rcpt-hr">
+    ${sh.showAlloc || sh.showBal || sh.showNet ? `<hr class="rcpt-hr">` : ""}
 
     <!-- ── Balance after ── -->
-    <div class="rcpt-sec">Balance After This Payment</div>
-    ${statusItems.map(r => {
+    ${sh.showBal ? `<div class="rcpt-sec">Balance After This Payment</div>` : ""}
+    ${!sh.showBal ? "" : statusItems.map(r => {
       const isDue    = r.signed ? r.val > 0 : r.val > 0;
       const isCredit = r.signed && r.val < 0;
       const cls      = isDue ? "rcpt-stat-due" : "rcpt-stat-ok";
@@ -217,16 +254,16 @@ function showCollectReceipt(d) {
     }).join("")}
 
     <!-- ── Final net ── -->
-    <div class="rcpt-net ${isSettled ? 'rcpt-net-ok' : 'rcpt-net-due'}">
+    ${sh.showNet ? `<div class="rcpt-net ${isSettled ? 'rcpt-net-ok' : 'rcpt-net-due'}">
       <span>Total Net Balance</span>
       <span style="color:${netColor}">${netLabel}</span>
-    </div>
+    </div>` : ""}
 
     <!-- ── Footer ── -->
     <div class="rcpt-foot">
-      ${d.pending ? `<div style="background:var(--accent-bg);color:var(--accent);border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;margin-bottom:8px">⚠ Pending — not official until the manager confirms it.</div>` : ""}
+      ${_rcptBanner(d, st, st === "confirmed" ? ["var(--green-bg)", "var(--green)"] : st === "rejected" ? ["var(--red-bg)", "var(--red)"] : ["var(--accent-bg)", "var(--accent)"])}
       <div class="rcpt-foot-txt">— Generated by ${messName} Manager —</div>
-      ${d.member.phone || d.pending ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
+      ${d.member.phone || st !== "confirmed" ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
     </div>
 
     <!-- ── Actions ── -->
@@ -285,22 +322,15 @@ function printCollectReceipt() {
   }
 
   const messName = currentMess?.name || "Mess";
-  const dt = d.timestamp.toLocaleString("en-IN", {
-    day:"2-digit", month:"short", year:"numeric",
-    hour:"2-digit", minute:"2-digit", hour12:true,
-  });
-  const receiptNo = "RCP-"
-    + d.timestamp.getFullYear()
-    + String(d.timestamp.getMonth()+1).padStart(2,"0")
-    + String(d.timestamp.getDate()).padStart(2,"0")
-    + "-" + String(d.timestamp.getHours()).padStart(2,"0")
-    + String(d.timestamp.getMinutes()).padStart(2,"0");
-
-  const isSettled = d.newNet <= 0;
+  const dt = _rcptDate(d.timestamp);
+  const receiptNo = _rcptNo(d);
+  const sh = _rcptShape(d), st = sh.st;
+  const isSettled = sh.isSettled;
 
   const fmtTkP = (v) => "৳" + Number(v).toLocaleString("en-IN", {minimumFractionDigits:0, maximumFractionDigits:2});
 
   const allocItems = [];
+  if (d.allocPrevDue > 0) allocItems.push({ icon:"⏪",  label:"Prev. Month Due", val:d.allocPrevDue, color:"#c0392b" });
   if (d.allocMeal > 0) allocItems.push({ icon:"🍽️", label:"Meal Balance",  val:d.allocMeal, color:"#b8914a" });
   if (d.allocUtil > 0) allocItems.push({ icon:"⚡",  label:"Utility",       val:d.allocUtil, color:"#3a7bd5" });
   if (d.allocRent > 0) allocItems.push({ icon:"🏠",  label:"Room Rent",     val:d.allocRent, color:"#3a7bd5" });
@@ -373,6 +403,7 @@ function printCollectReceipt() {
     .badge{display:inline-block;margin-top:8px;padding:3px 12px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
     .badge-ok{background:#e8f8f0;color:#27ae60;border:1px solid #b2dfce;}
     .badge-due{background:#fdf0f0;color:#c0392b;border:1px solid #f5c6c6;}
+    .badge-pend{background:#fdf3e1;color:#8a5a00;border:1px solid #e8c98a;}
     .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;background:#f7f7f7;border-radius:8px;padding:10px 14px;margin-bottom:14px;border:1px solid #eee;}
     .ml{display:flex;flex-direction:column;gap:1px;}
     .ml-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#999;}
@@ -406,7 +437,7 @@ function printCollectReceipt() {
     <div class="head-icon">🏠</div>
     <div class="head-name">${messName}</div>
     <div class="head-sub">Official Payment Receipt</div>
-    <span class="badge ${isSettled ? 'badge-ok' : 'badge-due'}">${isSettled ? "✓ Settled" : "Partially Paid"}</span>
+    <span class="badge ${st === "pending" ? 'badge-pend' : st === "rejected" ? 'badge-due' : (!sh.showNet || isSettled) ? 'badge-ok' : 'badge-due'}">${st === "pending" ? "🕓 Pending" : st === "rejected" ? "✖ Rejected" : !sh.showNet ? "✓ Confirmed" : isSettled ? "✓ Settled" : "Partially Paid"}</span>
   </div>
 
   <div class="meta">
@@ -418,28 +449,28 @@ function printCollectReceipt() {
 
   <div class="hero">
     <div>
-      <div class="hero-lbl">Amount Received</div>
-      <div class="hero-sub">Cash handed over by member</div>
+      <div class="hero-lbl">Amount ${sh.received ? "Received" : "Offered"}</div>
+      <div class="hero-sub">${sh.received ? "Cash handed over by member" : "Offered to the manager"}</div>
     </div>
     <div class="hero-amt">${fmtTkP(d.amountReceived)}</div>
   </div>
 
-  <div class="sec">Payment Breakdown</div>
+  ${sh.showAlloc ? `<div class="sec">Payment Breakdown</div>
   ${allocHtml}
-  ${changeHtml}
+  ${changeHtml}` : ""}
 
-  <hr class="divider">
+  ${sh.showAlloc || sh.showBal || sh.showNet ? `<hr class="divider">` : ""}
 
-  <div class="sec">Balance After This Payment</div>
-  ${statusHtml}
+  ${sh.showBal ? `<div class="sec">Balance After This Payment</div>
+  ${statusHtml}` : ""}
 
-  <div class="net ${isSettled ? 'net-ok' : 'net-due'}">
+  ${sh.showNet ? `<div class="net ${isSettled ? 'net-ok' : 'net-due'}">
     <span>Total Net Balance</span>
     <span style="color:${netColor}">${netLabel}</span>
-  </div>
+  </div>` : ""}
 
   <div class="foot">
-    ${d.pending ? `<div style="background:#fdf3e1;color:#8a5a00;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;margin-bottom:8px">⚠ Pending — not official until the manager confirms it.</div>` : ""}
+    ${_rcptBanner(d, st, st === "confirmed" ? ["#e8f8f0", "#27ae60"] : st === "rejected" ? ["#fdf0f0", "#c0392b"] : ["#fdf3e1", "#8a5a00"])}
     <div class="foot-txt">— Generated by ${messName} Manager —</div>
   </div>
 

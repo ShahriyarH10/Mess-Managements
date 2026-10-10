@@ -83,160 +83,33 @@ async function loadMemberCollectRow(member, month, year) {
   };
 }
 
-/* ── Receipts (shared with the manager's Collect page) ── */
+/* ── Receipt: the same card the manager gets after Collect Payment → Save (collect-receipt.js) ── */
 
-function buildPaymentReceiptText(p) {
-  const messName = _decodeEntities(currentMess?.name || "Mess");
-  const label = monthLabelFromKey(p.month_key);
-  const L = [];
-  L.push(p.status === "confirmed" ? "💵 PAYMENT RECEIPT" : p.status === "rejected" ? "✖ PAYMENT REJECTED" : "🕓 PAYMENT REQUEST");
-  L.push("─────────────────────");
-  L.push(`Receipt: ${paymentReceiptNo(p.receipt_no)}`);
-  L.push(`Mess:    ${messName}`);
-  L.push(`Member:  ${paymentMemberName(p)}`);
-  L.push(`Month:   ${label}`);
-  L.push(`Date:    ${_payDate(p.created_at)}`);
-  L.push("");
-  L.push(`Amount ${p.status === "confirmed" ? "received" : "offered"}:  ${fmtTk(Number(p.amount))}`);
-  L.push("─────────────────────");
-  const by = p.confirmed_by || "manager";
-  if (p.status === "confirmed") {
-    const sp = p.split;
-    if (sp) {
-      if (sp.allocPrevDue > 0) L.push(`→ Prev. Due: ${fmtTk(sp.allocPrevDue)}`);
-      if (sp.allocMeal    > 0) L.push(`→ Meal:      ${fmtTk(sp.allocMeal)}`);
-      if (sp.allocUtil    > 0) L.push(`→ Utility:   ${fmtTk(sp.allocUtil)}`);
-      if (sp.allocRent    > 0) L.push(`→ Rent:      ${fmtTk(sp.allocRent)}`);
-      if (sp.change       > 0) L.push(`Change returned: ${fmtTk(sp.change)}`);
-      L.push("─────────────────────");
-    }
-    if (p.still_due != null) L.push(_paymentBalanceLine(Number(p.still_due), label));
-    L.push(`Confirmed by ${by}${p.confirmed_at ? " · " + _payDate(p.confirmed_at) : ""}`);
-  } else if (p.status === "rejected") {
-    L.push(`Rejected by ${by} — not counted.`);
-  } else {
-    L.push("⚠ Not yet confirmed by the manager.");
-    L.push("This is NOT proof of payment received.");
-  }
-  return L.join("\n");
-}
-
-function _paymentBalanceLine(stillDue, label) {
-  return stillDue > 0.005 ? `Still due: ${fmtTk(stillDue)}`
-    : stillDue < -0.005   ? `Mess owes you ${fmtTk(Math.abs(stillDue))}`
-    : `Fully settled for ${label}`;
-}
-
-function buildPaymentReceiptHtml(p) {
-  const esc = escapeHtml;
-  const messName = _decodeEntities(currentMess?.name || "Mess");
-  const label = monthLabelFromKey(p.month_key);
-  const row = (l, v, color = "#1a1816") =>
-    `<tr><td style="padding:6px 0;color:#6b6560">${l}</td><td style="padding:6px 0;text-align:right;font-weight:700;color:${color}">${v}</td></tr>`;
-  const title = p.status === "confirmed" ? "Payment Receipt" : p.status === "rejected" ? "Payment Rejected" : "Payment Request";
+function paymentReceiptData(p) {
   const sp = p.split;
-  const allocRows = sp ? [
-    sp.allocPrevDue > 0 ? row("Previous due", fmtTk(sp.allocPrevDue), "#e05252") : "",
-    sp.allocRent    > 0 ? row("Room rent",    fmtTk(sp.allocRent),    "#b8914a") : "",
-    sp.allocUtil    > 0 ? row("Utility",      fmtTk(sp.allocUtil),    "#5b9bd5") : "",
-    sp.allocMeal    > 0 ? row("Meal balance", fmtTk(sp.allocMeal),    "#9b7fd4") : "",
-    sp.change       > 0 ? row("Change returned", fmtTk(sp.change),    "#4caf82") : "",
-  ].join("") : "";
-  const by = esc(p.confirmed_by || "manager");
-  const banner = p.status === "pending"
-    ? `<div class="warn">Not yet confirmed by the manager.<br/>This is not proof that the payment was received.</div>`
-    : p.status === "rejected"
-      ? `<div class="warn">Rejected by ${by} — this payment was not counted.</div>`
-      : `<div class="ok">Confirmed by ${by}${p.confirmed_at ? "<br/>" + esc(_payDate(p.confirmed_at)) : ""}</div>`;
-  const balance = p.status === "confirmed" && p.still_due != null
-    ? `<div class="hr"></div><div class="hero"><span>Balance</span><b>${esc(_paymentBalanceLine(Number(p.still_due), label))}</b></div>` : "";
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>${esc(title)}</title>
-  <style>body{font-family:-apple-system,Roboto,Arial,sans-serif;color:#1a1816;padding:28px;max-width:420px;margin:0 auto}
-  h1{font-size:20px;margin:0 0 2px}.sub{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#9a9690;margin-bottom:18px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  .hero{background:#f0ede8;border-radius:10px;padding:14px 16px;margin:14px 0;display:flex;justify-content:space-between;align-items:center}
-  .hero b{font-size:20px}.hr{border-top:2px dashed #ddd;margin:14px 0}.foot{font-size:10px;color:#9a9690;text-align:center;margin-top:18px}
-  .warn{background:#fdf3e1;color:#8a5a00;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:14px}
-  .ok{background:#e6f5ee;color:#1d7a4f;border-radius:8px;padding:10px 12px;font-size:12px;margin-top:14px}</style></head>
-  <body>
-    <h1>${esc(messName)}</h1><div class="sub">${esc(title)}</div>
-    <table>
-      ${row("Receipt no.", paymentReceiptNo(p.receipt_no))}
-      ${row("Member", esc(paymentMemberName(p)))}
-      ${row("Month", esc(label))}
-      ${row("Date", esc(_payDate(p.created_at)))}
-    </table>
-    <div class="hero"><span>Amount ${p.status === "confirmed" ? "received" : "offered"}</span><b>${fmtTk(Number(p.amount))}</b></div>
-    ${allocRows ? `<div class="sub">Allocation</div><table>${allocRows}</table>` : ""}
-    ${balance}
-    ${banner}
-    <div class="foot">Generated by MessManager</div>
-  </body></html>`;
+  const mgr = ["manager", "sub_manager", "superadmin"].includes(currentUser?.role);
+  const m = mgr ? (typeof members !== "undefined" ? members : []).find(x => x.id === p.member_id) : null;
+  return {
+    // member names are HTML-escaped by the receipt, so hand it escaped plain text
+    member: { name: escapeHtml(paymentMemberName(p)), phone: m?.phone || "" },
+    monthLabel: monthLabelFromKey(p.month_key),
+    amountReceived: Number(p.amount),
+    allocMeal: sp?.allocMeal || 0, allocUtil: sp?.allocUtil || 0, allocRent: sp?.allocRent || 0,
+    allocPrevDue: sp?.allocPrevDue || 0, change: sp?.change || 0,
+    hasBreakdown: !!sp,
+    newNet: p.status === "confirmed" && p.still_due != null ? Number(p.still_due) : null,
+    timestamp: new Date(p.created_at),
+    receiptNo: paymentReceiptNo(p.receipt_no),
+    status: p.status,
+    confirmedBy: p.status === "pending" ? "" : escapeHtml(p.confirmed_by || "manager"),
+    confirmedAt: p.confirmed_at ? new Date(p.confirmed_at) : null,
+  };
 }
 
 function showPaymentReceipt(id) {
   const p = _paymentCache.get(id);
   if (!p) { toast("Receipt not found — refresh and try again", "error"); return; }
-  window._lastPayReceipt = p;
-  const st = _payStatus(p);
-  document.getElementById("modal-content").innerHTML = `
-    <div style="max-width:420px;margin:0 auto">
-      <div style="text-align:center;padding:4px 0 14px;border-bottom:2px dashed var(--border2);margin-bottom:14px">
-        <div style="font-size:30px;line-height:1;margin-bottom:6px">🧾</div>
-        <div style="font-family:var(--font-serif);font-size:21px;font-weight:700;color:var(--text)">${escapeHtml(_decodeEntities(currentMess?.name || "Mess"))}</div>
-        <span class="badge ${st.cls}" style="margin-top:8px">${st.label}</span>
-      </div>
-      <pre style="white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--text);background:var(--bg3);border-radius:8px;padding:12px 14px;margin:0">${escapeHtml(buildPaymentReceiptText(p))}</pre>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:14px">
-        <button class="btn btn-primary btn-sm" onclick="copyPaymentReceipt(this)" style="flex:1;justify-content:center">📋 Copy</button>
-        <button class="btn btn-ghost btn-sm" onclick="printPaymentReceipt()" style="flex:1;justify-content:center">🖨 Print</button>
-        <button class="btn btn-ghost btn-sm" onclick="closeModal()" style="flex:1;justify-content:center">✕ Close</button>
-      </div>
-    </div>`;
-  document.querySelector(".modal").classList.remove("modal-wide");
-  openModal();
-}
-
-async function copyPaymentReceipt(btn) {
-  const p = window._lastPayReceipt;
-  if (!p) return;
-  const text = buildPaymentReceiptText(p);
-  try {
-    await navigator.clipboard.writeText(text);
-    if (btn) { const o = btn.textContent; btn.textContent = "✓ Copied"; setTimeout(() => btn.textContent = o, 1600); }
-    toast("Receipt copied to clipboard", "success");
-  } catch (_) {
-    const ta = document.createElement("textarea");
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); toast("Receipt copied", "success"); }
-    catch (__) { toast("Copy failed — select the receipt text and copy it manually", "error"); }
-    document.body.removeChild(ta);
-  }
-}
-
-function printPaymentReceipt() {
-  const p = window._lastPayReceipt;
-  if (!p) { toast("No receipt to print", "error"); return; }
-  const html = buildPaymentReceiptHtml(p);
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  let w, frame;
-  if (isSafari) {
-    w = window.open("", "_blank", "width=480,height=700");
-    if (!w) { toast("Pop-up blocked — allow pop-ups to print", "error"); return; }
-  } else {
-    frame = document.getElementById("_pay-print-frame");
-    if (frame) frame.remove();
-    frame = document.createElement("iframe");
-    frame.id = "_pay-print-frame";
-    frame.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
-    document.body.appendChild(frame);
-    w = frame.contentWindow;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  if (isSafari) setTimeout(() => { w.focus(); w.print(); }, 250);
-  else frame.onload = () => setTimeout(() => { w.focus(); w.print(); }, 250);
+  showCollectReceipt(paymentReceiptData(p));
 }
 
 /* ═══════════════════════════════════════════════
@@ -461,7 +334,8 @@ async function submitGivePayment() {
       allocPrevDue: sp.allocPrevDue, change: sp.change,
       newUtilRem, newRentRem, newMealRem, newNet,
       timestamp: new Date(payment.created_at || Date.now()),
-      pending: true,
+      status: "pending",
+      receiptNo: paymentReceiptNo(payment.receipt_no),
     });
   } catch (e) {
     toast("Error: " + e.message, "error");
