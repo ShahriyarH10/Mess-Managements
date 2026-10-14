@@ -14,6 +14,7 @@
    origin whenever liveLogin is true.
    ═══════════════════════════════════════════════ */
 window.MM_ENV = Object.freeze({
+  demoOnly: false, // LIVE branch: real Supabase sign-in enabled (the sandbox stays at #/demo)
   liveLogin: true,
   liveSignup: true,
 });
