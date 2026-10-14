@@ -9,6 +9,7 @@ mess-manager/
 ├── assets/                       ← favicon, self-hosted fonts
 ├── vendor/supabase.min.js        ← vendored SDK, loaded only in live builds
 ├── tests/                        ← browser smoke test (smoke.html + smoke.js)
+├── docs/screenshots/             ← images used by the README
 │
 ├── css/
 │   ├── 01-variables.css          ← CSS tokens, dark/light theme, reset
@@ -16,13 +17,15 @@ mess-manager/
 │   ├── 03-auth.css               ← Login & create-mess screens
 │   ├── 04-layout.css             ← App shell, sidebar, mobile nav, drawer
 │   ├── 05-components.css         ← Cards, buttons, inputs, tables, badges, modals, toast
-│   └── 06-animations-responsive.css  ← Keyframes + all @media breakpoints
+│   ├── 06-animations-responsive.css  ← Keyframes + all @media breakpoints
+│   └── 08-motion.css         ← Spinner, skeletons, splash, progress bar, entrance choreography
 │
 └── js/
     │
     ├── core/                     ← Shared by both manager and member
-    │   ├── env.js                ← demoOnly flag (default true → no backend access)
+    │   ├── env.js                ← liveLogin / liveSignup feature flags
     │   ├── loader.js             ← on-demand script loading + prefetch
+    │   ├── motion.js             ← route progress bar, boot splash, skeletons, button loading, scroll reveal
     │   ├── events.js             ← CSP-safe handler for inline on* attributes
     │   ├── router.js             ← hash router, guards, demo controls
     │   ├── boot.js               ← Router.start()
@@ -48,13 +51,16 @@ mess-manager/
     │   ├── log.js                ← Room rent entry + Monthly settlement log (prepaid/postpaid split)
     │   ├── announcements.js      ← Post/delete announcements, mark-read badge system
     │   ├── notifications.js      ← View/approve/reject member requests (meal, bazar, bill payment)
+    │   ├── payment-requests.js   ← Confirm/reject members' Give Payment requests (listed on the Collect page)
     │   └── members.js            ← Add/edit/delete members, transfer role, settings page
     │
     └── member/                   ← Only loaded/used when role === "member"
         ├── dashboard.js          ← My Dashboard: settlement stats, today's meals, What I Owe
         │                            My Profile: stats, history, mess share, recent months
-        └── pages.js              ← My Meals (request), My Bazar (request), My Payments,
-                                     Mess Overview, submit helpers (submitMealRequest etc.)
+        ├── pages.js              ← My Meals (request), My Bazar (request), My Payments,
+        │                            Mess Overview, submit helpers (submitMealRequest etc.)
+        ├── give-payment.js       ← Give Payment page + receipt builders/modal (also used by the manager)
+        └── collect-receipt.js    ← Collect-style receipt modal/copy/print (shared; used by Collect + Give Payment)
 ```
 
 ## Script load order in index.html
@@ -105,6 +111,7 @@ mess-manager/
 | `my-meals`      | renderMyMeals         | member/pages.js             |
 | `my-bazar`      | renderMyBazar         | member/pages.js             |
 | `my-payments`   | renderMyPayments      | member/pages.js             |
+| `give-payment`  | renderGivePayment     | member/give-payment.js      |
 | `mess-overview` | renderMessOverview    | member/pages.js             |
 | `my-announce`   | renderAnnouncements   | manager/announcements.js    |
 | `my-chores`     | renderChores          | manager/announcements.js    |

@@ -60,6 +60,21 @@ function buildMessage(table: string, r: Row): { title: string; body: string } {
       return { title: `${who} logged bazar`, body: `${r.date} — ${tk(d.amount)}` };
     case "rent_update":
       return { title: `${who} paid rent`, body: `${tk(d.amount)} · ${d.monthName ?? ""} ${d.year ?? ""}`.trim() };
+    case "payment_request":
+      return {
+        title: `${who} wants to give a payment`,
+        body: `${tk(d.amount)} · ${d.monthName ?? ""} ${d.year ?? ""} — tap to confirm`.trim(),
+      };
+    case "payment_confirmed":
+      return {
+        title: "Payment confirmed ✓",
+        body: `${tk(d.amount)} · ${d.monthName ?? ""} ${d.year ?? ""} — your receipt is ready`.trim(),
+      };
+    case "payment_rejected":
+      return {
+        title: "Payment not accepted",
+        body: `${tk(d.amount)} · ${d.monthName ?? ""} ${d.year ?? ""} — contact your manager`.trim(),
+      };
     case "utility_update":
       return {
         title: `${who} paid a bill`,
@@ -114,13 +129,19 @@ Deno.serve(async (req) => {
 
   const { data: members } = await sb
     .from("members")
-    .select("id, name")
+    .select("id, name, role")
     .eq("mess_id", record.mess_id);
 
   const authorId = record.from_id ?? null;
   const authorName = record.author ?? record.from_name ?? null;
+  // Payment flow messages are targeted: requests go to managers only; a
+  // confirm/reject goes to the one member it is about.
+  const toMemberId = (record.data?.to_member_id as string | undefined) ?? null;
+  const managersOnly = record.type === "payment_request";
   const recipientIds = (members ?? [])
     .filter((m) => m.id !== authorId && (!authorName || m.name !== authorName))
+    .filter((m) => !toMemberId || m.id === toMemberId)
+    .filter((m) => !managersOnly || m.role === "manager" || m.role === "sub_manager")
     .map((m) => m.id);
   console.log("send-push: recipients", { members: members?.length ?? 0, recipients: recipientIds.length });
   if (recipientIds.length === 0) return json({ sent: 0, reason: "no recipients" });

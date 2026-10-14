@@ -55,7 +55,7 @@ function renderMembers(el) {
       </div>
       <div class="card" id="roles-member-list">
         <div class="card-title">Manage roles</div>
-        <div class="empty">Loading…</div>
+        <div class="loading"><div class="spinner"></div>Loading…</div>
       </div>
     </div>
     <!-- Transfer tab -->

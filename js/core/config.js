@@ -4,7 +4,7 @@
 /* ═══════════════════════════════════════════
    BACKEND
    "demo" → in-memory mock (js/demo/*), no network, resets on reload
-   "live" → Supabase (only reachable when MM_ENV.demoOnly === false)
+   "live" → Supabase (only when MM_ENV.liveLogin is true)
 ═══════════════════════════════════════════ */
 const SUPABASE_URL = "https://lrzotklutnyzcadutgwf.supabase.co";
 const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb"; // publishable (anon) key — safe to ship; protect data with RLS
@@ -15,7 +15,7 @@ let _demoDb = null;     // demo data store; null → re-seed on next useBackend(
 let _authedClient = null, _authedToken = null;
 
 async function useBackend(mode) {
-  if (MM_ENV.demoOnly) mode = "demo"; // hard guarantee: demo-only builds never build a live client
+  if (mode === "live" && !MM_ENV.liveLogin) mode = "demo"; // sandbox-only builds never build a live client
   MM_MODE = mode;
   document.body.classList.toggle("is-demo", mode === "demo");
   if (mode === "demo") {

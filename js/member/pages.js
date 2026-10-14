@@ -477,6 +477,14 @@ async function renderMyPayments(el) {
 
   <div class="content">
     <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Give payment to the manager</div>
+      <div class="auth-sub" style="margin-bottom:12px;font-size:13px;color:var(--text2)">
+        Tell the manager what you're paying for the month. Once they confirm it, it's split across rent, utility and meals and your receipt becomes official.
+      </div>
+      <button class="btn btn-primary" onclick="navigate('give-payment')">💵 Give payment</button>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
       <div class="card-title">My utility / room-rent payment</div>
 
       <div class="auth-sub" style="margin-bottom:14px;font-size:13px;color:var(--text2)">

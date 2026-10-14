@@ -160,7 +160,8 @@ function closeLandingDrawer() {
   document.body.style.overflow = "";
 }
 
-/* SESSION — live: localStorage (30 days) · demo: sessionStorage (tab lifetime) */
+/* SESSION — one per world. live: localStorage (30 days) · sandbox: sessionStorage (tab lifetime).
+   Loading is done by Router.selectWorld(). */
 function saveSession(u, m, jwt = null) {
   currentUser = u; currentMess = m;
   const demo = MM_MODE === "demo";
@@ -169,22 +170,13 @@ function saveSession(u, m, jwt = null) {
     (demo ? sessionStorage : localStorage).setItem(demo ? DEMO_SESSION_KEY : SESSION_KEY, JSON.stringify(payload));
   } catch (_) { /* storage blocked — session lives in memory for this page only */ }
 }
-function loadSession() {
-  // A demo session wins; a live session is ignored entirely in demo-only builds.
-  let mode = "demo", payload = readStoredSession("demo");
-  if (!payload && !MM_ENV.demoOnly) { mode = "live"; payload = readStoredSession("live"); }
-  if (!payload) return;
-  if (!payload.exp || Date.now() > payload.exp || !payload.u) { MM_MODE = mode; clearSession(); return; }
-  MM_MODE = mode;
-  currentUser = payload.u;
-  currentMess = payload.m || null;
-}
+// Clears only the ACTIVE world's session, so leaving the sandbox never signs you out of a real
+// account in the same browser (and vice-versa).
 function clearSession() {
   currentUser = null; currentMess = null; members = [];
   try {
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess"); // legacy keys
-    sessionStorage.removeItem(DEMO_SESSION_KEY);
+    if (MM_MODE === "demo") sessionStorage.removeItem(DEMO_SESSION_KEY);
+    else { localStorage.removeItem(SESSION_KEY); localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess"); }
   } catch (_) {}
 }
 
@@ -502,6 +494,41 @@ function calcPrevDueForMember(member, allMeals, allBazar, allRent, allUtil, sett
     carry = round2(Math.max(0, carry + netOwnPrev - prevDuePaidThisStep));
   }
   return carry;
+}
+
+/* Priority-ordered split: Rent → Util → Meal.
+   Fills each bucket fully before moving to the next.
+   Excess (amount > totalRem) → change.
+   Negative mealRem (bazar surplus) is clamped to 0 —
+   the surplus is already baked into netPayable so the
+   member simply pays less. */
+/* Priority order: prevDue (old debt) → Rent → Util → Meal */
+function computeSplit3(amount, mealRem, utilRem, rentRem, prevDue = 0) {
+  amount   = Math.max(0, round2(amount  || 0));
+  const m  = Math.max(0, round2(mealRem || 0));
+  const u  = Math.max(0, round2(utilRem || 0));
+  const r  = Math.max(0, round2(rentRem || 0));
+  const pd = Math.max(0, round2(prevDue || 0));
+  const totalRem = round2(m + u + r + pd);
+
+  if (amount <= 0)        return { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: 0 };
+  if (totalRem <= 0)      return { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: amount };
+  if (amount >= totalRem) return { allocMeal: m, allocUtil: u, allocRent: r, allocPrevDue: pd, change: round2(amount - totalRem) };
+
+  let remaining = amount;
+
+  const allocPrevDue = round2(Math.min(remaining, pd));
+  remaining = round2(remaining - allocPrevDue);
+
+  const allocRent = round2(Math.min(remaining, r));
+  remaining = round2(remaining - allocRent);
+
+  const allocUtil = round2(Math.min(remaining, u));
+  remaining = round2(remaining - allocUtil);
+
+  const allocMeal = round2(Math.min(remaining, m));
+
+  return { allocMeal, allocUtil, allocRent, allocPrevDue, change: 0 };
 }
 
 function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForward = 5) {
