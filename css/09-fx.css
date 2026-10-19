@@ -1,0 +1,315 @@
+/* ══════════════════════════════════════════════
+   FX — the expressive layer (pairs with js/core/fx.js)
+   Ambient aurora, 3D tilt + spotlight, ripples, glowing borders, count-up
+   pops, cascading tables/calendars, cinematic modals, toast physics,
+   landing parallax. Shared classes, so manager and member get it alike.
+
+   Everything animated lives inside `no-preference`, so reduced-motion users
+   get the calm base UI with no extra work.
+══════════════════════════════════════════════ */
+
+/* Hosts for ripples / spotlights (zero specificity: never overrides a fixed/absolute) */
+:where(.nav-item,.theme-toggle-btn,.meal-month-chip,.profile-card,.mob-theme-btn,.land-nav-theme,.demo-role,
+       .stat-card,.feature-card,.step,.su-avatar){position:relative;}
+
+.fx-ripple-wrap{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none;z-index:0;}
+.fx-ripple{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.35) 0%,rgba(212,168,83,.25) 40%,transparent 70%);
+  transform:scale(0);opacity:1;animation:fxRipple .6s cubic-bezier(.22,1,.36,1) forwards;}
+.btn-primary .fx-ripple{background:radial-gradient(circle,rgba(255,255,255,.6) 0%,rgba(255,255,255,.2) 45%,transparent 70%);}
+@keyframes fxRipple{to{transform:scale(1);opacity:0;}}
+
+#fx-confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:2100;}
+
+/* Theme switch: a circle of the new theme grows from the click (View Transitions) */
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal;}
+.fx-theme-swap *,.fx-theme-swap *::before,.fx-theme-swap *::after{transition:none!important;}
+
+@property --fx-angle{syntax:"<angle>";inherits:false;initial-value:0deg;}
+
+@media (prefers-reduced-motion:no-preference){
+
+/* ═════════ AMBIENT ═════════ */
+
+/* Slow aurora drifting behind the app (both roles) */
+.shell::before{
+  content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(38% 32% at 22% 28%,rgba(212,168,83,.10),transparent 70%),
+    radial-gradient(34% 30% at 78% 18%,rgba(91,155,213,.08),transparent 70%),
+    radial-gradient(40% 36% at 70% 82%,rgba(167,139,250,.07),transparent 70%),
+    radial-gradient(30% 28% at 18% 85%,rgba(76,175,130,.06),transparent 70%);
+  animation:fxAurora 38s ease-in-out infinite alternate;
+}
+[data-theme="light"] .shell::before{opacity:.7;}
+@keyframes fxAurora{
+  0%{transform:translate3d(0,0,0) rotate(0deg) scale(1);}
+  50%{transform:translate3d(4%,-3%,0) rotate(8deg) scale(1.08);}
+  100%{transform:translate3d(-3%,4%,0) rotate(-6deg) scale(1.02);}
+}
+
+/* ═════════ PAGE ENTRANCE ═════════ */
+
+/* Pages focus-pull in (backwards fill: no lingering filter/transform afterwards) */
+.page-enter{animation:fxPageIn .6s var(--ease-spring) backwards;}
+@keyframes fxPageIn{from{opacity:0;transform:translateY(18px) scale(.992);filter:blur(7px);}to{opacity:1;transform:none;filter:blur(0);}}
+
+/* Title wipes in, with a gold underline that draws itself */
+.page-enter .page-title{animation:fxWipe .8s var(--ease-spring) .05s backwards;position:relative;}
+.page-enter .page-title::after{content:"";position:absolute;left:0;bottom:-5px;height:2px;width:42px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent),transparent);transform-origin:left;animation:fxDraw .9s var(--ease-spring) .45s backwards;}
+.page-enter .page-sub{animation:fadeUp .6s var(--ease-spring) .2s backwards;}
+.page-enter .topbar-actions>*{animation:fxPop .5s var(--ease-snap) backwards;}
+.page-enter .topbar-actions>:nth-child(1){animation-delay:.2s;}
+.page-enter .topbar-actions>:nth-child(2){animation-delay:.26s;}
+.page-enter .topbar-actions>:nth-child(n+3){animation-delay:.32s;}
+@keyframes fxWipe{from{clip-path:inset(0 100% 0 0);opacity:.2;transform:translateX(-8px);}to{clip-path:inset(0 -10% -20% 0);opacity:1;transform:none;}}
+@keyframes fxDraw{from{transform:scaleX(0);}}
+@keyframes fxPop{from{opacity:0;transform:scale(.6) translateY(6px);}60%{opacity:1;transform:scale(1.06);}to{transform:none;}}
+
+/* Stat cards flip up instead of just rising */
+.page-enter .stat-grid>*{animation-name:fxFlipUp;animation-duration:.75s;}
+@keyframes fxFlipUp{from{opacity:0;transform:perspective(700px) rotateX(-38deg) translateY(18px) scale(.94);}to{opacity:1;transform:none;}}
+
+/* Cascades: table rows, calendars, meal grids, month chips (--fx-i set by fx.js) */
+tbody>tr{animation:fxRowIn .45s var(--ease-spring) backwards;animation-delay:calc(var(--fx-i,0) * 22ms + 60ms);}
+@keyframes fxRowIn{from{opacity:0;transform:translateX(-14px);}}
+:is(.meal-calendar,.att-cal-grid,.bz-cal-grid,.meal-grid,.meal-month-list)>*{
+  animation:fxTileIn .5s var(--ease-snap) backwards;animation-delay:calc(var(--fx-i,0) * 16ms + 80ms);}
+@keyframes fxTileIn{from{opacity:0;transform:scale(.7) rotate(-4deg);}}
+.onboard-wrap>*{animation:fxRowIn .5s var(--ease-spring) backwards;animation-delay:calc(var(--fx-i,0) * 60ms + 100ms);}
+
+/* Charts grow: history bars rise, split bars sweep */
+.hist-wrap>.hist-b{transform-origin:bottom;animation:fxGrowY .8s var(--ease-snap) backwards;animation-delay:calc(var(--fx-i,0) * 30ms + 150ms);}
+@keyframes fxGrowY{from{transform:scaleY(0);}}
+.dn-split-bar{transform-origin:left;animation:fxDraw .9s var(--ease-spring) .2s backwards;}
+.page-enter .badge{animation:fxPop .45s var(--ease-snap) .35s backwards;}
+
+/* Progress fills get a light sweep */
+.mini-bar-fill{
+  background-image:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.45) 50%,transparent 70%);
+  background-size:200% 100%;background-repeat:no-repeat;background-position:150% 0;
+  animation:barGrow .9s var(--ease-spring) .15s backwards,fxSweep 2.8s ease-in-out 1.2s infinite;
+}
+@keyframes fxSweep{0%{background-position:150% 0;}60%,100%{background-position:-60% 0;}}
+
+/* Empty states bob */
+.empty{animation:fadeUp .6s var(--ease-spring) backwards;}
+.empty>:first-child:not(:only-child){display:inline-block;animation:fxBob 3s ease-in-out infinite;}
+@keyframes fxBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+
+/* ═════════ CARDS ═════════ */
+
+/* 3D tilt from fx.js (mouse only) */
+.fx-tilt{
+  transform:perspective(800px) rotateX(var(--rx,0)) rotateY(var(--ry,0)) translateY(-3px)!important;
+  transition:transform .12s linear,box-shadow .25s,border-color .25s!important;
+  box-shadow:0 14px 34px -14px var(--shadow),0 0 0 1px rgba(212,168,83,.12);
+}
+.auth-card.fx-tilt,.hero-visual.fx-tilt{transform:perspective(1200px) rotateX(var(--rx,0)) rotateY(var(--ry,0))!important;box-shadow:0 24px 80px var(--shadow);}
+
+/* Cursor spotlight inside cards */
+:is(.stat-card,.profile-card,.feature-card,.demo-role,.meal-month-chip,.step)::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;
+  background:radial-gradient(220px circle at var(--mx,50%) var(--my,50%),rgba(212,168,83,.16),transparent 60%);
+}
+:is(.stat-card,.profile-card,.feature-card,.demo-role,.meal-month-chip,.step).fx-tilt::before{opacity:1;}
+
+/* Spinning gradient border on hovered stat / profile / feature cards */
+:is(.stat-card,.profile-card,.feature-card)::after{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;opacity:0;transition:opacity .35s;
+  background:conic-gradient(from var(--fx-angle),transparent 0 60%,var(--accent) 75%,#f0d28f 82%,transparent 92%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+          mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  animation:fxSpinAngle 3s linear infinite;
+}
+:is(.stat-card,.profile-card,.feature-card):hover::after{opacity:1;}
+@keyframes fxSpinAngle{to{--fx-angle:360deg;}}
+
+/* Touch press feedback */
+:is(.stat-card,.profile-card,.meal-month-chip,.meal-day,.announce-item):active{transform:scale(.97);transition-duration:.08s;}
+
+.card{transition:background .25s,border-color .25s,box-shadow .35s,transform .35s var(--ease-spring);}
+.card:hover{border-color:var(--border2);box-shadow:0 12px 34px -18px var(--shadow);}
+
+/* Numbers: glow while rolling, pop when they land */
+.fx-counting{font-variant-numeric:tabular-nums;text-shadow:0 0 14px rgba(212,168,83,.35);}
+.fx-counted{animation:fxNumPop .6s var(--ease-snap);}
+@keyframes fxNumPop{0%{transform:scale(1);}40%{transform:scale(1.14);text-shadow:0 0 18px rgba(212,168,83,.55);}100%{transform:scale(1);}}
+.stat-value{transform-origin:left center;}
+
+/* Meal calendar days lift */
+.meal-day{transition:transform .25s var(--ease-snap),box-shadow .25s,background .18s,border-color .18s;}
+.meal-day:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 8px 20px -10px var(--shadow);z-index:1;position:relative;}
+.meal-day.has-meal .meal-day-total{animation:fxGlowPulse 3.4s ease-in-out infinite;}
+@keyframes fxGlowPulse{0%,100%{text-shadow:none;}50%{text-shadow:0 0 12px rgba(76,175,130,.55);}}
+
+/* Announcements slide on hover, pins swing */
+.announce-item{transition:border-color .2s,transform .3s var(--ease-spring),box-shadow .3s;}
+.announce-item:hover{transform:translateX(4px);box-shadow:-3px 0 0 var(--accent),0 8px 24px -14px var(--shadow);}
+.announce-pin{display:inline-block;animation:fxSwing 2.6s ease-in-out infinite;transform-origin:50% 0;}
+@keyframes fxSwing{0%,100%{transform:rotate(0);}20%{transform:rotate(14deg);}40%{transform:rotate(-10deg);}60%{transform:rotate(5deg);}80%{transform:rotate(0);}}
+
+/* Table rows: accent edge slides in on hover */
+tbody tr>td:first-child{transition:box-shadow .2s;}
+tbody tr:hover>td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
+
+/* ═════════ BUTTONS & INPUTS ═════════ */
+
+/* Primary: light sweep + glow breathing */
+.btn-primary,.btn-primary:hover{
+  background-image:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.5) 50%,transparent 65%);
+  background-size:250% 100%;background-repeat:no-repeat;
+}
+.btn-primary{background-position:160% 0;transition:background-position .8s var(--ease-spring),background-color .15s,transform .2s var(--ease-snap),box-shadow .25s;}
+.btn-primary:hover{background-position:-60% 0;transform:translateY(-2px) scale(1.02);}
+.btn-lg.btn-primary{animation:fxBreathe 3.2s ease-in-out infinite;}
+@keyframes fxBreathe{0%,100%{box-shadow:0 0 0 0 rgba(212,168,83,.0),0 6px 18px -8px rgba(212,168,83,.5);}50%{box-shadow:0 0 0 7px rgba(212,168,83,.12),0 10px 28px -8px rgba(212,168,83,.6);}}
+.btn:hover svg{animation:fxWiggle .5s var(--ease-snap);}
+@keyframes fxWiggle{0%,100%{transform:rotate(0);}30%{transform:rotate(-14deg) scale(1.15);}60%{transform:rotate(9deg);}}
+.btn-danger:hover{animation:fxDangerShiver .35s linear;}
+@keyframes fxDangerShiver{25%{transform:translateX(-1.5px);}75%{transform:translateX(1.5px);}}
+.btn:active{transform:scale(.94)!important;transition-duration:.06s;}
+
+/* Magnetic landing CTAs */
+.fx-magnet{translate:var(--tx,0) var(--ty,0);transition:translate .15s ease-out;}
+:is(.hero-actions,.land-cta,.land-nav-actions) .btn{transition:translate .5s var(--ease-snap),background-position .8s var(--ease-spring),background-color .15s,transform .2s var(--ease-snap),box-shadow .25s;}
+
+/* Inputs: halo pulse on focus */
+.input:focus,.meal-num-input:focus{animation:fxHalo .7s var(--ease-spring);}
+@keyframes fxHalo{0%{box-shadow:0 0 0 0 rgba(212,168,83,.45);}100%{box-shadow:0 0 0 3px rgba(212,168,83,.13);}}
+.meal-num-input:focus{box-shadow:0 0 0 3px rgba(212,168,83,.13);}
+
+/* ═════════ NAVIGATION ═════════ */
+
+/* Sidebar items slide in once on boot (--fx-i from fx.js) */
+.nav>*{animation:fxNavIn .55s var(--ease-spring) backwards;animation-delay:calc(var(--fx-i,0) * 32ms + 120ms);}
+@keyframes fxNavIn{from{opacity:0;transform:translateX(-18px);}}
+
+/* Active item: glowing rail + sliding icon */
+.nav-item::after{content:"";position:absolute;left:-6px;top:20%;bottom:20%;width:3px;border-radius:0 3px 3px 0;
+  background:var(--accent);box-shadow:0 0 12px var(--accent);transform:scaleY(0);transition:transform .35s var(--ease-snap);}
+.nav-item.active::after{transform:scaleY(1);}
+.nav-item .nav-icon{transition:transform .3s var(--ease-snap),opacity .2s;}
+.nav-item:hover .nav-icon{transform:scale(1.18) rotate(-8deg);}
+.nav-item.active .nav-icon{animation:fxIconPop .5s var(--ease-snap);}
+.nav-item{transition:background .2s,color .2s,padding-left .3s var(--ease-spring);}
+.nav-item:hover{padding-left:14px;}
+@keyframes fxIconPop{0%{transform:scale(1);}40%{transform:scale(1.35) rotate(-12deg);}100%{transform:scale(1);}}
+
+/* Mobile bottom nav: rise in, active tab bounces and gets a glow pip */
+.mobile-nav>*{animation:fxRise .5s var(--ease-snap) backwards;animation-delay:calc(var(--fx-i,0) * 45ms + 150ms);}
+@keyframes fxRise{from{opacity:0;transform:translateY(20px);}}
+.mob-nav-btn.active svg{animation:fxTabBounce .55s var(--ease-snap);}
+@keyframes fxTabBounce{0%{transform:translateY(0) scale(1);}35%{transform:translateY(-6px) scale(1.2);}70%{transform:translateY(1px) scale(.95);}100%{transform:none;}}
+.mob-nav-btn::before{content:"";position:absolute;top:0;left:50%;width:22px;height:3px;margin-left:-11px;border-radius:0 0 3px 3px;
+  background:var(--accent);box-shadow:0 0 10px var(--accent);transform:scaleX(0);transition:transform .35s var(--ease-snap);}
+.mob-nav-btn.active::before{transform:scaleX(1);}
+
+/* Logo + avatars */
+.land-logo-icon{transition:transform .6s var(--ease-snap);}
+.logo:hover .land-logo-icon,.land-logo:hover .land-logo-icon{transform:rotate(360deg) scale(1.1);}
+.su-avatar::after{content:"";position:absolute;inset:-3px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from var(--fx-angle),var(--accent),transparent 40%,var(--accent2) 70%,transparent);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));
+  animation:fxSpinAngle 4s linear infinite;}
+.avatar,.su-avatar,.mob-user-badge,.hcp-m{transition:transform .45s var(--ease-snap);}
+:is(.avatar,.su-avatar,.mob-user-badge,.hcp-m):hover{transform:scale(1.15) rotate(-8deg);}
+
+/* Notification badges: pop in, then sonar ping */
+.notif-badge{animation:fxPop .5s var(--ease-snap) backwards,fxPing 2.2s ease-out 1s infinite;}
+@keyframes fxPing{0%{box-shadow:0 0 0 0 rgba(224,82,82,.6);}70%,100%{box-shadow:0 0 0 9px rgba(224,82,82,0);}}
+
+/* Theme buttons spin on click */
+:is(.theme-toggle-btn,.mob-theme-btn,.land-nav-theme,.auth-theme-btn):active svg{transform:rotate(180deg) scale(.8);}
+:is(.theme-toggle-btn,.mob-theme-btn,.land-nav-theme,.auth-theme-btn) svg{transition:transform .5s var(--ease-snap);}
+
+/* ═════════ OVERLAYS ═════════ */
+
+/* Modals: cinematic tilt-up with focus pull, content cascades in */
+.modal-bg.open{animation:fxBackdrop .35s ease both;}
+@keyframes fxBackdrop{from{opacity:0;backdrop-filter:blur(0);}to{opacity:1;backdrop-filter:blur(4px);}}
+.modal,.confirm-dialog{transform-origin:50% 100%;animation:fxModalIn .6s var(--ease-spring) both;}
+@keyframes fxModalIn{
+  from{opacity:0;transform:perspective(1100px) rotateX(16deg) translateY(46px) scale(.9);filter:blur(6px);}
+  to{opacity:1;transform:none;filter:none;}
+}
+.modal>*,.confirm-dialog>*{animation:fxRowIn .5s var(--ease-spring) backwards;}
+.modal>:nth-child(1),.confirm-dialog>:nth-child(1){animation-delay:.12s;}
+.modal>:nth-child(2),.confirm-dialog>:nth-child(2){animation-delay:.17s;}
+.modal>:nth-child(3),.confirm-dialog>:nth-child(3){animation-delay:.22s;}
+.modal>:nth-child(4){animation-delay:.27s;}
+.modal>:nth-child(n+5){animation-delay:.32s;}
+.fx-shake{animation:fxShake .5s cubic-bezier(.36,.07,.19,.97)!important;}
+@keyframes fxShake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(4px);}30%,50%,70%{transform:translateX(-8px);}40%,60%{transform:translateX(8px);}}
+
+/* Toast: springs in from below with a draining timer line; errors shake */
+#toast{transform:translateY(30px) scale(.85) rotate(-2deg);transition:opacity .25s,transform .55s var(--ease-snap);overflow:hidden;}
+#toast.show{transform:none;}
+#toast::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:100%;background:currentColor;opacity:.5;transform-origin:left;transform:scaleX(0);}
+#toast.show::after{animation:fxDrain 3.2s linear forwards;}
+@keyframes fxDrain{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+#toast.show.error{animation:fxShake .5s cubic-bezier(.36,.07,.19,.97) .1s;}
+#toast.show.success{box-shadow:0 8px 32px var(--shadow),0 0 24px -4px rgba(76,175,130,.5);}
+
+/* Mobile "more" drawer items cascade up */
+#mobile-more-drawer.open .mob-drawer-item{animation:fxRise .45s var(--ease-snap) backwards;}
+#mobile-more-drawer.open .mob-drawer-item:nth-child(2){animation-delay:.04s;}
+#mobile-more-drawer.open .mob-drawer-item:nth-child(3){animation-delay:.08s;}
+#mobile-more-drawer.open .mob-drawer-item:nth-child(4){animation-delay:.12s;}
+#mobile-more-drawer.open .mob-drawer-item:nth-child(n+5){animation-delay:.16s;}
+
+/* ═════════ LANDING ═════════ */
+
+#fx-scroll-bar{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;pointer-events:none;transform-origin:0 50%;transform:scaleX(0);
+  background:linear-gradient(90deg,var(--accent2),var(--accent),#f0d28f,var(--blue),var(--purple));box-shadow:0 0 12px rgba(212,168,83,.6);}
+#fx-cursor-glow{position:fixed;left:-300px;top:-300px;width:600px;height:600px;border-radius:50%;pointer-events:none;z-index:0;opacity:0;
+  background:radial-gradient(circle,rgba(212,168,83,.11),transparent 62%);transition:opacity .4s;will-change:transform;}
+#fx-cursor-glow.on{opacity:1;}
+
+/* Hero: morphing aurora blobs + parallax (isolated so the blobs sit above the page bg) */
+.hero{isolation:isolate;}
+.hero::before,.hero::after{content:"";position:absolute;z-index:-1;border-radius:50%;filter:blur(60px);pointer-events:none;}
+.hero::before{width:420px;height:420px;left:-8%;top:4%;background:rgba(212,168,83,.20);animation:fxBlobA 16s ease-in-out infinite alternate;}
+.hero::after{width:380px;height:380px;right:-6%;top:28%;background:rgba(91,155,213,.16);animation:fxBlobB 19s ease-in-out infinite alternate;}
+[data-theme="light"] .hero::before{background:rgba(212,168,83,.22);}
+@keyframes fxBlobA{0%{transform:translate(0,0) scale(1);border-radius:50%;}50%{transform:translate(18%,10%) scale(1.15);border-radius:42% 58% 63% 37%/45% 40% 60% 55%;}100%{transform:translate(6%,-8%) scale(.95);}}
+@keyframes fxBlobB{0%{transform:translate(0,0) scale(1);}50%{transform:translate(-20%,-12%) scale(1.2);border-radius:60% 40% 35% 65%/55% 60% 40% 45%;}100%{transform:translate(-6%,10%) scale(1);}}
+.hero-title{translate:0 calc(var(--py,0) * .18px);opacity:calc(1 - var(--py,0) / 900);}
+.hero-visual{translate:0 calc(var(--py,0) * -.06px);}
+
+/* Hero headline: shimmering gold */
+.hero-title em{background:linear-gradient(100deg,var(--accent) 20%,#fff3cf 40%,var(--accent) 55%,var(--accent2) 80%);background-size:250% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:fxShimmerText 4.5s ease-in-out infinite;}
+@keyframes fxShimmerText{0%{background-position:100% 0;}100%{background-position:-150% 0;}}
+.hero-badge{position:relative;overflow:hidden;}
+.hero-badge::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);animation:fxBadgeShine 3.5s ease-in-out 1.2s infinite;}
+@keyframes fxBadgeShine{0%{transform:translateX(-120%);}45%,100%{transform:translateX(120%);}}
+
+/* Preview card: stats breathe, member avatars dance in a wave */
+.hcp-m{animation:fxBob 2.4s ease-in-out infinite;}
+.hcp-m:nth-child(2){animation-delay:.15s;}.hcp-m:nth-child(3){animation-delay:.3s;}
+.hcp-m:nth-child(4){animation-delay:.45s;}.hcp-m:nth-child(5){animation-delay:.6s;}
+
+/* Feature icons spin up, step numbers ripple */
+.feature-icon{display:inline-flex;transition:transform .6s var(--ease-snap);}
+.feature-card:hover .feature-icon{transform:rotate(-12deg) scale(1.25) translateY(-3px);}
+.step-num{position:relative;}
+.step-num::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 0 rgba(212,168,83,.5);animation:fxRing 2.6s ease-out infinite;}
+.step:nth-child(3) .step-num::after{animation-delay:.6s;}.step:nth-child(5) .step-num::after{animation-delay:1.2s;}
+@keyframes fxRing{0%{box-shadow:0 0 0 0 rgba(212,168,83,.5);}80%,100%{box-shadow:0 0 0 14px rgba(212,168,83,0);}}
+.step-arrow{animation:fxNudge 1.6s ease-in-out infinite;}
+@keyframes fxNudge{0%,100%{transform:translateX(0);opacity:.6;}50%{transform:translateX(6px);opacity:1;}}
+
+/* ═════════ AUTH ═════════ */
+.auth-bg::before,.auth-bg::after{content:"";position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none;}
+.auth-bg::before{width:360px;height:360px;left:8%;top:10%;background:rgba(212,168,83,.16);animation:fxBlobA 14s ease-in-out infinite alternate;}
+.auth-bg::after{width:320px;height:320px;right:8%;bottom:8%;background:rgba(91,155,213,.13);animation:fxBlobB 17s ease-in-out infinite alternate;}
+.auth-card{animation:fxModalIn .75s var(--ease-spring) both;}
+.auth-card>*{animation:fxRowIn .55s var(--ease-spring) backwards;}
+.auth-card>:nth-child(2){animation-delay:.1s;}.auth-card>:nth-child(3){animation-delay:.16s;}
+.auth-card>:nth-child(4){animation-delay:.22s;}.auth-card>:nth-child(5){animation-delay:.28s;}
+.auth-card>:nth-child(n+6){animation-delay:.34s;}
+.auth-error{animation:fxShake .5s cubic-bezier(.36,.07,.19,.97);}
+
+} /* end no-preference */

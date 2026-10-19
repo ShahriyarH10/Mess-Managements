@@ -18,7 +18,8 @@ mess-manager/
 │   ├── 04-layout.css             ← App shell, sidebar, mobile nav, drawer
 │   ├── 05-components.css         ← Cards, buttons, inputs, tables, badges, modals, toast
 │   ├── 06-animations-responsive.css  ← Keyframes + all @media breakpoints
-│   └── 08-motion.css         ← Spinner, skeletons, splash, progress bar, entrance choreography
+│   ├── 08-motion.css         ← Spinner, skeletons, splash, progress bar, entrance choreography
+│   └── 09-fx.css             ← Expressive layer: aurora, 3D tilt, ripples, cascades, modal/toast physics, landing parallax
 │
 └── js/
     │
@@ -26,6 +27,7 @@ mess-manager/
     │   ├── env.js                ← liveLogin / liveSignup feature flags
     │   ├── loader.js             ← on-demand script loading + prefetch
     │   ├── motion.js             ← route progress bar, boot splash, skeletons, button loading, scroll reveal
+    │   ├── fx.js                 ← count-up numbers, ripples, tilt/spotlight, confetti, theme-switch reveal, stagger indices
     │   ├── events.js             ← CSP-safe handler for inline on* attributes
     │   ├── router.js             ← hash router, guards, demo controls
     │   ├── boot.js               ← Router.start()
