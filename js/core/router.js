@@ -7,6 +7,7 @@
      #/login                             #/demo/login
      #/create        real signup         #/demo/create      sandbox signup
      #/app/<page>    the app             #/demo/app/<page>  the app, same code
+     #/app/<page>/<id>                   #/demo/app/<page>/<id>   (e.g. a receipt link)
      #/admin/<page>  super-admin         #/demo             one click → sample mess as manager
                                          (role switching happens inside the app)
 
@@ -21,7 +22,8 @@ const Router = (() => {
   const SLUG = /^[a-z0-9-]+$/;
   const LANDING_SECTIONS = { features: "features", "how-it-works": "how-it-works", engineering: "engineering" };
   const RETURN_KEY = "mm_return";
-  const RETURN_RE = /^(demo\/)?app\/[a-z0-9-]+$/;
+  const PARAM = /^[\w-]{1,64}$/;
+  const RETURN_RE = /^(demo\/)?app\/[a-z0-9-]+(\/[\w-]{1,64})?$/;
   const DEMO_ROLES = ["manager", "member"];
   let token = 0;        // bumps on every navigation so stale async work can bail out
   let shellKey = null;  // "<memberId>:<role>" the app shell was built for
@@ -42,8 +44,16 @@ const Router = (() => {
     else location.hash = target;
   }
 
-  /* app page change (sidebar, buttons). Same page again = re-render. */
-  function openPage(page) { if (SLUG.test(String(page))) go(prefix() + page); }
+  /* app page change (sidebar, buttons). Same page again = re-render.
+     `param` is an optional id for pages that show one record (receipt/<id>). */
+  function openPage(page, param) {
+    if (!SLUG.test(String(page))) return;
+    go(prefix() + page + (param != null && PARAM.test(String(param)) ? "/" + param : ""));
+  }
+  /* Absolute, shareable URL of an app page in the current world. */
+  function pageUrl(page, param) {
+    return location.href.split("#")[0] + "#/" + prefix() + page + (param ? "/" + param : "");
+  }
 
   function rememberReturn() {
     const p = parse().join("/");
@@ -137,7 +147,7 @@ const Router = (() => {
   }
 
   /* The app proper — identical for both worlds. */
-  async function renderApp(pageSlug, stale) {
+  async function renderApp(pageSlug, stale, param) {
     await ensureBackend();
     if (stale()) return;
     await loadAppScripts(currentUser.role);
@@ -149,6 +159,7 @@ const Router = (() => {
     if (allowed !== wanted || !pageSlug) return go(prefix() + allowed, true);
 
     showScreen("app-shell");
+    window.MM_PAGE_PARAM = param && PARAM.test(param) ? param : null;
     setTitle(pageLabel(allowed));
     await showPage(allowed);
     if (stale()) return;
@@ -167,7 +178,7 @@ const Router = (() => {
   async function routeInner() {
     const my = ++token;
     const stale = () => my !== token;
-    const [a, b, c] = parse();
+    const [a, b, c, d] = parse();
     const wasFirst = firstRoute; firstRoute = false;
     closeLandingDrawer();
 
@@ -205,7 +216,7 @@ const Router = (() => {
         }
         if (b === "app") {
           if (!currentUser) { rememberReturn(); return go("demo", true); } // deep link → auto-start the sample demo
-          return renderApp(c, stale);
+          return renderApp(c, stale, d);
         }
         return go("demo", true);
       }
@@ -236,7 +247,7 @@ const Router = (() => {
         // a === "app"
         if (!currentUser) { rememberReturn(); return go("login", true); }
         if (currentUser.role === "superadmin") return go("admin/messes", true);
-        return renderApp(b, stale);
+        return renderApp(b, stale, c);
       }
 
       go("", true); // unknown route → landing
@@ -256,7 +267,7 @@ const Router = (() => {
     window.addEventListener("load", () => idle(prefetchAppScripts), { once: true });
   }
 
-  return { start, go, openPage, goAfterLogin, resetShell, route };
+  return { start, go, openPage, pageUrl, goAfterLogin, resetShell, route };
 })();
 
 /* ── Demo controls (sidebar / mobile drawer) ── */

@@ -85,6 +85,15 @@ async function loadMemberCollectRow(member, month, year) {
 
 /* ── Receipt: the same card the manager gets after Collect Payment → Save (collect-receipt.js) ── */
 
+/* Who generated a receipt, as plain text. Rows from before receipts.sql have no source → member. */
+function paymentGeneratedBy(p) {
+  if (p.source === "manager") return `Manager · ${p.created_by || p.confirmed_by || "Manager"}`;
+  return `${p.created_by || paymentMemberName(p)} (member)`;
+}
+
+/* Shareable link to one receipt (#/app/receipt/<id>); opens after sign-in, own receipts only for members. */
+function receiptLink(id) { return _safeId(id) ? Router.pageUrl("receipt", _safeId(id)) : ""; }
+
 function paymentReceiptData(p) {
   const sp = p.split;
   const mgr = ["manager", "sub_manager", "superadmin"].includes(currentUser?.role);
@@ -103,6 +112,8 @@ function paymentReceiptData(p) {
     status: p.status,
     confirmedBy: p.status === "pending" ? "" : escapeHtml(p.confirmed_by || "manager"),
     confirmedAt: p.confirmed_at ? new Date(p.confirmed_at) : null,
+    generatedBy: escapeHtml(paymentGeneratedBy(p)),
+    link: receiptLink(p.id),
   };
 }
 
@@ -280,7 +291,8 @@ function buildGiveHistory() {
             <td><b>${escapeHtml(monthLabelFromKey(p.month_key))}</b><div style="font-size:11px;color:var(--text3)">${escapeHtml(new Date(p.created_at).toLocaleDateString("en-IN"))}</div></td>
             <td style="font-family:monospace;font-size:12px">${paymentReceiptNo(p.receipt_no)}</td>
             <td style="font-weight:700">${fmtTk(Number(p.amount))}</td>
-            <td><span class="badge ${st.cls}">${st.label}</span></td>
+            <td><span class="badge ${st.cls}">${st.label}</span>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">${p.source === "manager" ? "🧑‍💼 " : "🙋 "}${escapeHtml(paymentGeneratedBy(p))}</div></td>
             <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="showPaymentReceipt('${_safeId(p.id)}')">Receipt</button></td>
           </tr>`;
         }).join("")}</tbody></table></div>`);
@@ -309,6 +321,7 @@ async function submitGivePayment() {
       year:        ctx.year,
       amount:      value,
       dueAtSubmit: ctx.row.total,
+      createdBy:   _decodeEntities(ctx.member.name),
     });
     try {
       await notifyManagerUpdate("payment_request", today(), {
@@ -336,6 +349,8 @@ async function submitGivePayment() {
       timestamp: new Date(payment.created_at || Date.now()),
       status: "pending",
       receiptNo: paymentReceiptNo(payment.receipt_no),
+      generatedBy: escapeHtml(paymentGeneratedBy(payment)),
+      link: receiptLink(payment.id),
     });
   } catch (e) {
     toast("Error: " + e.message, "error");

@@ -37,7 +37,7 @@
     announcements: () => ({ pinned: false }),
     chores:        () => ({ assignee: "", frequency: "daily", status: "pending" }),
     notifications: () => ({ status: "pending", note: "" }),
-    member_payments: () => ({ status: "pending", split: null, still_due: null, confirmed_by: null, confirmed_at: null }),
+    member_payments: () => ({ status: "pending", source: "member", created_by: null, split: null, still_due: null, confirmed_by: null, confirmed_at: null }),
     broadcasts:    () => ({ priority: "normal", pinned: false }),
     meals:         () => ({ meals: {} }),
     bazar:         () => ({ bazar: {}, utility: {} }),

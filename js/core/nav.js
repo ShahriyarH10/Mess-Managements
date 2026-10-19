@@ -67,6 +67,7 @@ const MEMBER_NAV = [
   { page:"my-bazar",      label:"Bazar Log",      icon:IC.bazar },
   { page:"my-payments",   label:"Utility/Rent",   icon:IC.rent },
   { page:"give-payment",  label:"Give Payment",   icon:IC.fund },
+  { page:"my-receipts",   label:"My Receipts",    icon:IC.log },
   { page:"my-month-log",  label:"Monthly Log",    icon:IC.log },
   { page:"my-messages",   label:"Messages",       icon:IC.broadcast },
   { page:"my-rules",      label:"Mess Info",      icon:IC.rules },
@@ -385,7 +386,7 @@ function updateSidebarUser() {
    PAGE ROUTING
 ═══════════════════════════════════════════ */
 // Changing page = changing the URL (#/app/<page>); the router calls showPage().
-function navigate(page) { Router.openPage(page); }
+function navigate(page, param) { Router.openPage(page, param); }
 
 function showPage(page) {
   currentPage = page;
@@ -429,6 +430,7 @@ function guardPage(page, role) {
   return page;
 }
 function pageLabel(page) {
+  if (page === "receipt") return "Receipt";
   const hit = [...MANAGER_NAV, ...MEMBER_NAV].find(i => i.page === page);
   return hit ? hit.label : "";
 }
@@ -491,6 +493,10 @@ async function renderPage(page) {
       // ── New member pages ──
       case "my-messages":    await renderMessages(div, false);         break;
       case "my-rules":       await renderMessRules(div, false);       break;
+      case "my-receipts":    await renderMyReceipts(div);             break;
+
+      // ── Both roles: one receipt by link (#/app/receipt/<id>) ──
+      case "receipt":        await renderReceiptPage(div, window.MM_PAGE_PARAM); break;
 
       default:
         div.innerHTML = '<div class="content"><div class="empty">Page not found</div></div>';

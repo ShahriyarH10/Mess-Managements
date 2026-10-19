@@ -313,6 +313,7 @@ sequenceDiagram
 2. Open **SQL Editor** → paste and run `database.sql`
 3. For v7 features (attendance, broadcasts, mess rules, audit log) also run `supabase/migration-v7-features.sql`
    — and `supabase/member-payments.sql` for **Give Payment** (member payment requests the manager confirms; the mobile app shares this table, so skip it if you already ran it)
+   — then `supabase/receipts.sql` for **receipts**: stores the manager's Collect Payment receipts too and records who generated each one (powers **My Receipts** and receipt links)
 4. Go to **Project Settings → API** and copy your **Project URL** and **Anon/Public key**
 
 ### Step 2 — Configure
@@ -385,6 +386,7 @@ MessManager-v6/
 └── supabase/
     ├── migration-v7-features.sql           # New tables: audit_log, meal_attendance, mess_rules, broadcasts
     ├── member-payments.sql                 # member_payments table for Give Payment requests
+    ├── receipts.sql                        # adds source / created_by to member_payments (manager receipts, links)
     ├── rls-policies.sql                    # Row Level Security policies (optional — see Security section)
     └── functions/
         └── sign-session-jwt/

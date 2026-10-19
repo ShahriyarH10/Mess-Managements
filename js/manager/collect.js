@@ -944,6 +944,7 @@ async function saveCollectRow(memberId) {
   const rentRem = round2(Math.max(0, r.rentDue - r.rentPaid));
   const prevDue = round2(r.prevDue || 0);
   const { allocMeal, allocUtil, allocRent, allocPrevDue, change } = computeSplit3(amt, mealRem, utilRem, rentRem, prevDue);
+  const dueBefore = round2(r.netPayable + prevDue);
 
   try {
     /* ── 1) Update utility_payments — utility paid + meal_paid + prev_due_paid live here ── */
@@ -1068,7 +1069,25 @@ async function saveCollectRow(memberId) {
     // ── Re-fetch from DB so the table reflects exactly what was saved ──
     await loadCollectMonth();
 
-    /* ── 4) Auto-open shareable receipt ─────────────────────────── */
+    /* ── 4) Store it as a confirmed receipt, so the member sees it under My Receipts
+             and it has a shareable link. The money is already saved above, so a
+             failure here only costs the stored copy. ── */
+    let saved = null;
+    try {
+      saved = await dbCreateManagerReceipt({
+        memberId: m.id, memberName: m.name,
+        monthKey: ctx.key, month: ctx.month, year: ctx.year,
+        amount: amt, dueAtSubmit: dueBefore,
+        split: { allocMeal, allocUtil, allocRent, allocPrevDue, change },
+        stillDue: newTotal,
+      });
+      _paymentCache.set(saved.id, saved);
+    } catch (e) {
+      console.warn("[Receipts] not stored:", e.message);
+      toast("Payment saved, but its receipt was not stored: " + e.message, "error");
+    }
+
+    /* ── 5) Auto-open shareable receipt ─────────────────────────── */
     showCollectReceipt({
       member:        m,
       monthLabel:    monthLabelFromKey(ctx.key),
@@ -1076,7 +1095,10 @@ async function saveCollectRow(memberId) {
       allocMeal, allocUtil, allocRent, allocPrevDue, change,
       newUtilRem, newRentRem, newMealRem,
       newNet:        r.netPayable,
-      timestamp:     new Date(),
+      timestamp:     saved ? new Date(saved.created_at) : new Date(),
+      receiptNo:     saved ? paymentReceiptNo(saved.receipt_no) : undefined,
+      generatedBy:   escapeHtml(`Manager · ${currentUser?.name || "Manager"}`),
+      link:          saved ? receiptLink(saved.id) : "",
     });
   } catch (e) {
     toast("Error: " + e.message, "error");

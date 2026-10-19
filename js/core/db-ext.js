@@ -95,9 +95,15 @@ async function dbDeleteBroadcast(id) {
    A member files a request (status "pending"); nothing is credited until a
    manager confirms it in Collect Payment. Read WITHOUT sanitize(): the rows are
    rendered through escapeHtml() / member lookups, so a forged member_name in
-   the table can never reach innerHTML. */
+   the table can never reach innerHTML.
+
+   Every row is also a receipt (see supabase/receipts.sql): `source` says who
+   generated it — "member" (Give Payment) or "manager" (cash recorded in
+   Collect Payment, stored already confirmed). */
+const _missingReceiptCols = (e) => /source|created_by/.test(e?.message || "") && /column/i.test(e?.message || "");
+
 async function dbCreateMemberPayment(row) {
-  const { data, error } = await getClient().from("member_payments").insert({
+  const rec = {
     mess_id:       messId(),
     member_id:     row.memberId,
     member_name:   row.memberName,
@@ -107,9 +113,50 @@ async function dbCreateMemberPayment(row) {
     amount:        row.amount,
     due_at_submit: row.dueAtSubmit,
     status:        "pending",
-  }).select("*").single();
+    source:        "member",
+    created_by:    row.createdBy || row.memberName,
+  };
+  let { data, error } = await getClient().from("member_payments").insert(rec).select("*").single();
+  if (error && _missingReceiptCols(error)) {
+    // receipts.sql not run yet — a member request still works without the new columns
+    delete rec.source; delete rec.created_by;
+    ({ data, error } = await getClient().from("member_payments").insert(rec).select("*").single());
+  }
   if (error) throw error;
   return data;
+}
+
+/* A manager's Collect Payment, stored as an already-confirmed receipt. */
+async function dbCreateManagerReceipt(row) {
+  const by = currentUser?.name || "Manager";
+  const { data, error } = await getClient().from("member_payments").insert({
+    mess_id:       messId(),
+    member_id:     row.memberId,
+    member_name:   row.memberName,
+    month_key:     row.monthKey,
+    month:         row.month,
+    year:          row.year,
+    amount:        row.amount,
+    due_at_submit: row.dueAtSubmit,
+    status:        "confirmed",
+    source:        "manager",
+    created_by:    by,
+    confirmed_by:  by,
+    confirmed_at:  new Date().toISOString(),
+    split:         row.split,
+    still_due:     row.stillDue,
+  }).select("*").single();
+  if (error && _missingReceiptCols(error)) throw new Error("run supabase/receipts.sql to store manager receipts");
+  if (error) throw error;
+  return data;
+}
+
+/* One receipt by id, scoped to this mess. */
+async function dbGetMemberPayment(id) {
+  const { data, error } = await getClient().from("member_payments").select("*")
+    .eq("id", id).eq("mess_id", messId()).maybeSingle();
+  if (error) throw error;
+  return data || null;
 }
 
 /* Newest first. A member passes their own id; a manager passes nothing (whole mess). */
