@@ -289,77 +289,103 @@ async function renderMyBazar(el) {
   const member = await getMe();
   if (!member) return;
 
-  const allBazar = await dbGetAll("bazar");
+  const allBazar = await historyRows("bazar", true);
+  const now = new Date(), key = monthKey(now.getFullYear(), now.getMonth());
+  const prevKey = previousMonthFromKey(key).key;
+  const yday = new Date(now.getTime() - 86400000);
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  const myRows = allBazar
-    .filter(r => Number((r.bazar || {})[member.name] || 0) > 0)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .slice(0, 20);
+  const mine = allBazar
+    .map(r => ({ date: String(r.date), amt: Number((r.bazar || {})[member.name] || 0) }))
+    .filter(x => x.amt > 0)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const sumFor = k => round2(mine.filter(x => x.date.startsWith(k)).reduce((s, x) => s + x.amt, 0));
+  const thisM = sumFor(key), lastM = sumFor(prevKey);
+  const entriesThis = mine.filter(x => x.date.startsWith(key)).length;
+
+  // Share + rank among this month's contributors
+  const byName = {};
+  allBazar.filter(r => String(r.date).startsWith(key)).forEach(r =>
+    Object.entries(r.bazar || {}).forEach(([n, v]) => { byName[n] = (byName[n] || 0) + (Number(v) || 0); }));
+  const messTotal = Object.values(byName).reduce((s, v) => s + v, 0);
+  const share = messTotal > 0 ? Math.round((thisM / messTotal) * 100) : 0;
+  const ranked = Object.entries(byName).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const rank = ranked.findIndex(([n]) => n === member.name) + 1;
+
+  // History grouped by month (last 6 months with entries)
+  const groups = [];
+  mine.forEach(x => {
+    const k = x.date.slice(0, 7);
+    let g = groups.find(y => y.k === k);
+    if (!g) { if (groups.length >= 6) return; groups.push(g = { k, items: [], total: 0 }); }
+    g.items.push(x); g.total = round2(g.total + x.amt);
+  });
+  const maxAmt = Math.max(1, ...mine.slice(0, 60).map(x => x.amt));
+  const niceDate = d => { const [y, m, dd] = d.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); };
+  const tile = (icon, label, value, sub, bar) => `
+    <div class="pf-tile">
+      <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+      <div class="stat-value pf-val">${value}</div>
+      <div class="dk-sub">${sub}</div>
+      ${bar != null ? `<div class="dk-bar pf-share"><i style="width:${bar}%;background:var(--green)"></i></div>` : ""}
+    </div>`;
+  const setAmt = v => `document.getElementById('my-bazar-amount').value='${v}'`;
 
   el.innerHTML = `
   <div class="topbar">
     <div>
-      <div class="page-title">Bazar Entry</div>
-      <div class="page-sub">Update your own bazar spending directly</div>
+      <div class="page-title">Bazar Log</div>
+      <div class="page-sub">What you spend on bazar is credited against your meals</div>
     </div>
   </div>
 
-  <div class="content">
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">My bazar entry</div>
-
-      <div class="auth-sub" style="margin-bottom:14px;font-size:13px;color:var(--text2)">
-        This will update your amount for the selected date. Manager will only receive an update notification.
-      </div>
-
-      <div class="date-row">
-        <label>Date</label>
-        <input type="date" class="input" id="my-bazar-date" value="${today()}" style="width:170px" onchange="fillMyBazarFromDate()"/>
-        <button class="btn btn-ghost btn-sm" onclick="fillMyBazarFromDate()">Load</button>
-      </div>
-
-      <div class="field">
-        <label>Amount (৳) *</label>
-        <input type="number" class="input" id="my-bazar-amount" min="0" placeholder="e.g. 850"/>
-      </div>
-
-      <div class="field">
-        <label>Note (optional)</label>
-        <input type="text" class="input" id="my-bazar-note" placeholder="e.g. Bought vegetables from market"/>
-      </div>
-
-      <button class="btn btn-primary" onclick="saveMyBazarEntry()">✓ Save my bazar</button>
+  <div class="content dk">
+    <div class="pf-tiles">
+      ${tile("🛒", "This month", fmtTk(thisM), `${share}% of ${fmtTk(round2(messTotal))} mess bazar`, share)}
+      ${tile("🏅", "Your rank", rank ? "#" + rank : "—", rank ? `of ${ranked.length} contributor${ranked.length === 1 ? "" : "s"} this month` : "no bazar yet this month", null)}
+      ${tile("🗓️", "Last month", fmtTk(lastM), lastM && thisM ? `${thisM >= lastM ? "↑" : "↓"} ${Math.abs(Math.round(((thisM - lastM) / lastM) * 100))}% so far vs last month` : MONTHS[Number(prevKey.slice(5)) - 1], null)}
+      ${tile("🧾", "Entries", entriesThis, `this month · ${mine.length} in total`, null)}
     </div>
 
-    <div class="card">
-      <div class="card-title">My saved bazar entries</div>
+    <div class="ml-grid">
+      <div class="card ml-form">
+        <div class="dk-card-title"><span>Add bazar</span></div>
+        <div class="field">
+          <label>Date</label>
+          <div class="ml-date">
+            <input type="date" class="input" id="my-bazar-date" value="${today()}" onchange="fillMyBazarFromDate()"/>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('my-bazar-date').value='${ymd(now)}';fillMyBazarFromDate()">Today</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('my-bazar-date').value='${ymd(yday)}';fillMyBazarFromDate()">Yesterday</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Amount</label>
+          <div class="ml-amt"><span>৳</span><input type="number" class="input" id="my-bazar-amount" min="0" placeholder="0" onkeydown="if(event.key==='Enter') saveMyBazarEntry()"/></div>
+          <div class="ml-quick">
+            ${[500, 1000, 1500, 2000].map(v => `<button class="ml-chip" onclick="${setAmt(v)}">${fmtTk(v)}</button>`).join("")}
+          </div>
+        </div>
+        <div class="field">
+          <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+          <input type="text" class="input" id="my-bazar-note" placeholder="e.g. Vegetables and fish"/>
+        </div>
+        <button class="btn btn-primary ml-save" onclick="saveMyBazarEntry()">✓ Save bazar</button>
+        <div class="ml-hint">Saving the same date again replaces that day's amount. The manager is notified.</div>
+      </div>
 
-      ${
-        myRows.length === 0
-          ? `<div class="empty">No bazar entries yet</div>`
-          : `<div class="tbl-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  ${
-                    myRows.map(r => `
-                    <tr>
-                      <td><b>${r.date}</b></td>
-                      <td style="color:var(--green);font-weight:600">
-                        ${fmtTk(Number((r.bazar || {})[member.name] || 0))}
-                      </td>
-                    </tr>`).join("")
-                  }
-                </tbody>
-              </table>
-            </div>`
-      }
+      <div class="card">
+        <div class="dk-card-title"><span>My bazar history</span><span class="dk-legend">${mine.length} entr${mine.length === 1 ? "y" : "ies"}</span></div>
+        ${groups.length ? groups.map(g => `
+          <div class="ml-month"><span>${monthLabelFromKey(g.k)}</span><b>${fmtTk(g.total)}</b></div>
+          ${g.items.map(x => `
+            <div class="ml-row">
+              <span class="ml-day">${niceDate(x.date)}</span>
+              <div class="dk-bar ml-bar"><i style="width:${Math.max(4, Math.round((x.amt / maxAmt) * 100))}%;background:var(--green)"></i></div>
+              <b class="ml-val">${fmtTk(x.amt)}</b>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('my-bazar-date').value='${x.date}';fillMyBazarFromDate()" title="Load this day into the form">Edit</button>
+            </div>`).join("")}
+        `).join("") : `<div class="empty"><div>🛒</div><div>No bazar yet — add your first one on the left.</div></div>`}
+      </div>
     </div>
   </div>`;
 }
@@ -377,8 +403,10 @@ async function fillMyBazarFromDate() {
     .eq("date", date)
     .maybeSingle();
 
-  document.getElementById("my-bazar-amount").value =
-    Number((existing?.bazar || {})[member.name] || 0);
+  const v = Number((existing?.bazar || {})[member.name] || 0);
+  const amt = document.getElementById("my-bazar-amount");
+  amt.value = v || "";
+  if (matchMedia("(max-width: 860px)").matches) amt.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function saveMyBazarEntry() {
@@ -441,198 +469,126 @@ async function renderMyPayments(el) {
 
   const [allRent, { data: allUtil }] = await Promise.all([
     dbGetAll("rent"),
-    sb
-      .from("utility_payments")
-      .select("*")
-      .eq("mess_id", messId())
-      .order("month_key", { ascending: false }),
+    sb.from("utility_payments").select("*").eq("mess_id", messId()).order("month_key", { ascending: false }),
   ]);
 
-  const n = new Date();
+  const n = new Date(), month = n.getMonth(), year = n.getFullYear(), key = monthKey(year, month);
+  const prev = memberPrevMonthInfo(month, year);
+  const utilBy = {}; (allUtil || []).forEach(r => { utilBy[r.month_key] = r; });
 
-  const rentRows = (allRent || [])
-    .map(r => ({
-      rec: r,
-      entry: (r.entries || []).find(e => e.name === member.name),
-    }))
-    .filter(x => x.entry && Number(x.entry.paid || 0) > 0)
-    .slice(-8)
-    .reverse();
+  // This month: rent due/paid and my utility share/paid (same share rule as saving)
+  const rentRec   = (allRent || []).find(r => r.month_key === key);
+  const rentEntry = (rentRec?.entries || []).find(e => e.name === member.name) || {};
+  const rentDue   = Number(rentEntry.rent || 0), rentPaid = Number(rentEntry.paid || 0);
+  const rentLeft  = round2(Math.max(0, rentDue - rentPaid));
+  const utilTotal = utilTotalFromBills(utilBy[key]?.bills || {}, UTIL_PREPAID_KEYS) + utilTotalFromBills(utilBy[prev.key]?.bills || {}, UTIL_POSTPAID_KEYS);
+  const utilShare = members.length ? round2(utilTotal / members.length) : 0;
+  const utilPaid  = round2(Number(((utilBy[key]?.payments || {})[member.name] || {}).paid || 0));
+  const utilLeft  = round2(Math.max(0, utilShare - utilPaid));
+  const totalLeft = round2(rentLeft + utilLeft);
 
-  const utilRows = (allUtil || [])
-    .map(r => ({
-      rec: r,
-      payment: (r.payments || {})[member.name],
-    }))
-    .filter(x => x.payment && Number(x.payment.paid || 0) > 0)
-    .slice(0, 8);
+  // One history: rent + utility payments, newest month first
+  const hist = [];
+  (allRent || []).forEach(r => {
+    const e = (r.entries || []).find(x => x.name === member.name);
+    if (e && Number(e.paid || 0) > 0) hist.push({ key: r.month_key, type: "Rent", icon: "🏠", paid: Number(e.paid), of: Number(e.rent || 0), status: e.status, note: e.notes });
+  });
+  (allUtil || []).forEach(r => {
+    const p = (r.payments || {})[member.name];
+    if (p && Number(p.paid || 0) > 0) hist.push({ key: r.month_key, type: "Utility", icon: "⚡", paid: Number(p.paid), of: null, status: p.status, note: p.notes });
+  });
+  hist.sort((a, b) => b.key.localeCompare(a.key) || a.type.localeCompare(b.type));
+
+  const tile = (icon, label, value, sub, pct, color) => `
+    <div class="pf-tile">
+      <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+      <div class="stat-value pf-val" ${color ? `style="color:${color}"` : ""}>${value}</div>
+      <div class="dk-sub">${sub}</div>
+      ${pct != null ? `<div class="dk-bar pf-share"><i style="width:${pct}%;background:${pct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>` : ""}
+    </div>`;
+  const pct = (a, b) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : null);
+  const types = [["rent", "🏠", "Room rent"], ["elec", "⚡", "Electricity"], ["gas", "🔥", "Gas"], ["wifi", "📶", "WiFi"], ["khala", "👩", "Khala"], ["other", "📦", "Other"]];
+  const statusBadge = st => `<span class="badge ${st === "paid" ? "badge-green" : st === "partial" ? "badge-amber" : "badge-red"}">${st === "paid" ? "Paid" : st === "partial" ? "Partial" : "Unpaid"}</span>`;
 
   el.innerHTML = `
   <div class="topbar">
     <div>
-      <div class="page-title">Utility & Room Rent Entry</div>
-      <div class="page-sub">Update your own utility or rent payment directly</div>
+      <div class="page-title">Utility & Rent</div>
+      <div class="page-sub">Record a rent or utility payment you made — it's credited right away</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="navigate('give-payment')" title="Or send money to the manager to confirm">💵 Give payment instead</button>
     </div>
   </div>
 
-  <div class="content">
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">Give payment to the manager</div>
-      <div class="auth-sub" style="margin-bottom:12px;font-size:13px;color:var(--text2)">
-        Tell the manager what you're paying for the month. Once they confirm it, it's split across rent, utility and meals and your receipt becomes official.
-      </div>
-      <button class="btn btn-primary" onclick="navigate('give-payment')">💵 Give payment</button>
+  <div class="content dk">
+    <div class="pf-tiles ml-tiles3">
+      ${tile("🏠", "Rent · " + MONTHS[month], rentDue ? (rentLeft ? fmtTk(rentLeft) + " due" : "✓ Paid") : "—",
+          rentDue ? `${fmtTk(rentPaid)} of ${fmtTk(rentDue)} paid` : "no rent set yet", pct(rentPaid, rentDue), rentDue ? (rentLeft ? "var(--red)" : "var(--green)") : null)}
+      ${tile("⚡", "Utility share · " + MONTHS[month], utilShare ? (utilLeft ? fmtTk(utilLeft) + " due" : "✓ Paid") : "—",
+          utilShare ? `${fmtTk(utilPaid)} of ${fmtTk(utilShare)} paid` : "no bills yet", pct(utilPaid, utilShare), utilShare ? (utilLeft ? "var(--red)" : "var(--green)") : null)}
+      ${tile("📌", "Left to pay", totalLeft ? fmtTk(totalLeft) : "✓ Nothing", "rent + utility this month", null, totalLeft ? "var(--red)" : "var(--green)")}
     </div>
 
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">My utility / room-rent payment</div>
-
-      <div class="auth-sub" style="margin-bottom:14px;font-size:13px;color:var(--text2)">
-        The payment will be credited immediately. Manager will only receive an update notification.
-      </div>
-
-      <div class="grid-2">
+    <div class="ml-grid">
+      <div class="card ml-form">
+        <div class="dk-card-title"><span>Record a payment</span></div>
+        <input type="hidden" id="bp-type" value=""/>
         <div class="field">
-          <label>Month</label>
-          <select class="input" id="bp-month">
-            ${
-              MONTHS.map((m, i) => `
-                <option value="${i}"${i === n.getMonth() ? " selected" : ""}>
-                  ${m}
-                </option>`).join("")
-            }
-          </select>
+          <label>What did you pay?</label>
+          <div class="ml-types">
+            ${types.map(([v, ic, t]) => `<button class="ml-type" data-type="${v}" onclick="pickBpType(this)">${ic}<span>${t}</span></button>`).join("")}
+          </div>
         </div>
-
+        <div class="ml-2">
+          <div class="field"><label>Month</label>
+            <select class="input" id="bp-month">${MONTHS.map((m, i) => `<option value="${i}"${i === month ? " selected" : ""}>${m}</option>`).join("")}</select></div>
+          <div class="field"><label>Year</label>
+            <select class="input" id="bp-year">${Array.from({ length: 5 }, (_, i) => year - 2 + i).map(y => `<option value="${y}"${y === year ? " selected" : ""}>${y}</option>`).join("")}</select></div>
+        </div>
         <div class="field">
-          <label>Year</label>
-          <select class="input" id="bp-year">
-            ${
-              Array.from({ length: 5 }, (_, i) => n.getFullYear() - 2 + i)
-                .map(y => `
-                  <option value="${y}"${y === n.getFullYear() ? " selected" : ""}>
-                    ${y}
-                  </option>`)
-                .join("")
-            }
-          </select>
+          <label>Amount</label>
+          <div class="ml-amt"><span>৳</span><input type="number" class="input" id="bp-amount" min="0" placeholder="0"/></div>
+          ${rentLeft || utilLeft ? `<div class="ml-quick">
+            ${rentLeft ? `<button class="ml-chip" onclick="fillBpDue('rent',${rentLeft})">Remaining rent ${fmtTk(rentLeft)}</button>` : ""}
+            ${utilLeft ? `<button class="ml-chip" onclick="fillBpDue('elec',${utilLeft})">Remaining utility ${fmtTk(utilLeft)}</button>` : ""}
+          </div>` : ""}
         </div>
-      </div>
-
-      <div class="field">
-        <label>Payment type *</label>
-        <select class="input" id="bp-type">
-          <option value="">— Select payment —</option>
-          <option value="elec">⚡ Electricity</option>
-          <option value="wifi">📶 WiFi</option>
-          <option value="gas">🔥 Gas</option>
-          <option value="khala">👩 Khala</option>
-          <option value="other">📦 Other</option>
-          <option value="rent">🏠 Room Rent</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label>Amount paid (৳) *</label>
-        <input type="number" class="input" id="bp-amount" min="0" placeholder="e.g. 1200"/>
-      </div>
-
-      <div class="field">
-        <label>Note (optional)</label>
-        <input type="text" class="input" id="bp-note" placeholder="e.g. Paid full electricity bill"/>
-      </div>
-
-      <button class="btn btn-primary" onclick="saveMyPaymentEntry()">✓ Save payment</button>
-    </div>
-
-    <div class="grid-2" style="align-items:start">
-      <div class="card">
-        <div class="card-title">My rent payment history</div>
-
-        ${
-          rentRows.length === 0
-            ? `<div class="empty">No rent payment yet</div>`
-            : `<div class="tbl-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Month</th>
-                      <th>Rent</th>
-                      <th>Paid</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    ${
-                      rentRows.map(x => `
-                      <tr>
-                        <td><b>${x.rec.month_name} ${x.rec.year}</b></td>
-                        <td>${fmtTk(x.entry.rent || 0)}</td>
-                        <td style="color:var(--green);font-weight:600">${fmtTk(x.entry.paid || 0)}</td>
-                        <td>
-                          <span class="badge ${
-                            x.entry.status === "paid"
-                              ? "badge-green"
-                              : x.entry.status === "partial"
-                                ? "badge-amber"
-                                : "badge-red"
-                          }">
-                            ${x.entry.status || "unpaid"}
-                          </span>
-                        </td>
-                      </tr>`).join("")
-                    }
-                  </tbody>
-                </table>
-              </div>`
-        }
+        <div class="field">
+          <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+          <input type="text" class="input" id="bp-note" placeholder="e.g. Paid the full electricity bill"/>
+        </div>
+        <button class="btn btn-primary ml-save" onclick="saveMyPaymentEntry()">✓ Save payment</button>
+        <div class="ml-hint">Credited immediately and added to My Receipts. The manager is notified.</div>
       </div>
 
       <div class="card">
-        <div class="card-title">My utility payment history</div>
-
-        ${
-          utilRows.length === 0
-            ? `<div class="empty">No utility payment yet</div>`
-            : `<div class="tbl-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Month</th>
-                      <th>Paid</th>
-                      <th>Status</th>
-                      <th>Note</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    ${
-                      utilRows.map(x => `
-                      <tr>
-                        <td><b>${x.rec.month_name} ${x.rec.year}</b></td>
-                        <td style="color:var(--green);font-weight:600">${fmtTk(x.payment.paid || 0)}</td>
-                        <td>
-                          <span class="badge ${
-                            x.payment.status === "paid"
-                              ? "badge-green"
-                              : x.payment.status === "partial"
-                                ? "badge-amber"
-                                : "badge-red"
-                          }">
-                            ${x.payment.status || "unpaid"}
-                          </span>
-                        </td>
-                        <td style="color:var(--text3)">${x.payment.notes || "—"}</td>
-                      </tr>`).join("")
-                    }
-                  </tbody>
-                </table>
-              </div>`
-        }
+        <div class="dk-card-title"><span>Payment history</span><button class="btn btn-ghost btn-sm" onclick="navigate('my-receipts')">Receipts →</button></div>
+        ${hist.length ? `<div class="tbl-wrap"><table class="ml-hist">
+          <thead><tr><th>Month</th><th>For</th><th style="text-align:right">Paid</th><th>Status</th></tr></thead>
+          <tbody>${hist.slice(0, 24).map(h => `<tr>
+            <td style="white-space:nowrap"><b>${monthLabelFromKey(h.key)}</b></td>
+            <td>${h.icon} ${h.type}${h.note ? `<div class="dk-mini">${escapeHtml(h.note)}</div>` : ""}</td>
+            <td style="text-align:right;color:var(--green);font-weight:600;white-space:nowrap">${fmtTk(h.paid)}${h.of ? `<div class="dk-mini">of ${fmtTk(h.of)}</div>` : ""}</td>
+            <td>${statusBadge(h.status)}</td></tr>`).join("")}</tbody>
+        </table></div>` : `<div class="empty"><div>🧾</div><div>No rent or utility payments recorded yet</div></div>`}
       </div>
     </div>
   </div>`;
+}
+
+/* Payment-type chips → the hidden #bp-type the save reads. */
+function pickBpType(btn) {
+  document.querySelectorAll(".ml-type").forEach(b => b.classList.toggle("on", b === btn));
+  const t = document.getElementById("bp-type");
+  if (t) t.value = btn.dataset.type || "";
+}
+/* "Remaining rent/utility" chips: pick the type and fill the amount. */
+function fillBpDue(type, amount) {
+  const btn = document.querySelector(`.ml-type[data-type="${type}"]`);
+  if (btn) pickBpType(btn);
+  const a = document.getElementById("bp-amount");
+  if (a) { a.value = amount; a.focus(); }
 }
 
 async function saveMyPaymentEntry() {

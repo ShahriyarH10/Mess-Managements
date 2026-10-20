@@ -483,3 +483,45 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
   .pf-val{font-size:18px!important;}
   .pf-hist{height:150px;gap:4px;}
 }
+
+/* ── Member Bazar Log + Utility & Rent (js/member/pages.js) ── */
+.ml-grid{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:12px;align-items:start;}
+.ml-grid>.card{margin-bottom:14px;min-width:0;}
+.ml-tiles3{grid-template-columns:repeat(3,minmax(0,1fr));}
+.ml-form .field{margin-bottom:14px;}
+.ml-date{display:flex;gap:6px;align-items:center;}
+.ml-date .input{flex:1;min-width:0;}
+.ml-amt{position:relative;}
+.ml-amt span{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:18px;font-weight:700;color:var(--text3);pointer-events:none;}
+.ml-amt .input{font-size:20px;font-weight:700;padding:11px 13px 11px 32px;}
+.ml-quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.ml-chip{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font:500 12px var(--font);padding:5px 10px;border-radius:99px;cursor:pointer;transition:border-color .15s,color .15s,background .15s;}
+.ml-chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);}
+.ml-save{width:100%;justify-content:center;padding:11px;}
+.ml-hint{font-size:11px;color:var(--text3);margin-top:9px;line-height:1.5;}
+.ml-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ml-types{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.ml-type{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font:500 11px var(--font);font-size:16px;transition:border-color .15s,background .15s,color .15s,transform .2s var(--ease-snap);}
+.ml-type span{font-size:11px;}
+.ml-type:hover{border-color:var(--border2);color:var(--text);}
+.ml-type.on{border-color:var(--accent);background:var(--accent-bg);color:var(--accent);transform:translateY(-1px);}
+
+.ml-month{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.ml-month:first-of-type{margin-top:0;}
+.ml-month b{color:var(--green);font-size:13px;letter-spacing:0;text-transform:none;}
+.ml-row{display:grid;grid-template-columns:110px 1fr auto auto;align-items:center;gap:10px;padding:6px 0;}
+.ml-day{font-size:13px;color:var(--text);white-space:nowrap;}
+.ml-bar{height:5px;}
+.ml-val{font-size:13px;color:var(--green);min-width:64px;text-align:right;}
+.ml-row .btn{padding:3px 9px;}
+.ml-hist td{vertical-align:middle;}
+
+@media(max-width:860px){
+  .ml-grid{grid-template-columns:minmax(0,1fr);}
+}
+@media(max-width:768px){
+  .ml-tiles3{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ml-tiles3>:last-child{grid-column:1/-1;}
+  .ml-row{grid-template-columns:auto 1fr auto auto;gap:8px;}
+  .ml-day{font-size:12px;}
+}
