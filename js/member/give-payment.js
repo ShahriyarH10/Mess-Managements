@@ -15,6 +15,7 @@ const PAY_STATUS = {
   pending:   { label: "Pending",   cls: "badge-amber" },
   confirmed: { label: "Confirmed", cls: "badge-green" },
   rejected:  { label: "Rejected",  cls: "badge-red"   },
+  reversed:  { label: "Reversed",  cls: "badge-red"   },
 };
 
 let _giveCtx = null;
@@ -52,8 +53,7 @@ function _safeId(id) { return /^[\w-]+$/.test(String(id)) ? String(id) : ""; }
 function _cachePayments(list) { list.forEach(p => _paymentCache.set(p.id, p)); }
 
 /* ── This member's settlement for a month (same numbers Collect Payment shows) ── */
-async function loadMemberCollectRow(member, month, year) {
-  const key = monthKey(year, month);
+async function loadMemberCollectData() {
   const [allMeals, allBazar, allRent, utilRes] = await Promise.all([
     dbGetAll("meals"),
     dbGetAll("bazar"),
@@ -61,7 +61,16 @@ async function loadMemberCollectRow(member, month, year) {
     getClient().from("utility_payments").select("*").eq("mess_id", messId()),
   ]);
   if (utilRes.error) throw utilRes.error;
-  const allUtil = utilRes.data || [];
+  return { allMeals, allBazar, allRent, allUtil: utilRes.data || [] };
+}
+
+async function loadMemberCollectRow(member, month, year) {
+  return memberCollectRowFrom(await loadMemberCollectData(), member, month, year);
+}
+
+/* Same as loadMemberCollectRow, from data already loaded (several months, one fetch). */
+function memberCollectRowFrom({ allMeals, allBazar, allRent, allUtil }, member, month, year) {
+  const key = monthKey(year, month);
   const rentRec  = allRent.find(r => r.month_key === key) || null;
   const utilRec  = allUtil.find(u => u.month_key === key) || null;
   const utilPrev = allUtil.find(u => u.month_key === previousMonthFromKey(key).key) || null;
@@ -110,7 +119,7 @@ function paymentReceiptData(p) {
     timestamp: new Date(p.created_at),
     receiptNo: paymentReceiptNo(p.receipt_no),
     status: p.status,
-    confirmedBy: p.status === "pending" ? "" : escapeHtml(p.confirmed_by || "manager"),
+    confirmedBy: p.status === "pending" || !p.confirmed_by ? "" : escapeHtml(p.confirmed_by),
     confirmedAt: p.confirmed_at ? new Date(p.confirmed_at) : null,
     generatedBy: escapeHtml(paymentGeneratedBy(p)),
     link: receiptLink(p.id),

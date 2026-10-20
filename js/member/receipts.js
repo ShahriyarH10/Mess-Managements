@@ -10,21 +10,49 @@
    ═══════════════════════════════════════════════ */
 
 let _rcptList = [];
+let _rcptLive = {};   // month_key → live balance (same number Give Payment shows)
 
 const _isMgrRole = () => ["manager", "sub_manager", "superadmin"].includes(currentUser?.role);
 
 /* Money actually kept by the mess for a receipt (amount minus change handed back). */
 function _rcptKept(p) { return round2(Number(p.amount) - Number(p.split?.change || 0)); }
 
-/* "After this payment" status of one confirmed receipt. */
+/* Live status of a month, coloured. */
+function _rcptStatusText(total) {
+  return total > 0.01
+    ? `<span style="color:var(--red)">Still due ${fmtTk(total)}</span>`
+    : total < -0.01
+      ? `<span style="color:var(--green)">Mess owes you ${fmtTk(Math.abs(total))}</span>`
+      : `<span style="color:var(--green)">✓ Fully paid</span>`;
+}
+
+/* Balance right after one confirmed receipt — a snapshot, so later payments can change it.
+   Shown muted and labelled; the month header carries the live status. */
 function _rcptAfter(p) {
   if (p.status !== "confirmed" || p.still_due == null) return "";
   const due = Number(p.still_due);
-  return due > 0.01
-    ? `<span style="color:var(--red);font-weight:600">Still due ${fmtTk(due)}</span>`
-    : due < -0.01
-      ? `<span style="color:var(--green);font-weight:600">Mess owes ${fmtTk(Math.abs(due))}</span>`
-      : `<span style="color:var(--green);font-weight:600">✓ Fully paid</span>`;
+  const txt = due > 0.01 ? `due ${fmtTk(due)}` : due < -0.01 ? `mess owed ${fmtTk(Math.abs(due))}` : "settled";
+  return `<span style="color:var(--text3);font-size:11px">After this payment: ${txt}</span>`;
+}
+
+/* Store a receipt for money a page has ALREADY credited (Room Rent, Utility, the member's
+   Utility/Rent page). Never throws — the payment itself is saved either way.
+   split: { allocRent } or { allocUtil }. */
+async function recordCreditedReceipt({ member, month, year, amount, split, source, dueBefore }) {
+  try {
+    const row = await loadMemberCollectRow(member, month, year);
+    return await dbCreateRecordedReceipt({
+      memberId: member.id, memberName: member.name,
+      monthKey: monthKey(year, month), month, year,
+      amount: round2(amount), dueAtSubmit: dueBefore ?? null,
+      split: { allocMeal: 0, allocUtil: 0, allocRent: 0, allocPrevDue: 0, change: 0, ...split },
+      stillDue: row.total, source,
+    });
+  } catch (e) {
+    console.warn("[Receipts] not stored:", e.message);
+    toast("Saved, but the receipt was not stored: " + e.message, "error");
+    return null;
+  }
 }
 
 async function copyReceiptLinkFor(id) {
@@ -44,12 +72,19 @@ async function renderMyReceipts(el) {
     return;
   }
   const n = new Date();
-  const [row, list] = await Promise.all([
-    loadMemberCollectRow(member, n.getMonth(), n.getFullYear()),
+  const [data, list] = await Promise.all([
+    loadMemberCollectData(),
     dbGetMemberPayments({ memberId: member.id, limit: 300 }),
   ]);
+  const row = memberCollectRowFrom(data, member, n.getMonth(), n.getFullYear());
   _rcptList = list;
   _cachePayments(list);
+  // live balance of every month that has a receipt
+  _rcptLive = { [row.key]: row.total };
+  [...new Set(list.map(p => p.month_key))].forEach(k => {
+    if (k in _rcptLive || !/^\d{4}-\d{2}$/.test(k)) return;
+    _rcptLive[k] = memberCollectRowFrom(data, member, Number(k.slice(5)) - 1, Number(k.slice(0, 4))).total;
+  });
 
   const curKey    = row.key;
   const confirmed = list.filter(p => p.status === "confirmed");
@@ -140,13 +175,17 @@ function buildMyReceiptsList() {
 
   wrap.innerHTML = groups.map(g => {
     const paid = round2(g.items.filter(p => p.status === "confirmed").reduce((s, p) => s + _rcptKept(p), 0));
+    const live = _rcptLive[g.key];
     return `
-    <div class="rc-month"><span>${escapeHtml(monthLabelFromKey(g.key))}</span><span style="color:var(--green)">Paid ${fmtTk(paid)}</span></div>
+    <div class="rc-month">
+      <span>${escapeHtml(monthLabelFromKey(g.key))} <span style="color:var(--green);font-weight:600;text-transform:none;letter-spacing:0">· Paid ${fmtTk(paid)}</span></span>
+      ${live == null ? "" : `<span style="text-transform:none;letter-spacing:0">${_rcptStatusText(live)}</span>`}
+    </div>
     ${g.items.map(p => {
       const id = _safeId(p.id), st = _payStatus(p), mgr = p.source === "manager";
       return `
       <div class="rc-row">
-        <div class="rc-amt" style="color:${p.status === "rejected" ? "var(--text3)" : "var(--text)"}">${fmtTk(Number(p.amount))}</div>
+        <div class="rc-amt" style="color:${_rcptVoid(p.status) ? "var(--text3)" : "var(--text)"}">${fmtTk(Number(p.amount))}</div>
         <div class="rc-mid">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <span class="badge ${mgr ? "badge-blue" : "badge-purple"}">${mgr ? "🧑‍💼 Manager" : "🙋 You sent"}</span>

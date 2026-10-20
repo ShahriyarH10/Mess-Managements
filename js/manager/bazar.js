@@ -375,9 +375,11 @@ async function saveUtilityPayments() {
   const { month, year, key } = getPaymentKey();
   if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const { data: rec } = await getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
-  const payments = {};
+  const old = rec?.payments || {};
+  const payments = { ...old };
   members.forEach(m => {
     payments[m.name] = {
+      ...(old[m.name] || {}),   // keep meal_paid / prev_due_paid written by Collect Payment
       paid:   parseFloat(document.getElementById("up-"  + m.id)?.value || 0),
       status: document.getElementById("ust-" + m.id)?.value || "unpaid",
       notes:  cleanText(document.getElementById("un-"  + m.id)?.value || ""),
@@ -386,6 +388,10 @@ async function saveUtilityPayments() {
   try {
     await dbUpsertUtility(month, year, key, rec?.bills || {}, payments);
     toast("Utility payments saved ✓", "success");
+    for (const m of members) {
+      const added = round2(Number(payments[m.name].paid || 0) - Number(old[m.name]?.paid || 0));
+      if (added > 0.01) await recordCreditedReceipt({ member: m, month, year, amount: added, source: "manager", split: { allocUtil: added } });
+    }
     await loadUtilHistory();
   } catch (e) { toast("Error: " + e.message, "error"); }
 }

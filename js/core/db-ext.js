@@ -126,9 +126,14 @@ async function dbCreateMemberPayment(row) {
   return data;
 }
 
-/* A manager's Collect Payment, stored as an already-confirmed receipt. */
-async function dbCreateManagerReceipt(row) {
-  const by = currentUser?.name || "Manager";
+/* A payment that is already credited, stored as a confirmed receipt:
+   a manager's Collect Payment / Room Rent / Utility entry (source "manager"), or a
+   member's own Utility/Rent entry (source "member", credited without confirmation). */
+async function dbCreateManagerReceipt(row) { return dbCreateRecordedReceipt({ ...row, source: "manager" }); }
+
+async function dbCreateRecordedReceipt(row) {
+  const by = currentUser?.name || (row.source === "manager" ? "Manager" : row.memberName);
+  const mgr = row.source === "manager";
   const { data, error } = await getClient().from("member_payments").insert({
     mess_id:       messId(),
     member_id:     row.memberId,
@@ -139,16 +144,36 @@ async function dbCreateManagerReceipt(row) {
     amount:        row.amount,
     due_at_submit: row.dueAtSubmit,
     status:        "confirmed",
-    source:        "manager",
+    source:        mgr ? "manager" : "member",
     created_by:    by,
-    confirmed_by:  by,
+    confirmed_by:  mgr ? by : null,
     confirmed_at:  new Date().toISOString(),
     split:         row.split,
     still_due:     row.stillDue,
   }).select("*").single();
-  if (error && _missingReceiptCols(error)) throw new Error("run supabase/receipts.sql to store manager receipts");
+  if (error && _missingReceiptCols(error)) throw new Error("run supabase/receipts.sql to store these receipts");
   if (error) throw error;
   return data;
+}
+
+/* Claim a confirmed receipt for reversal (confirmed → reversed) so two managers can't
+   undo the same payment twice. Resolves null if it was already reversed / not confirmed.
+   Before receipts.sql allows 'reversed', falls back to 'rejected' (still "not counted"). */
+async function dbClaimReversal(id, by) {
+  const patch = { confirmed_by: by, confirmed_at: new Date().toISOString() };
+  const claim = (status) => getClient().from("member_payments").update({ ...patch, status })
+    .eq("id", id).eq("mess_id", messId()).eq("status", "confirmed").select("*").maybeSingle();
+  let { data, error } = await claim("reversed");
+  if (error && /check|constraint/i.test(error.message || "")) ({ data, error } = await claim("rejected"));
+  if (error) throw error;
+  return data || null;
+}
+
+/* Undo a claim when applying the reversal failed, so it can be retried. */
+async function dbReleaseReversal(prev) {
+  await getClient().from("member_payments")
+    .update({ status: "confirmed", confirmed_by: prev.confirmed_by, confirmed_at: prev.confirmed_at })
+    .eq("id", prev.id).eq("mess_id", messId());
 }
 
 /* One receipt by id, scoped to this mess. */

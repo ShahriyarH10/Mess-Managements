@@ -117,6 +117,11 @@ async function renderCollect(el) {
 
     /* header row */
     .cp-mcard-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+    .cp-mcard-ret{position:relative;}
+    .cp-mcard-ret .cp-mcard-head{padding-right:26px;}
+    .cp-mcard-x{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;border:1px solid var(--border2);background:var(--bg3);color:var(--text3);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:color .15s,border-color .15s,background .15s,transform .2s;}
+    .cp-mcard-x:hover{color:var(--red);border-color:var(--red);background:var(--red-bg);transform:rotate(90deg);}
+
     .cp-mcard-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
     .cp-mcard-name{font-size:15px;font-weight:700;color:var(--text);}
     .cp-mcard-total{margin-left:auto;text-align:right;}
@@ -407,6 +412,116 @@ function returnAmountsFor(r) {
   };
 }
 
+/* ── ✕ on a Return Amount card: reverse the collection that overpaid ───────
+   The overpaid change is still in bills.pending_change (saving the card is what
+   clears it), so nothing has been handed back yet. The newest confirmed receipt
+   for this member + month with change is undone exactly: its stored split is
+   subtracted from utility_payments / rent and its change from pending_change.
+   The receipt is kept, marked "reversed", so the member still sees it. */
+const _reverseBusy = new Set();
+
+function _reversibleFor(list, key, change) {
+  return list.find(p => p.month_key === key && p.split
+    && Number(p.split.change || 0) > 0.01 && Number(p.split.change) <= change + 0.01);
+}
+
+async function reverseReturnCard(memberId) {
+  if (!requireManager("reverseReturnCard")) return;
+  const ctx = _collectCtx, r = ctx?.perMember[memberId], m = members.find(x => x.id === memberId);
+  if (!r || !m) return;
+  let p;
+  try {
+    const list = await dbGetMemberPayments({ memberId, status: "confirmed", limit: 100 });
+    p = _reversibleFor(list, ctx.key, round2(r.pendingChange || 0));
+  } catch (e) { toast("Could not load receipts: " + e.message, "error"); return; }
+  if (!p) {
+    toast("No saved collection to reverse — this overpayment was recorded before receipts existed. Correct it on the Utility / Room Rent pages.", "error");
+    return;
+  }
+  const sp = p.split, name = _decodeEntities(m.name);
+  const parts = [
+    sp.allocPrevDue > 0 && `Prev. due ${fmtTk(sp.allocPrevDue)}`,
+    sp.allocRent    > 0 && `Rent ${fmtTk(sp.allocRent)}`,
+    sp.allocUtil    > 0 && `Utility ${fmtTk(sp.allocUtil)}`,
+    sp.allocMeal    > 0 && `Meal ${fmtTk(sp.allocMeal)}`,
+  ].filter(Boolean);
+  showConfirm({
+    title: `Reverse ${fmtTk(Number(p.amount))} from ${name}?`,
+    body: `Receipt ${paymentReceiptNo(p.receipt_no)}, collected ${_payDate(p.created_at)}. `
+      + (parts.length ? `This takes back what it paid: ${parts.join(", ")}. ` : "")
+      + `The ${fmtTk(sp.change)} change will no longer need returning. The receipt stays in ${name}'s My Receipts, marked Reversed.`,
+    confirmLabel: "Reverse payment",
+    danger: true,
+    onConfirm: () => doReverseCollection(p.id, memberId),
+  });
+}
+
+async function doReverseCollection(id, memberId) {
+  if (!requireManager("doReverseCollection") || _reverseBusy.has(id)) return;
+  const ctx = _collectCtx, r = ctx?.perMember[memberId], m = members.find(x => x.id === memberId);
+  if (!r || !m) return;
+  _reverseBusy.add(id);
+  let before = null, claimed = null, wrote = false;
+  try {
+    if (await isMonthLocked(ctx.key)) throw new Error(`${monthLabelFromKey(ctx.key)} is locked — unlock it first.`);
+    before  = await dbGetMemberPayment(id);
+    claimed = before && await dbClaimReversal(id, currentUser.name);
+    if (!claimed) throw new Error("This payment was already reversed.");
+    const sp = claimed.split || {};
+    const allocMeal = Number(sp.allocMeal || 0), allocUtil = Number(sp.allocUtil || 0),
+          allocRent = Number(sp.allocRent || 0), allocPrevDue = Number(sp.allocPrevDue || 0),
+          change    = Number(sp.change || 0);
+
+    /* utility_payments: paid / meal_paid / prev_due_paid + this month's pending change */
+    const { data: util } = await getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+    const bills    = { ...(util?.bills || {}) };
+    const payments = { ...(util?.payments || {}) };
+    const cur      = payments[m.name] || {};
+    const paid     = round2(Number(cur.paid || 0) - allocUtil);
+    payments[m.name] = {
+      ...cur,
+      paid,
+      meal_paid:     round2(Number(cur.meal_paid     || 0) - allocMeal),
+      prev_due_paid: round2(Number(cur.prev_due_paid || 0) - allocPrevDue),
+      status: paid <= 0 ? "unpaid" : paid >= r.utilDue ? "paid" : "partial",
+    };
+    const pending = { ...(bills.pending_change || {}) };
+    const left = round2(Number(pending[m.name] || 0) - change);
+    if (left > 0.01) pending[m.name] = left; else delete pending[m.name];
+    if (Object.keys(pending).length) bills.pending_change = pending; else delete bills.pending_change;
+    await dbUpsertUtility(ctx.month, ctx.year, ctx.key, bills, payments);
+    wrote = true;
+
+    /* rent */
+    if (allocRent > 0) {
+      const { data: rent } = await getClient().from("rent")
+        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+      const entries = (rent?.entries || []).map(e => ({ ...e }));
+      const t = entries.find(e => e.name === m.name);
+      if (t) {
+        t.paid = round2(Number(t.paid || 0) - allocRent);
+        t.status = t.paid <= 0 ? "unpaid" : t.paid >= Number(t.rent || 0) ? "paid" : "partial";
+        await dbUpsertRent(ctx.month, ctx.year, ctx.key, entries);
+      }
+    }
+
+    await logAudit("delete", "collect", ctx.key, `Reversed payment ${claimed.amount} from ${m.name}`, sp);
+    toast(`Reversed ${fmtTk(Number(claimed.amount))} from ${_decodeEntities(m.name)} ✓`, "success");
+  } catch (e) {
+    if (claimed && wrote) {
+      // utility was already undone — releasing the claim would let a retry undo it twice
+      toast("Reversal was only partly applied — check this member's rent before retrying: " + e.message, "error");
+    } else {
+      if (claimed && before) await dbReleaseReversal(before);
+      toast("Error: " + e.message, "error");
+    }
+  } finally {
+    _reverseBusy.delete(id);
+    try { await loadCollectMonth(); } catch (_) { /* the toast already reported the outcome */ }
+  }
+}
+
 function buildReturnTable() {
   const card = document.getElementById("cp-return-card");
   const wrap = document.getElementById("cp-return-wrap");
@@ -454,7 +569,8 @@ function buildReturnTable() {
           </div>`);
 
     return `
-      <div class="cp-mcard" id="retr-${m.id}">
+      <div class="cp-mcard cp-mcard-ret" id="retr-${m.id}">
+        ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" onclick="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">✕</button>` : ""}
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
           <div>

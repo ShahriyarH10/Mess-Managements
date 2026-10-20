@@ -118,7 +118,18 @@ async function saveRent() {
     status: document.getElementById("rs-"+m.id)?.value||"unpaid",
     notes:  cleanText(document.getElementById("rn-"+m.id)?.value||""),
   }));
-  try{ await dbUpsertRent(month,year,key,entries); toast("Rent saved","success"); loadRentHistory(); }catch(e){ toast("Error: "+e.message,"error"); }
+  try{
+    // what was paid before this save, so each increase becomes a receipt
+    const { data: before } = await getClient().from("rent").select("entries").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+    const prevPaid = name => Number((before?.entries || []).find(e => e.name === name)?.paid || 0);
+    await dbUpsertRent(month,year,key,entries);
+    toast("Rent saved","success");
+    for (const m of members) {
+      const added = round2(Number(entries.find(e => e.name === m.name)?.paid || 0) - prevPaid(m.name));
+      if (added > 0.01) await recordCreditedReceipt({ member: m, month, year, amount: added, source: "manager", split: { allocRent: added } });
+    }
+    loadRentHistory();
+  }catch(e){ toast("Error: "+e.message,"error"); }
 }
 
 async function loadRentHistory() {

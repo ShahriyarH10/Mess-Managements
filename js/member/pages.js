@@ -810,6 +810,12 @@ async function saveMyPaymentEntry() {
       );
     }
 
+    // credited immediately, so it gets a confirmed receipt under My Receipts
+    await recordCreditedReceipt({
+      member, month, year, amount, source: "member",
+      split: billType === "rent" ? { allocRent: amount } : { allocUtil: amount },
+    });
+
     toast("Payment saved. Manager notified ✓", "success");
     setTimeout(() => navigate("my-payments"), 350);
   } catch (e) {

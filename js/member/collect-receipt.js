@@ -4,14 +4,18 @@
 /* ═════════════════════════════════════════════════════════════════
    Shareable receipt — opens in modal after a successful save.
    ═════════════════════════════════════════════════════════════════ */
-/* d.status: "confirmed" (default — a manager collection) | "pending" | "rejected" — member payment requests.
+/* d.status: "confirmed" (default — a manager collection) | "pending" | "rejected" — member payment requests
+   | "reversed" — a manager undid the payment (Collect Payment → Return Amount ✕).
    Optional: d.generatedBy (escaped text, e.g. "Manager · Tanvir"), d.link (shareable receipt URL),
    d.target (render into this element as a page instead of the modal).
    Optional: d.receiptNo, d.confirmedBy, d.confirmedAt, d.hasBreakdown === false, newMealRem/newNet == null
    (history rows only store part of the settlement, so the sections they can't fill are hidden). */
 function _rcptStatus(d) { return d.status || (d.pending ? "pending" : "confirmed"); }
+/* rejected / reversed: shown, but not counted */
+function _rcptVoid(st) { return st === "rejected" || st === "reversed"; }
+function _rcptVoidLabel(st) { return st === "reversed" ? "↺ Reversed" : "✖ Rejected"; }
 function _rcptShape(d) {
-  const st = _rcptStatus(d), ok = st !== "rejected";
+  const st = _rcptStatus(d), ok = !_rcptVoid(st);
   return {
     st,
     showAlloc: ok && d.hasBreakdown !== false,
@@ -37,6 +41,7 @@ function _rcptBanner(d, st, color) {
   const box = txt => `<div style="background:${bg};color:${fg};border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;margin-bottom:8px">${txt}</div>`;
   if (st === "pending")  return box("⚠ Pending — not official until the manager confirms it.");
   if (st === "rejected") return box(`✖ Rejected${d.confirmedBy ? " by " + d.confirmedBy : ""} — this payment was not counted.`);
+  if (st === "reversed") return box(`↺ Reversed${d.confirmedBy ? " by " + d.confirmedBy : ""} — this payment was undone and is not counted.`);
   return d.confirmedBy ? box(`✓ Confirmed by ${d.confirmedBy}${d.confirmedAt ? " · " + _rcptDate(d.confirmedAt) : ""}`) : "";
 }
 
@@ -49,7 +54,7 @@ function buildReceiptText(d) {
   const dt = _rcptDate(d.timestamp);
   const sh = _rcptShape(d);
   const lines = [];
-  lines.push(sh.st === "rejected" ? `✖ PAYMENT REJECTED` : sh.st === "pending" ? `🕓 PAYMENT REQUEST` : `💵 PAYMENT RECEIPT`);
+  lines.push(sh.st === "reversed" ? `↺ PAYMENT REVERSED` : sh.st === "rejected" ? `✖ PAYMENT REJECTED` : sh.st === "pending" ? `🕓 PAYMENT REQUEST` : `💵 PAYMENT RECEIPT`);
   lines.push(`─────────────────────`);
   if (d.receiptNo) lines.push(`Receipt: ${d.receiptNo}`);
   lines.push(`Mess:    ${messName}`);
@@ -79,6 +84,8 @@ function buildReceiptText(d) {
   if (sh.st === "pending") {
     lines.push(`⚠ Not yet confirmed by the manager.`);
     lines.push(`This is NOT proof of payment received.`);
+  } else if (sh.st === "reversed") {
+    lines.push(`Reversed${d.confirmedBy ? " by " + d.confirmedBy : ""} — undone, not counted.`);
   } else if (sh.st === "rejected") {
     lines.push(`Rejected${d.confirmedBy ? " by " + d.confirmedBy : ""} — not counted.`);
   } else if (d.confirmedBy) {
@@ -176,8 +183,8 @@ function showCollectReceipt(d) {
       <div class="rcpt-head-icon">🏠</div>
       <div class="rcpt-head-name">${messName}</div>
       <div class="rcpt-head-sub">Official Payment Receipt</div>
-      <span class="rcpt-badge ${st === "pending" ? 'rcpt-badge-pend' : st === "rejected" ? 'rcpt-badge-due' : (!sh.showNet || isSettled) ? 'rcpt-badge-settled' : 'rcpt-badge-due'}">
-        ${st === "pending" ? "🕓 Pending" : st === "rejected" ? "✖ Rejected" : !sh.showNet ? "✓ Confirmed" : isSettled ? "✓ Settled" : "Partially Paid"}
+      <span class="rcpt-badge ${st === "pending" ? 'rcpt-badge-pend' : _rcptVoid(st) ? 'rcpt-badge-due' : (!sh.showNet || isSettled) ? 'rcpt-badge-settled' : 'rcpt-badge-due'}">
+        ${st === "pending" ? "🕓 Pending" : _rcptVoid(st) ? _rcptVoidLabel(st) : !sh.showNet ? "✓ Confirmed" : isSettled ? "✓ Settled" : "Partially Paid"}
       </span>
     </div>
 
@@ -273,7 +280,7 @@ function showCollectReceipt(d) {
 
     <!-- ── Footer ── -->
     <div class="rcpt-foot">
-      ${_rcptBanner(d, st, st === "confirmed" ? ["var(--green-bg)", "var(--green)"] : st === "rejected" ? ["var(--red-bg)", "var(--red)"] : ["var(--accent-bg)", "var(--accent)"])}
+      ${_rcptBanner(d, st, st === "confirmed" ? ["var(--green-bg)", "var(--green)"] : _rcptVoid(st) ? ["var(--red-bg)", "var(--red)"] : ["var(--accent-bg)", "var(--accent)"])}
       <div class="rcpt-foot-txt">${_rcptFooter(d, messName)}</div>
       ${d.member.phone || st !== "confirmed" ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
     </div>
@@ -463,7 +470,7 @@ function printCollectReceipt() {
     <div class="head-icon">🏠</div>
     <div class="head-name">${messName}</div>
     <div class="head-sub">Official Payment Receipt</div>
-    <span class="badge ${st === "pending" ? 'badge-pend' : st === "rejected" ? 'badge-due' : (!sh.showNet || isSettled) ? 'badge-ok' : 'badge-due'}">${st === "pending" ? "🕓 Pending" : st === "rejected" ? "✖ Rejected" : !sh.showNet ? "✓ Confirmed" : isSettled ? "✓ Settled" : "Partially Paid"}</span>
+    <span class="badge ${st === "pending" ? 'badge-pend' : _rcptVoid(st) ? 'badge-due' : (!sh.showNet || isSettled) ? 'badge-ok' : 'badge-due'}">${st === "pending" ? "🕓 Pending" : _rcptVoid(st) ? _rcptVoidLabel(st) : !sh.showNet ? "✓ Confirmed" : isSettled ? "✓ Settled" : "Partially Paid"}</span>
   </div>
 
   <div class="meta">
@@ -497,7 +504,7 @@ function printCollectReceipt() {
   </div>` : ""}
 
   <div class="foot">
-    ${_rcptBanner(d, st, st === "confirmed" ? ["#e8f8f0", "#27ae60"] : st === "rejected" ? ["#fdf0f0", "#c0392b"] : ["#fdf3e1", "#8a5a00"])}
+    ${_rcptBanner(d, st, st === "confirmed" ? ["#e8f8f0", "#27ae60"] : _rcptVoid(st) ? ["#fdf0f0", "#c0392b"] : ["#fdf3e1", "#8a5a00"])}
     <div class="foot-txt">${_rcptFooter(d, messName)}</div>
   </div>
 
