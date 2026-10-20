@@ -698,7 +698,7 @@ async function renderMyProfile(el) {
   if (!member) { el.innerHTML = '<div class="content"><div class="empty">Profile not found</div></div>'; return; }
   el.innerHTML = `
   <div class="topbar">
-    <div><div class="page-title">My Profile</div><div class="page-sub">Personal stats</div></div>
+    <div><div class="page-title">My Profile</div><div class="page-sub">Your stats, balances and history</div></div>
     <div class="topbar-actions">
       <select class="input" id="my-prof-period" onchange="refreshMyProfile()" style="width:180px">
         <option value="next">Next month</option>
@@ -710,7 +710,7 @@ async function renderMyProfile(el) {
       </select>
     </div>
   </div>
-  <div class="content" id="my-profile-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>`;
+  <div class="content dk" id="my-profile-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>`;
   await loadMyProfile(member);
 }
 
@@ -776,8 +776,8 @@ async function loadMyProfile(member) {
   const uc = myUtilPay.status   === "paid" ? "badge-green" : myUtilPay.status   === "partial" ? "badge-amber" : "badge-red";
 
   const recentMonthsHTML = `
-    <div class="card" style="padding:16px">
-      <div class="card-title">Recent months</div>
+    <div class="card">
+      <div class="dk-card-title"><span>Recent months</span></div>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Util paid</th><th>Net</th></tr></thead>
@@ -797,9 +797,9 @@ async function loadMyProfile(member) {
                     : netCalcM.netPayable < 0
                       ? `<b style="color:var(--green)">Get ${fmtTk(Math.abs(netCalcM.netPayable))}</b>`
                       : `<b style="color:var(--green)">✓</b>`;
-                  return `<tr><td>${MONTHS[mIndex]} ${y}</td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(d.rentPaid || 0)}</td><td style="color:var(--green)">${fmtTk(d.utilityPaid || 0)}</td><td>${netCellM}</td></tr>`;
+                  return `<tr><td style="white-space:nowrap"><b>${MONTHS[mIndex].slice(0, 3)} ${y}</b></td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(d.rentPaid || 0)}</td><td style="color:var(--green)">${fmtTk(d.utilityPaid || 0)}</td><td>${netCellM}</td></tr>`;
                 }).join("")
-              : `<tr><td colspan="5" class="empty">No recent data</td></tr>`
+              : `<tr><td colspan="6" class="empty">No recent data</td></tr>`
             }
           </tbody>
         </table>
@@ -814,89 +814,69 @@ async function loadMyProfile(member) {
       Net payable and "What I Owe" are always pinned to the <b>latest settlement month (${monthLabelFromKey(curKey)})</b>.</span>
     </div>` : "";
 
+  // Net payable — the same number as My Dashboard (settlement + carried due)
+  const net  = round2(settlementCalc.netPayable + prevDueForOwe);
+  const pays = net > 0.01, gets = net < -0.01;
+  const chip = (label, v, owedTxt, okTxt) => {
+    const due = v < -0.01, credit = v > 0.01;
+    return `<span class="pf-chip ${due ? "bad" : "ok"}"><span>${label}</span><b>${due ? `${fmtTk(Math.abs(v))} ${owedTxt}` : credit ? `+${fmtTk(v)} ${okTxt}` : "✓ clear"}</b></span>`;
+  };
+  const tile = (icon, label, value, sub, bar) => `
+    <div class="pf-tile">
+      <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+      <div class="stat-value pf-val">${value}</div>
+      <div class="dk-sub">${sub}</div>
+      ${bar != null ? `<div class="dk-bar pf-share" title="${bar}% of the mess"><i style="width:${bar}%"></i></div>` : ""}
+    </div>`;
+  const curHistKey = monthKey(year, month);
+
   content.innerHTML = `
   ${multiPeriodBanner}
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div class="avatar" style="width:52px;height:52px;font-size:17px;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">
-          ${memberInitials(member.id, member.name)}
-        </div>
-        <div>
-          <div style="font-family:var(--font-serif);font-size:22px;font-weight:700">${member.name}</div>
-          <div style="font-size:12px;color:var(--text2);margin-top:2px">Room ${member.room || "—"}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1px">@${member.username || "—"} · Joined: ${member.joined || "—"}</div>
-          <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
-            <span class="badge ${rc}">${myRentEntry.status === "paid" ? "Rent paid" : "Rent due"}</span>
-            <span class="badge ${uc}">${myUtilPay.status === "paid" ? "Utility paid" : "Utility due"}</span>
-          </div>
-        </div>
-      </div>
-      <div class="profile-balance-row" style="display:flex;gap:20px;flex-wrap:wrap">
-        <div class="profile-balance-item" style="text-align:right">
-          <div style="font-size:11px;color:var(--text3)">Meal balance</div>
-          <div style="font-size:18px;font-weight:800" class="${mealNet >= 0 ? "net-pos" : "net-neg"}">
-            ${mealNet >= 0 ? "Get " + fmtTk(mealNet) : "Pay " + fmtTk(Math.abs(mealNet))}
-          </div>
-        </div>
-        <div class="profile-balance-item profile-balance-item-bordered" style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text3)">Rent balance</div>
-          <div style="font-size:18px;font-weight:800" class="${rentNet >= 0 ? "net-pos" : "net-neg"}">${rentNet >= 0 ? "+" : ""}${fmtTk(rentNet)}</div>
-        </div>
-        <div class="profile-balance-item profile-balance-item-bordered" style="text-align:right;padding-left:20px;border-left:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text3)">Utility balance</div>
-          <div style="font-size:18px;font-weight:800" class="${utilNet >= 0 ? "net-pos" : "net-neg"}">${utilNet >= 0 ? "+" : ""}${fmtTk(utilNet)}</div>
+  <div class="card pf-head ${pays ? "mb-pay" : gets ? "mb-get" : ""}">
+    <div class="pf-id">
+      <div class="avatar pf-av" style="background:${col.bg};color:${col.fg}">${memberInitials(member.id, member.name)}</div>
+      <div class="pf-who">
+        <div class="pf-name">${member.name}</div>
+        <div class="pf-meta">Room ${member.room || "—"} · @${member.username || "—"} · joined ${member.joined || "—"}</div>
+        <div class="pf-chips">
+          ${chip("Meals", mealNet, "to pay", "credit")}
+          ${chip("Rent", rentNet, "due", "extra")}
+          ${chip("Utility", utilNet, "due", "extra")}
         </div>
       </div>
     </div>
-
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px;margin-bottom:18px">
-      ${[
-        ["Total meals", s.totalMeals, null],
-        ["Active days", s.activeDays, null],
-        ["Avg/day",     s.avgMeals,   null],
-        ["Bazar spent", fmtTk(s.totalBazar), null],
-        ["Meal cost",   fmtTk(s.mealCost),   null],
-        ["Rent paid",   fmtTk(s.rentPaid),   "var(--green)"],
-        ["Util paid",   fmtTk(round2(s.utilityPaid)), "var(--green)"],
-      ].map(([label, value, color]) => `
-        <div class="stat-card" style="padding:9px">
-          <div class="stat-label">${label}</div>
-          <div style="font-size:15px;font-weight:700;margin-top:4px;${color ? "color:" + color : ""}">${value}</div>
-        </div>
-      `).join("")}
-    </div>
-
-    <div class="detail-section">
-      <div class="detail-section-title">Mess share — ${periodLabel}</div>
-      <div class="mini-bar">
-        <div class="mini-bar-label">Meal share</div>
-        <div class="mini-bar-track" style="height:8px"><div class="mini-bar-fill" style="width:${mealShare}%"></div></div>
-        <div class="mini-bar-val">${mealShare}%</div>
-      </div>
-      <div class="mini-bar">
-        <div class="mini-bar-label">Bazar share</div>
-        <div class="mini-bar-track" style="height:8px"><div class="mini-bar-fill" style="width:${bazarShare}%"></div></div>
-        <div class="mini-bar-val">${bazarShare}%</div>
+    <div class="pf-net">
+      <div class="mb-hero-lbl">Net payable · ${monthLabelFromKey(curKey)}</div>
+      <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "You pay " : gets ? "You get " : "✓ Settled"}${pays || gets ? `<span class="stat-value">${fmtTk(Math.abs(net))}</span>` : ""}</div>
+      <div class="pf-net-btns">
+        ${pays ? `<button class="btn btn-primary btn-sm" onclick="navigate('give-payment')">💵 Give payment</button>` : ""}
+        <button class="btn btn-ghost btn-sm" onclick="navigate('my-receipts')">🧾 Receipts</button>
       </div>
     </div>
+  </div>
 
-    <div class="detail-section">
-      <div class="detail-section-title">Monthly meal history</div>
-      ${r8.length ? `
-        <div class="hist-labels">${r8.map(k => `<span>${MONTHS[parseInt(k.slice(5), 10) - 1].slice(0, 3)}</span>`).join("")}</div>
-        <div class="hist-wrap">${r8.map(k => {
-          const v = allStats.byMonth[k]?.meals || 0;
-          const h = Math.max(Math.round((v / maxM) * 44), 3);
-          return `<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5), 10) - 1].slice(0, 3)}: ${v}</div></div>`;
-        }).join("")}</div>
-      ` : `<div style="color:var(--text3);font-size:13px">No history</div>`}
-    </div>
+  <div class="pf-tiles">
+    ${tile("🍽️", "Meals · " + periodLabel.toLowerCase(), s.totalMeals, `${s.activeDays} days · ${s.avgMeals}/day`, null)}
+    ${tile("🧾", "Meal cost", fmtTk(s.mealCost), `${mealShare}% of mess meals`, mealShare)}
+    ${tile("🛒", "Bazar spent", fmtTk(s.totalBazar), `${bazarShare}% of mess bazar`, bazarShare)}
+    ${tile("✅", "Paid", fmtTk(round2(s.rentPaid + s.utilityPaid)), `rent ${fmtTk(s.rentPaid)} · utility ${fmtTk(round2(s.utilityPaid))}`, null)}
+  </div>
 
-    <div class="profile-detail-bottom-grid" style="display:grid;gap:12px;margin-top:14px">
+  <div class="pf-grid">
+    <div class="pf-col">
+      <div class="card">
+        <div class="dk-card-title"><span>Meals per month</span><span class="dk-legend">last ${r8.length} month${r8.length === 1 ? "" : "s"}</span></div>
+        ${r8.length ? `<div class="an-wd pf-hist" style="grid-template-columns:repeat(${r8.length},minmax(0,1fr))">
+          ${r8.map(k => {
+            const v = round2(allStats.byMonth[k]?.meals || 0), lbl = MONTHS[parseInt(k.slice(5), 10) - 1].slice(0, 3);
+            return `<div class="an-wd-col${k === curHistKey ? " top" : ""}" title="${monthLabelFromKey(k)}: ${v} meals">
+              <b>${v}</b><div class="an-wd-bar"><i style="height:${Math.max(3, Math.round((v / maxM) * 100))}%"></i></div><span>${lbl}</span></div>`;
+          }).join("")}
+        </div>` : `<div class="empty">No history yet</div>`}
+      </div>
       ${recentMonthsHTML}
-      ${whatIOweHTML}
     </div>
+    <div class="pf-col">${whatIOweHTML}</div>
   </div>`;
 }
 
