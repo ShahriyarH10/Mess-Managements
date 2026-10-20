@@ -6,107 +6,86 @@ async function renderUtility(el) {
   const n    = new Date();
   const opts = buildMonthOptions(n.getMonth(), n.getFullYear());
 
+  const monthPick = (prefix, onLoad) => `
+    <div class="ut-pick">
+      <select class="input" id="${prefix}-month">${opts.monthOptions}</select>
+      <select class="input" id="${prefix}-year">${opts.yearOptions}</select>
+      <button class="btn btn-ghost btn-sm" onclick="${onLoad}">Load</button>
+    </div>`;
+  const billField = (id, icon, label) => `
+    <div class="field ut-field"><label>${icon} ${label}</label>
+      <div class="ml-amt"><span>৳</span><input type="number" class="input" id="${id}" min="0" placeholder="0" oninput="updUtilityPreview()"/></div></div>`;
+
   el.innerHTML = `
   <div class="topbar">
     <div>
       <div class="page-title">Utility Entry</div>
-      <div class="page-sub">Bills entry and member payment tracking</div>
+      <div class="page-sub">Enter the month's bills, then track what each member has paid</div>
     </div>
   </div>
-  <div class="content">
+  <div class="content dk">
 
-    <!-- Bill entry cards -->
-    <div class="grid-2" style="margin-bottom:12px">
-      <div class="card">
-        <div class="card-title">🔵 Prepaid bills — Electricity, Gas, WiFi</div>
-        <div class="modal-sub" style="margin-bottom:10px">Enter for the <b>current</b> settlement month</div>
-        <div class="month-sel">
-          <label>Month</label>
-          <select class="input" id="ut-pre-month" style="width:150px">${opts.monthOptions}</select>
-          <label>Year</label>
-          <select class="input" id="ut-pre-year" style="width:95px">${opts.yearOptions}</select>
-          <button class="btn btn-ghost btn-sm" onclick="loadUtilityGroup('prepaid')">Load</button>
+    <div class="ut-bills">
+      <div class="card ut-bill ut-pre">
+        <div class="dk-card-title"><span>🔵 Prepaid · this month</span></div>
+        <div class="ut-help">Electricity, gas and WiFi for the <b>current</b> settlement month.</div>
+        ${monthPick("ut-pre", "loadUtilityGroup('prepaid')")}
+        <div class="ut-fields">
+          ${billField("ut-elec", "⚡", "Electricity")}
+          ${billField("ut-gas", "🔥", "Gas")}
+          ${billField("ut-wifi", "📶", "WiFi")}
         </div>
-        <div class="util-fields">
-          <div class="field" style="margin:0"><label>Electricity (৳)</label><input type="number" class="input" id="ut-elec" min="0" placeholder="0" oninput="updUtilityPreview()"/></div>
-          <div class="field" style="margin:0"><label>Gas (৳)</label><input type="number" class="input" id="ut-gas" min="0" placeholder="0" oninput="updUtilityPreview()"/></div>
-          <div class="field" style="margin:0"><label>WiFi (৳)</label><input type="number" class="input" id="ut-wifi" min="0" placeholder="0" oninput="updUtilityPreview()"/></div>
+        <div class="ut-foot">
+          <div class="ent-pills"><span class="ent-pill">Total <b id="ut-pre-total">৳0</b></span><span class="ent-pill ent-d">Each <b id="ut-pre-share">৳0</b></span></div>
+          <button class="btn btn-primary btn-sm" onclick="saveUtilityGroup('prepaid')">Save prepaid</button>
         </div>
-        <div class="stat-grid" style="margin-top:14px;margin-bottom:8px">
-          <div class="stat-card"><div class="stat-label">Prepaid total</div><div class="stat-value" id="ut-pre-total">৳0</div></div>
-          <div class="stat-card"><div class="stat-label">Per member</div><div class="stat-value" id="ut-pre-share">৳0</div></div>
-        </div>
-        <button class="btn btn-primary" onclick="saveUtilityGroup('prepaid')">Save prepaid bills</button>
       </div>
 
-      <div class="card">
-        <div class="card-title">🔴 Postpaid bills — Khala bill, Other cost</div>
-        <div class="modal-sub" style="margin-bottom:10px">Enter for the <b>previous</b> month (will charge in next settlement)</div>
-        <div class="month-sel">
-          <label>Month</label>
-          <select class="input" id="ut-post-month" style="width:150px">${opts.monthOptions}</select>
-          <label>Year</label>
-          <select class="input" id="ut-post-year" style="width:95px">${opts.yearOptions}</select>
-          <button class="btn btn-ghost btn-sm" onclick="loadUtilityGroup('postpaid')">Load</button>
+      <div class="card ut-bill ut-post">
+        <div class="dk-card-title"><span>🔴 Postpaid · last month</span></div>
+        <div class="ut-help">Khala and other costs for the <b>previous</b> month — charged in the next settlement.</div>
+        ${monthPick("ut-post", "loadUtilityGroup('postpaid')")}
+        <div class="ut-fields ut-fields-2">
+          ${billField("ut-khala", "👩", "Khala")}
+          ${billField("ut-other", "📦", "Other")}
         </div>
-        <div class="util-fields">
-          <div class="field" style="margin:0"><label>Khala bill (৳)</label><input type="number" class="input" id="ut-khala" min="0" placeholder="0" oninput="updUtilityPreview()"/></div>
-          <div class="field" style="margin:0"><label>Other cost (৳)</label><input type="number" class="input" id="ut-other" min="0" placeholder="0" oninput="updUtilityPreview()"/></div>
+        <div class="ut-foot">
+          <div class="ent-pills"><span class="ent-pill">Total <b id="ut-post-total">৳0</b></span><span class="ent-pill ent-n">Each <b id="ut-post-share">৳0</b></span></div>
+          <button class="btn btn-primary btn-sm" onclick="saveUtilityGroup('postpaid')">Save postpaid</button>
         </div>
-        <div class="stat-grid" style="margin-top:14px;margin-bottom:8px">
-          <div class="stat-card"><div class="stat-label">Postpaid total</div><div class="stat-value" id="ut-post-total">৳0</div></div>
-          <div class="stat-card"><div class="stat-label">Per member</div><div class="stat-value" id="ut-post-share">৳0</div></div>
-        </div>
-        <button class="btn btn-primary" onclick="saveUtilityGroup('postpaid')">Save postpaid bills</button>
       </div>
     </div>
 
-    <!-- Payment tracking -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-title">💳 Member utility payment tracking</div>
+    <div class="card">
+      <div class="dk-card-title"><span>💳 Member payments</span>${monthPick("ut-pay", "loadUtilityPayments()")}</div>
+      <div class="ut-help">Each member owes this month's prepaid + last month's postpaid, split equally. Type what someone paid and their status updates itself.</div>
 
-      <div class="settlement-note" style="margin-bottom:12px">
-        <b>How it works:</b> Each member's utility due = current month prepaid (Elec+Gas+WiFi) + previous month postpaid (Khala+Other) ÷ total members.<br>
-        Enter how much a member paid — the remaining balance updates automatically.
-      </div>
-
-      <div class="month-sel" style="margin-bottom:14px">
-        <label>Settlement month</label>
-        <select class="input" id="ut-pay-month" style="width:150px">${opts.monthOptions}</select>
-        <label>Year</label>
-        <select class="input" id="ut-pay-year" style="width:95px">${opts.yearOptions}</select>
-        <button class="btn btn-ghost btn-sm" onclick="loadUtilityPayments()">Load</button>
-      </div>
-
-      <!-- Summary bar -->
-      <div id="ut-summary-bar" style="display:none;background:var(--bg3);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px">
-        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px">
-          <div><span style="color:var(--text3)">Per member due: </span><b id="ut-per-head">৳0</b></div>
-          <div><span style="color:var(--text3)">Prepaid (current): </span><span style="color:var(--blue)" id="ut-cur-prepaid">৳0</span></div>
-          <div><span style="color:var(--text3)">Postpaid (prev month): </span><span style="color:var(--red)" id="ut-prev-postpaid">৳0</span></div>
-          <div><span style="color:var(--text3)">Total collected: </span><span style="color:var(--green)" id="ut-total-collected">৳0</span></div>
+      <div id="ut-summary-bar" style="display:none" class="ut-summary">
+        <div class="ent-pills">
+          <span class="ent-pill">Each owes <b id="ut-per-head">৳0</b></span>
+          <span class="ent-pill ent-d">Prepaid <b id="ut-cur-prepaid">৳0</b></span>
+          <span class="ent-pill ent-n">Postpaid <b id="ut-prev-postpaid">৳0</b></span>
+          <span class="ent-pill ent-g">Collected <b id="ut-total-collected">৳0</b></span>
         </div>
+        <div class="dk-bar ut-progress"><i id="ut-progress" style="width:0%;background:var(--green)"></i></div>
       </div>
 
       <div id="ut-payment-table">
         <div class="empty" style="padding:24px;text-align:center">
           <div style="font-size:24px;margin-bottom:6px">💳</div>
-          Select a month and click <b>Load</b> to manage payments
+          Pick a month and press <b>Load</b> to manage payments
         </div>
       </div>
 
-      <div id="ut-payment-actions" style="display:none;margin-top:12px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="saveUtilityPayments()">💾 Save payments</button>
-          <button class="btn btn-ghost" onclick="markAllUtilPaid()">✓ Mark all fully paid</button>
-        </div>
+      <div id="ut-payment-actions" style="display:none" class="ent-foot">
+        <button class="btn btn-ghost" onclick="markAllUtilPaid()">✓ Mark all fully paid</button>
+        <button class="btn btn-primary" onclick="saveUtilityPayments()">💾 Save payments</button>
       </div>
     </div>
 
-    <!-- History -->
     <div class="card">
-      <div class="card-title">📋 Utility history</div>
-      <div class="tbl-wrap" id="ut-history"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+      <div class="dk-card-title"><span>📋 Utility history</span></div>
+      <div id="ut-history"><div class="loading"><div class="spinner"></div>Loading…</div></div>
     </div>
   </div>`;
 
@@ -205,67 +184,30 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
   }
 
   wrap.innerHTML = `
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Member</th>
-            <th>Total due</th>
-            <th>Amount paid (৳)</th>
-            <th>Status</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody id="ut-tbody">
-          ${members.map(m => {
-            const p       = payments[m.name] || {};
-            const credit  = round2(Number(messCredit[m.name] || 0));
-            const paid    = Number(p.paid || 0);
-            // Carry-forward reduces what the member owes, not what they paid
-            const effectiveDue = round2(Math.max(0, perHead - credit));
-            const status  = p.status || "unpaid";
-
-            return `
-              <tr id="utr-${m.id}">
-                <td><b>${m.name}</b></td>
-                <td>
-                  <b>${fmtTk(effectiveDue)}</b>
-                  ${credit > 0 ? `<div style="font-size:10px;color:var(--blue);margin-top:2px">↩ ${fmtTk(credit)} carried fwd</div>` : ''}
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    class="input input-sm"
-                    id="up-${m.id}"
-                    value="${paid}"
-                    min="0"
-                    step="1"
-                    style="width:100px"
-                    data-due="${effectiveDue}"
-                    oninput="onUtilPaidInput('${m.id}', ${effectiveDue})"
-                  />
-                </td>
-                <td>
-                  <select class="input input-sm" id="ust-${m.id}" style="width:110px">
-                    <option value="unpaid" ${status === "unpaid" ? "selected" : ""}>⏳ Not paid</option>
-                    <option value="partial" ${status === "partial" ? "selected" : ""}>⚠️ Partial</option>
-                    <option value="paid" ${status === "paid" ? "selected" : ""}>✅ Paid</option>
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    class="input input-sm"
-                    id="un-${m.id}"
-                    placeholder="—"
-                    value="${p.notes || ""}"
-                    style="width:110px"
-                  />
-                </td>
-              </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
+    <div class="ut-rows">
+      <div class="ut-row ut-row-head"><span>Member</span><span>Owes</span><span>Paid</span><span>Status</span><span>Note</span></div>
+      ${members.map((m, i) => {
+        const p       = payments[m.name] || {};
+        const credit  = round2(Number(messCredit[m.name] || 0));
+        const paid    = Number(p.paid || 0);
+        // Carry-forward reduces what the member owes, not what they paid
+        const effectiveDue = round2(Math.max(0, perHead - credit));
+        const status  = p.status || "unpaid";
+        const col     = avatarCol(i);
+        return `
+        <div class="ut-row" id="utr-${m.id}" data-status="${status}">
+          <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>${m.name}</div>
+          <div class="ut-due"><b>${fmtTk(effectiveDue)}</b>${credit > 0 ? `<div class="dk-mini" style="color:var(--blue)">↩ ${fmtTk(credit)} carried</div>` : ""}</div>
+          <div class="ml-amt ut-paid"><span>৳</span><input type="number" class="input input-sm" id="up-${m.id}" value="${paid}" min="0" step="1"
+            data-due="${effectiveDue}" oninput="onUtilPaidInput('${m.id}', ${effectiveDue})"/></div>
+          <select class="input input-sm ut-status" id="ust-${m.id}" onchange="utStatusChanged(this)">
+            <option value="unpaid" ${status === "unpaid" ? "selected" : ""}>⏳ Not paid</option>
+            <option value="partial" ${status === "partial" ? "selected" : ""}>⚠️ Partial</option>
+            <option value="paid" ${status === "paid" ? "selected" : ""}>✅ Paid</option>
+          </select>
+          <input type="text" class="input input-sm ut-note" id="un-${m.id}" placeholder="Note" value="${p.notes || ""}"/>
+        </div>`;
+      }).join("")}
     </div>`;
 
   if (actions)  actions.style.display  = "block";
@@ -285,6 +227,8 @@ function onUtilPaidInput(memberId, perHead) {
     if (paid <= 0)             statEl.value = "unpaid";
     else if (paid >= perHead)  statEl.value = "paid";
     else                       statEl.value = "partial";
+    const row = document.getElementById("utr-" + memberId);
+    if (row) row.dataset.status = statEl.value;
   }
 
   // Update summary totals
@@ -312,6 +256,8 @@ function updateSummaryTotals(perHead, messCredit = {}) {
     if (el) { el.textContent = fmtTk(v); if (color) el.style.color = color; }
   };
   set("ut-total-collected", totalCollected, "var(--green)");
+  const bar = document.getElementById("ut-progress");
+  if (bar) bar.style.width = (totalDue > 0 ? Math.min(100, Math.round((totalCollected / totalDue) * 100)) : 0) + "%";
 }
 
 function updateSummaryBar(perHead, payments, messCredit = {}) {
@@ -365,9 +311,15 @@ function markAllUtilPaid() {
       const due = parseFloat(paidEl.dataset.due ?? _utPerHead);
       paidEl.value = due;
     }
-    if (statEl) statEl.value = "paid";
+    if (statEl) { statEl.value = "paid"; utStatusChanged(statEl); }
   });
   updateSummaryTotals(_utPerHead);
+}
+
+/* Tint the member row by its status (CSS: .ut-row[data-status]). */
+function utStatusChanged(sel) {
+  const row = sel && sel.closest(".ut-row");
+  if (row) row.dataset.status = sel.value;
 }
 
 async function saveUtilityPayments() {

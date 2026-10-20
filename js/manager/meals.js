@@ -9,43 +9,46 @@ async function renderMeals(el) {
   // Render the shell with tabs — Entry tab shown by default
   el.innerHTML=`
   <div class="topbar">
-    <div><div class="page-title">Meal Entry</div><div class="page-sub">Log meals or view the absence calendar</div></div>
+    <div><div class="page-title">Meal Entry</div><div class="page-sub">Log everyone's meals for a day, or check attendance</div></div>
     <div class="topbar-actions">
-      <div style="display:flex;gap:0;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
-        <button id="meal-tab-entry" onclick="switchMealTab('entry')"
-          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:var(--accent);color:#0f0f0f;border-radius:0">
-          📝 Entry
-        </button>
-        <button id="meal-tab-calendar" onclick="switchMealTab('calendar')"
-          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:transparent;color:var(--text2);border-radius:0">
-          📅 Calendar
-        </button>
+      <div class="an-seg">
+        <button id="meal-tab-entry" class="an-seg-btn on" onclick="switchMealTab('entry')">📝 Entry</button>
+        <button id="meal-tab-calendar" class="an-seg-btn" onclick="switchMealTab('calendar')">📅 Attendance</button>
       </div>
     </div>
   </div>
-  <div class="content">
+  <div class="content dk">
     <!-- Entry tab -->
     <div id="meal-pane-entry">
-      <div class="card" style="margin-bottom:12px">
-        <div class="date-row"><label>Date</label><input type="date" class="input" id="meal-date" value="${today()}" style="width:170px" onchange="loadMealDate()"/><button class="btn btn-ghost btn-sm" onclick="loadMealDate()">Load</button></div>
-        <div class="stat-grid" style="margin-bottom:12px">
-          <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value" id="mt-total">0</div></div>
-          <div class="stat-card"><div class="stat-label">Day</div><div class="stat-value" id="mt-day">0</div></div>
-          <div class="stat-card"><div class="stat-label">Night</div><div class="stat-value" id="mt-night">0</div></div>
-          <div class="stat-card"><div class="stat-label">Eating</div><div class="stat-value" id="mt-eating">0</div></div>
+      <div class="card ent-card">
+        <div class="ent-bar">
+          <div class="ent-date">
+            <input type="date" class="input" id="meal-date" value="${today()}" onchange="loadMealDate()"/>
+            ${entDateChips("meal-date", "loadMealDate()")}
+          </div>
+          <div class="ent-pills">
+            <span class="ent-pill">Total <b id="mt-total">0</b></span>
+            <span class="ent-pill ent-d">☀ Day <b id="mt-day">0</b></span>
+            <span class="ent-pill ent-n">🌙 Night <b id="mt-night">0</b></span>
+            <span class="ent-pill">Eating <b id="mt-eating">0</b>/${members.length}</span>
+          </div>
         </div>
-        <div class="meal-grid" id="meal-grid"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-          <button class="btn btn-primary" onclick="saveMeals()">Save meals</button>
-          <button class="btn btn-ghost" onclick="setAllMeals('day',1)">Day All → 1</button>
-          <button class="btn btn-ghost" onclick="setAllMeals('night',1)">Night All → 1</button>
-          <button class="btn btn-ghost" onclick="setAllMeals('both',1)">All → 1</button>
-          <button class="btn btn-ghost" onclick="setAllMeals('both',0)">Clear</button>
+        <div class="ent-tools">
+          <span>Set everyone:</span>
+          <button class="ml-chip" onclick="setAllMeals('day',1)">Day → 1</button>
+          <button class="ml-chip" onclick="setAllMeals('night',1)">Night → 1</button>
+          <button class="ml-chip" onclick="setAllMeals('both',1)">Both → 1</button>
+          <button class="ml-chip" onclick="setAllMeals('both',0)">Clear</button>
+        </div>
+        <div class="ent-grid" id="meal-grid"></div>
+        <div class="ent-foot">
+          <span class="ml-hint" style="margin:0">Absent members are flagged from the attendance board.</span>
+          <button class="btn btn-primary" onclick="saveMeals()">✓ Save meals</button>
         </div>
       </div>
-      <div class="grid-2" style="align-items:start">
-        <div class="card"><div class="card-title">Recent entries</div><div class="tbl-wrap" id="meals-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
-        <div class="card"><div class="card-title">Month history</div><div id="manager-meal-months"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+      <div class="ent-split">
+        <div class="card"><div class="dk-card-title"><span>Recent entries</span></div><div class="tbl-wrap" id="meals-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+        <div class="card"><div class="dk-card-title"><span>Month history</span></div><div id="manager-meal-months"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
       </div>
     </div>
     <!-- Calendar tab (lazy-loaded) -->
@@ -67,8 +70,8 @@ function switchMealTab(tab) {
   document.getElementById('meal-pane-calendar').style.display = isEntry ? 'none' : '';
   const btnEntry = document.getElementById('meal-tab-entry');
   const btnCal   = document.getElementById('meal-tab-calendar');
-  if (btnEntry) { btnEntry.style.background = isEntry ? 'var(--accent)' : 'transparent'; btnEntry.style.color = isEntry ? '#0f0f0f' : 'var(--text2)'; }
-  if (btnCal)   { btnCal.style.background   = isEntry ? 'transparent' : 'var(--accent)'; btnCal.style.color   = isEntry ? 'var(--text2)' : '#0f0f0f'; }
+  btnEntry?.classList.toggle('on', isEntry);
+  btnCal?.classList.toggle('on', !isEntry);
   if (!isEntry) {
     const outer = document.getElementById('absence-cal-outer');
     if (outer && !outer._loaded) {
@@ -97,17 +100,42 @@ function buildMealGrid() {
   const g=document.getElementById("meal-grid"); if(!g) return;
   const abDay   = window._absentDay   || {};
   const abNight = window._absentNight || {};
-  g.innerHTML=members.map(m=>{
-    const dayAbsent   = abDay[m.id];
-    const nightAbsent = abNight[m.id];
+  const step = (id, val, absent, label) => `
+    <div class="ent-row${absent ? " ent-absent" : ""}">
+      <span class="ent-lbl">${label}</span>
+      <button class="ms-btn ent-btn" onclick="stepEntry('${id}',-1)" aria-label="Less">−</button>
+      <input type="number" class="meal-num-input" id="${id}" min="0" max="4" step="0.5" value="${val}" oninput="updMealSum()"/>
+      <button class="ms-btn ent-btn" onclick="stepEntry('${id}',1)" aria-label="More">+</button>
+    </div>`;
+  g.innerHTML=members.map((m,i)=>{
+    const dA = abDay[m.id], nA = abNight[m.id], col = avatarCol(i);
     return `
-    <div class="meal-cell" style="${(dayAbsent && nightAbsent) ? "opacity:.6;" : ""}">
-      <div class="meal-cell-name">${escapeHtml(m.name)}${(dayAbsent||nightAbsent) ? `<span style="font-size:9px;color:var(--red);margin-left:5px;background:var(--red-bg);padding:1px 5px;border-radius:99px">absent</span>` : ""}</div>
-      <div class="meal-cell-row"><span class="meal-cell-label">Day</span><input type="number" class="meal-num-input" id="md-${m.id}" min="0" max="4" step="0.5" value="${mealDayVals[m.id]??0}" ${dayAbsent?"style='border-color:var(--red-bg);background:var(--red-bg)'"  :""} oninput="updMealSum()"/></div>
-      <div class="meal-cell-row"><span class="meal-cell-label">Night</span><input type="number" class="meal-num-input" id="mn-${m.id}" min="0" max="4" step="0.5" value="${mealNightVals[m.id]??0}" ${nightAbsent?"style='border-color:var(--red-bg);background:var(--red-bg)'" :""} oninput="updMealSum()"/></div>
+    <div class="ent-cell${dA && nA ? " ent-off" : ""}">
+      <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>
+        <span class="ent-name">${escapeHtml(m.name)}</span>${dA || nA ? `<span class="badge badge-red">${dA && nA ? "absent" : dA ? "day off" : "night off"}</span>` : ""}</div>
+      ${step("md-"+m.id, mealDayVals[m.id]??0, dA, "☀ Day")}
+      ${step("mn-"+m.id, mealNightVals[m.id]??0, nA, "🌙 Night")}
     </div>`;
   }).join("");
   updMealSum();
+}
+/* −/+ on any entry stepper (0–4). */
+function stepEntry(id, delta) {
+  const el = document.getElementById(id); if (!el) return;
+  el.value = Math.min(4, Math.max(0, (parseFloat(el.value) || 0) + delta));
+  el.classList.remove("ms-bump"); void el.offsetWidth; el.classList.add("ms-bump");
+  updMealSum();
+}
+/* Yesterday / Today chips for an entry page's date input. */
+function entDateChips(inputId, after) {
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const t = new Date(), y = new Date(t.getTime() - 86400000);
+  return `<button class="ml-chip" onclick="document.getElementById('${inputId}').value='${ymd(y)}';${after}">Yesterday</button>
+    <button class="ml-chip" onclick="document.getElementById('${inputId}').value='${ymd(t)}';${after}">Today</button>`;
+}
+function entNiceDate(d) {
+  const [y, m, dd] = String(d).split("-").map(Number);
+  return new Date(y, m - 1, dd).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 function updMealSum() {
   let d=0,n=0,e=0;
@@ -173,8 +201,8 @@ function loadMealsRecent(all) {
   const wrap=document.getElementById("meals-tbl"); if(!wrap) return;
   const recent=[...all].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if(!recent.length){ wrap.innerHTML='<div class="empty">No meal entries yet</div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${escapeHtml(m.name)}</th>`).join("")}<th>Total</th><th></th></tr></thead>
-  <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealMemberTotal(r.meals||{},m.name); t+=v; return`<td>${v||"—"}</td>`; }).join(""); return`<tr><td>${r.date}</td>${cells}<td><b>${round2(t)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delMeal('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
+  wrap.innerHTML=`<table class="ent-tbl"><thead><tr><th>Date</th>${members.map(m=>`<th title="${escapeHtml(m.name)}" style="text-align:center">${memberInitials(m.id, m.name)}</th>`).join("")}<th style="text-align:right">Total</th><th></th></tr></thead>
+  <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealMemberTotal(r.meals||{},m.name); t+=v; return`<td style="text-align:center" class="${v?"":"ent-zero"}">${v||"·"}</td>`; }).join(""); return`<tr><td class="ent-dt">${entNiceDate(r.date)}</td>${cells}<td style="text-align:right"><b>${round2(t)}</b></td><td style="text-align:right"><button class="btn btn-ghost btn-sm btn-icon" onclick="delMeal('${r.id}')" title="Delete this day">✕</button></td></tr>`; }).join("")}</tbody></table>`;
 }
 function loadManagerMealMonths(all) {
   const wrap=document.getElementById("manager-meal-months"); if(!wrap) return;
@@ -187,27 +215,35 @@ async function delMeal(id) { showConfirm({ title: "Delete meal entry?", body: "T
    BAZAR ENTRY
 ═══════════════════════════════════════════ */
 function renderBazar(el) {
-  el.innerHTML=`<div class="topbar"><div><div class="page-title">Bazar Entry</div><div class="page-sub">Log grocery spending per member</div></div></div>
-  <div class="content">
-    <div class="card" style="margin-bottom:12px">
-      <div class="date-row"><label>Date</label><input type="date" class="input" id="bazar-date" value="${today()}" style="width:170px" onchange="loadBazarDate()"/><button class="btn btn-ghost btn-sm" onclick="loadBazarDate()">Load</button></div>
-      <div class="meal-grid" id="bazar-grid"></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-primary" onclick="saveBazar()">Save bazar</button>
+  el.innerHTML=`<div class="topbar"><div><div class="page-title">Bazar Entry</div><div class="page-sub">Log what each member spent on bazar for a day</div></div></div>
+  <div class="content dk">
+    <div class="card ent-card">
+      <div class="ent-bar">
+        <div class="ent-date">
+          <input type="date" class="input" id="bazar-date" value="${today()}" onchange="loadBazarDate()"/>
+          ${entDateChips("bazar-date", "loadBazarDate()")}
+        </div>
+        <div class="ent-pills"><span class="ent-pill ent-g">Day total <b id="bazar-tot">৳0</b></span></div>
+      </div>
+      <div class="ent-grid ent-grid-bz" id="bazar-grid"></div>
+      <div class="ent-foot">
         <button class="btn btn-ghost" onclick="clearBazar()">Clear</button>
-        <span style="font-size:13px;color:var(--text2)">Total: <b id="bazar-tot">৳0</b></span>
+        <button class="btn btn-primary" onclick="saveBazar()">✓ Save bazar</button>
       </div>
     </div>
-    <div class="grid-2" style="align-items:start">
-      <div class="card"><div class="card-title">Recent entries</div><div class="tbl-wrap" id="bazar-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
-      <div class="card"><div class="card-title">Month history</div><div id="bazar-month-history"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+    <div class="ent-split">
+      <div class="card"><div class="dk-card-title"><span>Recent entries</span></div><div id="bazar-tbl"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
+      <div class="card"><div class="dk-card-title"><span>Month history</span></div><div id="bazar-month-history"><div class="loading"><div class="spinner"></div>Loading…</div></div></div>
     </div>
   </div>`;
   buildBazarGrid(); refreshBazarLists();
 }
 function buildBazarGrid() {
   const g=document.getElementById("bazar-grid"); if(!g) return;
-  g.innerHTML=members.map(m=>`<div class="meal-cell"><div class="meal-cell-name">${escapeHtml(m.name)}</div><div class="meal-cell-row"><span class="meal-cell-label">৳</span><input type="number" class="meal-num-input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSum()"/></div></div>`).join("");
+  g.innerHTML=members.map((m,i)=>{ const col=avatarCol(i); return `<div class="ent-cell">
+    <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span><span class="ent-name">${escapeHtml(m.name)}</span></div>
+    <div class="ml-amt ent-amt"><span>৳</span><input type="number" class="input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSum()"/></div>
+  </div>`; }).join("");
 }
 function updBazarSum() { let b=0; members.forEach(m=>{ b+=parseFloat(document.getElementById("bz-"+m.id)?.value||0); }); const bt=document.getElementById("bazar-tot"); if(bt) bt.textContent=fmtTk(b); }
 async function loadBazarDate() {
@@ -232,7 +268,16 @@ function loadBazarRecent(all) {
   const wrap=document.getElementById("bazar-tbl"); if(!wrap) return;
   const recent=[...all].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   if(!recent.length){ wrap.innerHTML='<div class="empty">No bazar entries</div>'; return; }
-  wrap.innerHTML=`<table><thead><tr><th>Date</th>${members.map(m=>`<th>${escapeHtml(m.name)}</th>`).join("")}<th>Total</th><th></th></tr></thead><tbody>${recent.map(r=>{ const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v),0); return`<tr><td>${r.date}</td>${members.map(m=>`<td>${r.bazar[m.name]!=null?fmtTk(r.bazar[m.name]):"—"}</td>`).join("")}<td><b>${fmtTk(bt)}</b></td><td><button class="btn btn-ghost btn-sm btn-icon" onclick="delBazar('${r.id}')">✕</button></td></tr>`; }).join("")}</tbody></table>`;
+  wrap.innerHTML=recent.map(r=>{
+    const buyers=members.map((m,i)=>({ m, i, v:Number((r.bazar||{})[m.name]||0) })).filter(x=>x.v>0);
+    const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v||0),0);
+    return `<div class="ent-bz-row">
+      <span class="ent-dt">${entNiceDate(r.date)}</span>
+      <span class="ent-buyers">${buyers.length ? buyers.map(x=>{ const col=avatarCol(x.i); return `<span class="ent-buyer"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(x.m.id, x.m.name)}</span>${escapeHtml(x.m.name.split(" ")[0])} <b>${fmtTk(x.v)}</b></span>`; }).join("") : `<span class="ent-zero">nobody</span>`}</span>
+      <b class="ent-bz-total">${fmtTk(round2(bt))}</b>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="delBazar('${r.id}')" title="Delete this day">✕</button>
+    </div>`;
+  }).join("");
 }
 
 /* Bazar month-history grid (shared month cards, js/core/helpers.js). Click → calendar modal. */
