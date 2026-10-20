@@ -409,6 +409,20 @@ async function cancelAbsence(id) {
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
+/* Upcoming days off (member Meal Log). Shared by the first render and every refresh. */
+function buildUpcomingAbsences(upcoming) {
+  if (!upcoming.length) return `<div class="ma-none">No days off planned — you're eating every meal 🍽️</div>`;
+  const nice = d => { const [y, m, dd] = String(d).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); };
+  return upcoming.map(a => {
+    const off = !a.day_meal && !a.night_meal ? "All day" : !a.day_meal ? "☀ Day" : "🌙 Night";
+    return `<div class="ma-row">
+      <span class="ma-date">${nice(a.date)}</span>
+      <span class="badge badge-red">${off} off</span>
+      <button class="btn btn-ghost btn-sm" onclick="cancelAbsence('${a.id}')" title="Cancel this day off">✕</button>
+    </div>`;
+  }).join("");
+}
+
 async function refreshUpcomingAbsences(memberId) {
   const wrap = document.getElementById("upcoming-absences");
   if (!wrap) return;
@@ -418,20 +432,7 @@ async function refreshUpcomingAbsences(memberId) {
       .select("*").eq("mess_id", messId()).eq("member_id", memberId)
       .gte("date", dt).order("date", { ascending: true }).limit(30);
     const upcoming = (data || []).filter(a => !a.day_meal || !a.night_meal);
-    wrap.innerHTML = `<div class="card-title" style="margin-bottom:8px">📋 Upcoming Absences</div>` + (upcoming.length
-      ? `<div style="display:flex;flex-direction:column;gap:6px">
-          ${upcoming.map(a => {
-            const skipDay = !a.day_meal, skipNight = !a.night_meal;
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--red-bg);border:1px solid rgba(224,82,82,.2);border-radius:var(--radius-sm)">
-              <div>
-                <span style="font-size:13px;font-weight:600">${a.date}</span>
-                <span style="font-size:11px;color:var(--text3);margin-left:8px">${skipDay && skipNight ? "All meals off" : skipDay ? "☀ Day off" : "🌙 Night off"}</span>
-              </div>
-              <button class="btn btn-ghost btn-sm" onclick="cancelAbsence('${a.id}')">✕ Cancel</button>
-            </div>`;
-          }).join("")}
-        </div>`
-      : `<div style="font-size:13px;color:var(--text3)">No upcoming absences — you're eating all meals! 🍽️</div>`);
+    wrap.innerHTML = buildUpcomingAbsences(upcoming);
   } catch (e) { console.warn("Refresh absences failed:", e); }
 }
 

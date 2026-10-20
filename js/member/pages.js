@@ -51,116 +51,144 @@ async function renderMyMeals(el) {
 
   window._attMemberId = member.id;
 
+  // ── This month, for the tiles + calendar ──
+  const now = new Date(), y = now.getFullYear(), mo = now.getMonth(), key = monthKey(y, mo);
+  const dim = new Date(y, mo + 1, 0).getDate(), gone = Math.min(now.getDate(), dim);
+  const myDay = {};
+  let messMeals = 0;
+  const curRows = allMeals.filter(r => String(r.date).startsWith(key));
+  curRows.forEach(r => {
+    myDay[parseInt(String(r.date).slice(8), 10)] = mealMemberTotal(r.meals || {}, member.name);
+    messMeals += members.reduce((t, m) => t + mealMemberTotal(r.meals || {}, m.name), 0);
+  });
+  const myTotal = round2(Object.values(myDay).reduce((a, b) => a + b, 0));
+  const daysEaten = Object.values(myDay).filter(v => v > 0).length;
+  const loggedDays = curRows.length;
+  let bz = 0;
+  ((await historyRows("bazar")) || []).filter(r => String(r.date).startsWith(key))
+    .forEach(r => Object.values(r.bazar || {}).forEach(v => { bz += Number(v) || 0; }));
+  const rate = messMeals > 0 ? bz / messMeals : 0;
+  const offDays = {};
+  upcoming.forEach(a => { if (String(a.date).startsWith(key)) offDays[parseInt(String(a.date).slice(8), 10)] = !a.day_meal && !a.night_meal ? "all" : !a.day_meal ? "day" : "night"; });
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const shift = n => ymd(new Date(now.getTime() + n * 86400000));
+  const setDate = v => `document.getElementById('my-meal-date').value='${v}';fillMyMealFromDate()`;
+  const lead = (new Date(y, mo, 1).getDay() + 1) % 7;          // Saturday-first week
+  const myMax = Math.max(1, ...Object.values(myDay));
+  const tile = (icon, label, value, sub) => `
+    <div class="pf-tile">
+      <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+      <div class="stat-value pf-val">${value}</div>
+      <div class="dk-sub">${sub}</div>
+    </div>`;
+  const stepper = (id, icon, label) => `
+    <div class="ms-step">
+      <div class="ms-step-lbl">${icon} ${label}</div>
+      <div class="ms-step-ctl">
+        <button class="ms-btn" onclick="stepMyMeal('${id}',-1)" aria-label="One less ${label.toLowerCase()} meal">−</button>
+        <input type="number" class="input" id="${id}" min="0" max="4" step="0.5" value="0"/>
+        <button class="ms-btn" onclick="stepMyMeal('${id}',1)" aria-label="One more ${label.toLowerCase()} meal">+</button>
+      </div>
+    </div>`;
+
   el.innerHTML = `
   <div class="topbar">
     <div>
       <div class="page-title">Meal Log</div>
-      <div class="page-sub">Mark absences &amp; update your meal count</div>
+      <div class="page-sub">Your meals, days off and monthly history</div>
     </div>
-
   </div>
 
-  <div class="content">
+  <div class="content dk">
+    <div class="pf-tiles">
+      ${tile("🍽️", "Meals · " + MONTHS[mo], myTotal, `${daysEaten ? round2(myTotal / daysEaten) : 0}/day on days you ate`)}
+      ${tile("📅", "Days eaten", daysEaten, `of ${loggedDays} logged day${loggedDays === 1 ? "" : "s"} so far`)}
+      ${tile("🧾", "Meal cost so far", fmtTk(round2(myTotal * rate)), `at ${fmtTk(round2(rate))}/meal right now`)}
+      ${tile("🌙", "Days off planned", upcoming.length, upcoming.length ? "next: " + new Date(upcoming[0].date + "T00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "none coming up")}
+    </div>
 
-    <div class="grid-2" style="align-items:start">
-      <!-- ── Left column: Meal entry + Absence stacked ── -->
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="card">
-          <div class="card-title">My meal entry</div>
-
-          <div class="auth-sub" style="margin-bottom:14px;font-size:13px;color:var(--text2)">
-            Your meal will be saved directly. Manager will only receive an update notification.
-          </div>
-
-          <div class="date-row">
-            <label>Date</label>
-            <input type="date" class="input" id="my-meal-date" value="${dt}" style="width:170px" onchange="fillMyMealFromDate()"/>
-            <button class="btn btn-ghost btn-sm" onclick="fillMyMealFromDate()">Load</button>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-            <div class="field">
-              <label>Day meals</label>
-              <input type="number" class="input" id="my-meal-day" min="0" max="4" step="0.5" value="0"/>
-            </div>
-            <div class="field">
-              <label>Night meals</label>
-              <input type="number" class="input" id="my-meal-night" min="0" max="4" step="0.5" value="0"/>
-            </div>
-          </div>
-
+    <div class="ml-grid">
+      <div>
+        <div class="card ml-form">
+          <div class="dk-card-title"><span>My meals for a day</span></div>
           <div class="field">
-            <label>Note (optional)</label>
-            <input type="text" class="input" id="my-meal-note" placeholder="e.g. Updated my night meal"/>
+            <label>Date</label>
+            <div class="ml-date">
+              <input type="date" class="input" id="my-meal-date" value="${dt}" onchange="fillMyMealFromDate()"/>
+            </div>
+            <div class="ml-quick">
+              <button class="ml-chip" onclick="${setDate(shift(-1))}">Yesterday</button>
+              <button class="ml-chip" onclick="${setDate(shift(0))}">Today</button>
+              <button class="ml-chip" onclick="${setDate(shift(1))}">Tomorrow</button>
+            </div>
           </div>
+          <div class="ms-steps">
+            ${stepper("my-meal-day", "☀", "Day")}
+            ${stepper("my-meal-night", "🌙", "Night")}
+          </div>
+          <div class="field">
+            <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+            <input type="text" class="input" id="my-meal-note" placeholder="e.g. Guest for dinner"/>
+          </div>
+          <button class="btn btn-primary ml-save" onclick="saveMyMealEntry()">✓ Save my meals</button>
+          <div class="ml-hint">Saved straight away; the manager is notified. Tip: tap a day on the calendar to edit it.</div>
+        </div>
 
-          <button class="btn btn-primary" onclick="saveMyMealEntry()">✓ Save my meal</button>
+        <div class="card ml-form">
+          <div class="dk-card-title"><span>Days off</span></div>
+          <div class="ml-2">
+            <div class="field"><label>From</label><input type="date" class="input" id="abs-from" value="${dt}" min="${dt}"/></div>
+            <div class="field"><label>To</label><input type="date" class="input" id="abs-to" value="${dt}" min="${dt}"/></div>
+          </div>
+          <div class="ma-skips">
+            <label class="ma-skip"><input type="checkbox" id="abs-skip-day" checked/><span>☀ Skip day</span></label>
+            <label class="ma-skip"><input type="checkbox" id="abs-skip-night" checked/><span>🌙 Skip night</span></label>
+          </div>
+          <div class="ml-2" style="margin-top:12px">
+            <button class="btn btn-primary" style="justify-content:center" onclick="markAbsenceRange()">✗ Mark off</button>
+            <button class="btn btn-ghost" style="justify-content:center" onclick="clearAbsenceRange()">✓ I'll eat</button>
+          </div>
+          <div class="ma-head">Coming up</div>
+          <div id="upcoming-absences">${buildUpcomingAbsences(upcoming)}</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="dk-card-title"><span>${MONTHS[mo]} ${y}</span><span class="dk-legend"><i class="ma-key"></i> day off</span></div>
+          <div class="dk-cal ma-cal">
+            ${["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"].map(d => `<span class="dk-wd">${d}</span>`).join("")}
+            ${Array.from({ length: lead }, () => `<span></span>`).join("")}
+            ${Array.from({ length: dim }, (_, i) => {
+              const d = i + 1, v = myDay[d] || 0, off = offDays[d];
+              const date = `${key}-${String(d).padStart(2, "0")}`;
+              const a = v ? (0.3 + (v / myMax) * 0.7).toFixed(2) : 0;
+              return `<button class="dk-day${d === now.getDate() ? " dk-today-cell" : ""}${d > gone && !off ? " dk-future" : ""}${off ? " ma-off" : ""}"
+                ${v ? `style="--a:${a}"` : ""} title="${MONTHS[mo]} ${d}: ${v} meal${v === 1 ? "" : "s"}${off ? " · " + off + " off" : ""}"
+                onclick="${setDate(date)}"><span>${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">✗</b>` : ""}</button>`;
+            }).join("")}
+          </div>
         </div>
 
         <div class="card">
-          <div class="card-title" style="margin-bottom:10px">🗓️ Mark Absence</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <div class="field" style="margin:0">
-              <label>From date</label>
-              <input type="date" class="input" id="abs-from" value="${dt}" min="${dt}"/>
-            </div>
-            <div class="field" style="margin:0">
-              <label>To date</label>
-              <input type="date" class="input" id="abs-to" value="${dt}" min="${dt}"/>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border)">
-              <input type="checkbox" id="abs-skip-day" checked style="width:16px;height:16px"> ☀ Skip day
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--bg3);border-radius:var(--radius-sm);border:1px solid var(--border)">
-              <input type="checkbox" id="abs-skip-night" checked style="width:16px;height:16px"> 🌙 Skip night
-            </label>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <button class="btn btn-primary" onclick="markAbsenceRange()" style="flex:1;justify-content:center">✗ Mark Absent</button>
-            <button class="btn btn-ghost" onclick="clearAbsenceRange()" style="flex:1;justify-content:center">✓ Present</button>
-          </div>
-          <div style="font-size:11px;color:var(--text3)">Mark a date range absent at once. Manager sees this on the Attendance Board.</div>
+          <div class="dk-card-title"><span>Month history</span><span class="dk-legend">tap a month for its calendar</span></div>
+          ${buildMonthHistory(summarizeMonths(allMeals, mealsByMember),
+            { onClick: "openMyMealMonth", memberName: member.name, id: "mh-my-meals", emptyText: "No meal months yet" })}
         </div>
-
-        <div class="card" id="upcoming-absences">
-          <div class="card-title" style="margin-bottom:8px">📋 Upcoming Absences</div>
-          ${upcoming.length ? `
-            <div style="display:flex;flex-direction:column;gap:6px">
-              ${upcoming.map(a => {
-                const skipDay = !a.day_meal, skipNight = !a.night_meal;
-                return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--red-bg);border:1px solid rgba(224,82,82,.2);border-radius:var(--radius-sm)">
-                  <div style="min-width:0">
-                    <div style="font-size:13px;font-weight:600">${a.date}</div>
-                    <div style="font-size:11px;color:var(--text3)">${skipDay && skipNight ? "All meals off" : skipDay ? "☀ Day off" : "🌙 Night off"}</div>
-                  </div>
-                  <button class="btn btn-ghost btn-sm" onclick="cancelAbsence('${a.id}')" style="flex-shrink:0">✕</button>
-                </div>`;
-              }).join("")}
-            </div>
-          ` : '<div style="font-size:13px;color:var(--text3)">No upcoming absences — you\'re eating all meals! 🍽️</div>'}
-        </div>
-      </div>
-
-      <!-- ── Right column: Month history ── -->
-      <div class="card">
-        <div class="card-title">Month history</div>
-        <div class="modal-sub" style="margin-bottom:12px">
-          Click a month to open your colored meal calendar.
-        </div>
-        ${buildMonthHistory(summarizeMonths(allMeals, mealsByMember),
-          { onClick: "openMyMealMonth", memberName: member.name, id: "mh-my-meals", emptyText: "No meal months yet" })}
       </div>
     </div>
-  </div>
-
   </div>`;
 
   // Auto-load today's existing meal data as soon as the section renders
   fillMyMealFromDate();
-  // Load bazar history for the bazar tab
-  loadMyBazarRecent();
+}
+
+/* −/+ on the meal steppers (0–4, whole steps; type a .5 by hand if needed). */
+function stepMyMeal(id, delta) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = Math.min(4, Math.max(0, (parseFloat(el.value) || 0) + delta));
+  el.classList.remove("ms-bump"); void el.offsetWidth; el.classList.add("ms-bump");
 }
 
 function switchMyMealTab(tab) {
@@ -208,6 +236,7 @@ async function fillMyMealFromDate() {
 
   document.getElementById("my-meal-day").value = p.day || 0;
   document.getElementById("my-meal-night").value = p.night || 0;
+  if (matchMedia("(max-width: 860px)").matches) document.getElementById("my-meal-date")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function openMyMealMonth(key) {
