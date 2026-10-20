@@ -58,7 +58,7 @@
 
     /* 3. manager demo */
     await openHash("#/demo/manager");
-    const ok = await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .stat-card"), 10000);
+    const ok = await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .dk-card, #main-content .stat-card"), 10000);
     log(ok, "demo manager lands on #/demo/app/dashboard with stats");
     hook();
     log(P().sb() && P().sb().isDemo === true && P().mode() === "demo", "backend is the in-memory mock");
@@ -181,7 +181,7 @@
       log(JSON.stringify((await P().sb().from("rent").select("*")).data) === rentBefore, "request alone changes no rent/utility data");
 
       await openHash("#/demo/manager"); 
-      await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .stat-card"), 10000);
+      await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .dk-card, #main-content .stat-card"), 10000);
       await openHash("#/demo/app/collect"); await settle();
       const wrapTxt = D().getElementById("cp-pending-wrap")?.innerText || "";
       log(/Member payments to confirm/.test(wrapTxt) && /Confirm received/.test(wrapTxt), "manager Collect page lists the pending request");
@@ -226,7 +226,7 @@
     W().doLogout(); await until(() => visible("landing-page"));
     await openHash("#/demo/create"); await until(() => visible("create-mess-screen"));
     setv("cm-name", "Smoke Test Mess"); setv("cm-admin-name", "Test Manager"); setv("cm-username", "smoke_mgr"); setv("cm-password", "secret12"); setv("cm-location", "Dhaka");
-    W().doCreateMess(); await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .stat-card"), 10000);
+    W().doCreateMess(); await until(() => W().location.hash === "#/demo/app/dashboard" && D().querySelector("#main-content .dk-card, #main-content .stat-card"), 10000);
     log(W().location.hash === "#/demo/app/dashboard" && P().user().role === "manager" && P().user().username === "smoke_mgr", "created mess → signed in as its manager");
     log(/Smoke Test Mess/.test(D().getElementById("app-mess-name").textContent), "new mess has its own branding");
     await W().switchDemoRole(); await sleep(400);

@@ -326,6 +326,7 @@ function toggleMobileMore() {
   if (drawer.classList.contains("open")) {
     closeMobileMore();
   } else {
+    cancelClose(bg);
     drawer.classList.add("open");
     bg.classList.add("open");
     moreBtn?.classList.add("active");
@@ -337,8 +338,8 @@ function closeMobileMore() {
   const bg = document.getElementById("mobile-more-bg");
   const moreBtn = document.getElementById("mob-more-btn");
 
-  if (drawer) drawer.classList.remove("open");
-  if (bg) bg.classList.remove("open");
+  if (drawer) drawer.classList.remove("open"); // slides down via its transform transition
+  animateClose(bg);
 
   moreBtn?.classList.remove("active");
 }

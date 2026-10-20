@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   MANAGER — Dashboard: overview stats, today's meals, bazar leaders
+   MANAGER — Dashboard: KPIs with sparklines, today, meal calendar, collections, members
    ═══════════════════════════════════════════════ */
 async function renderDashboard(el) {
   const { month, year } = thisMonth();
@@ -67,8 +67,6 @@ async function renderDashboard(el) {
   // Bazar data
   let memBazar = {};
   mB.forEach(r => Object.entries(r.bazar || {}).forEach(([k, v]) => { memBazar[k] = (memBazar[k] || 0) + Number(v); }));
-  const topBazar = Object.entries(memBazar).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const maxB = topBazar[0]?.[1] || 1;
 
   // Today's meals
   let todayDayTotal = 0, todayNightTotal = 0;
@@ -112,283 +110,198 @@ async function renderDashboard(el) {
   const showOnboarding  = !allDone && !dismissed;
   if (allDone && !dismissed) localStorage.setItem(`mm_onboard_done_${messId()}`, '1');
 
-  // ── SVG ring helper ──
-  function ringChart(pct, color, size = 52, stroke = 5) {
-    const r = (size - stroke) / 2;
-    const circ = 2 * Math.PI * r;
-    const fill = circ * Math.min(pct / 100, 1);
-    const cx = size / 2, cy = size / 2;
-    const fontSize = size < 48 ? 9 : 11;
-    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg4)" stroke-width="${stroke}"/>
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
-        stroke-dasharray="${fill} ${circ}" stroke-linecap="round"
-        transform="rotate(-90 ${cx} ${cy})"
-        style="transition:stroke-dasharray .8s var(--ease-spring)"/>
-      <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central"
-        font-size="${fontSize}" font-weight="700" fill="${color}" font-family="var(--font)">${pct}%</text>
+  // ── Per-day series (1..today) for the sparklines ──
+  const daysGone   = Math.min(todayDay, daysInMonth);
+  const daysLogged = mM.length;
+  const dayBazarMap = {};
+  mB.forEach(r => {
+    const dd = parseInt(r.date.slice(8), 10);
+    dayBazarMap[dd] = (dayBazarMap[dd] || 0) + Object.values(r.bazar || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+  });
+  const mealSeries = [], bazarSeries = [], rateSeries = [];
+  let cumM = 0, cumB = 0;
+  for (let d = 1; d <= daysGone; d++) {
+    cumM += dayMealMap[d] || 0; cumB += dayBazarMap[d] || 0;
+    mealSeries.push(dayMealMap[d] || 0);
+    bazarSeries.push(cumB);
+    rateSeries.push(cumM > 0 ? cumB / cumM : 0);
+  }
+
+  /* Trend by per-day pace, so a month in progress isn't always "down". good: "up" | "down" | null (neutral) */
+  const prevDays = new Set(prevMM.map(r => r.date)).size;
+  function trend(cur, prev, good) {
+    if (!prev || !isFinite(prev) || !cur) return `<span class="dk-trend">— no ${MONTHS[prevInfo.month]} data</span>`;
+    const pct = Math.round(((cur - prev) / prev) * 100);
+    if (pct === 0) return `<span class="dk-trend">→ same as ${MONTHS[prevInfo.month].slice(0, 3)}</span>`;
+    const up = pct > 0;
+    const cls = !good ? "" : (up === (good === "up")) ? "dk-good" : "dk-bad";
+    return `<span class="dk-trend ${cls}">${up ? "↑" : "↓"} ${Math.abs(pct)}% vs ${MONTHS[prevInfo.month].slice(0, 3)}</span>`;
+  }
+
+  /* Sparkline: draws itself in (stroke-dashoffset) with a soft area under it. */
+  function spark(values, color) {
+    const v = values.length > 1 ? values : [0, ...(values.length ? values : [0])];
+    const W = 120, H = 34, max = Math.max(...v, 1), min = Math.min(...v, 0);
+    const pts = v.map((y, i) => [(i / (v.length - 1)) * W, H - 3 - ((y - min) / (max - min || 1)) * (H - 6)]);
+    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const last = pts[pts.length - 1];
+    return `<svg class="dk-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <path class="dk-spark-area" d="${line} L${W} ${H} L0 ${H} Z" fill="${color}"/>
+      <path class="dk-spark-line" d="${line}" stroke="${color}" pathLength="1"/>
+      <circle class="dk-spark-dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${color}"/>
     </svg>`;
   }
 
-  // ── Trend arrow ──
-  function trendBadge(cur, prev) {
-    if (!prev || prev === 0) return "";
-    const diff = round2(cur - prev);
-    const pct  = Math.abs(Math.round((diff / prev) * 100));
-    if (diff === 0) return `<span style="font-size:10px;color:var(--text3)">→ same as last month</span>`;
-    const up = diff > 0;
-    return `<span style="font-size:10px;color:${up ? "var(--green)" : "var(--red)"}">${up ? "▲" : "▼"} ${pct}% vs last month</span>`;
-  }
+  const pace     = daysLogged > 0 ? round2(totalMeals / daysLogged) : 0;
+  const prevPace = prevDays > 0 ? prevTotalMeals / prevDays : 0;
+  const bzPace     = daysGone > 0 ? round2(totalBazar / daysGone) : 0;
+  const prevDim    = new Date(prevInfo.year, prevInfo.month + 1, 0).getDate();
+  const prevBzPace = prevTotalBazar / prevDim;
+  const rentPct  = totalRentDue > 0 ? Math.min(100, Math.round((totalRentPaid / totalRentDue) * 100)) : 0;
+  const utilPct  = totalUtil    > 0 ? Math.min(100, Math.round((totalUtilPaid / totalUtil) * 100)) : 0;
+  const logPct   = daysGone > 0 ? Math.round((daysLogged / daysGone) * 100) : 0;
+  const outstanding = round2(Math.max(0, totalRentDue - totalRentPaid) + Math.max(0, totalUtil - totalUtilPaid));
+  const utilDueCount = Math.max(0, members.length - utilPaidCount - utilPartCount);
 
-  const rentPct  = totalRentDue  > 0 ? Math.round((totalRentPaid / totalRentDue) * 100) : 0;
-  const utilPct  = totalUtil     > 0 ? Math.round((totalUtilPaid / totalUtil) * 100) : 0;
-  const daysLogged = mM.length;
-  const daysGone   = Math.min(todayDay, daysInMonth);
-  const logPct     = daysGone > 0 ? Math.round((daysLogged / daysGone) * 100) : 0;
+  const kpi = (cls, icon, label, value, sub, graphic) => `
+    <div class="dk-card ${cls}">
+      <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+      <div class="stat-value dk-value">${value}</div>
+      <div class="dk-sub">${sub}</div>
+      ${graphic}
+    </div>`;
+
+  const collectRow = (icon, label, paid, due, pct, chips, color) => `
+    <div class="dk-coll">
+      <div class="dk-coll-top">
+        <span class="dk-coll-lbl">${icon} ${label}</span>
+        <span class="dk-coll-pct" style="color:${color}">${pct}%</span>
+      </div>
+      <div class="dk-bar"><i style="width:${pct}%;background:${color}"></i></div>
+      <div class="dk-coll-bot">
+        <span><b>${fmtTk(round2(paid))}</b> of ${fmtTk(round2(due))}</span>
+        <span class="dk-chips">${chips}</span>
+      </div>
+    </div>`;
+  const chip = (n, txt, cls) => n > 0 ? `<span class="dk-chip ${cls}">${n} ${txt}</span>` : "";
+
+  // Calendar starts on Saturday (the Bangladeshi week)
+  const lead = (new Date(year, month, 1).getDay() + 1) % 7;
+  const rentBy = {}; (rentRec?.entries || []).forEach(e => { rentBy[e.name] = e; });
+  const utilBy = utilRec?.payments || {};
+  const statusBadge = (st, extra) => {
+    const map = { paid: ["badge-green", "Paid"], partial: ["badge-amber", "Partial"] };
+    const [c, t] = map[st] || ["badge-red", "Due"];
+    return `<span class="badge ${c}">${t}</span>${extra ? `<div class="dk-mini">${extra}</div>` : ""}`;
+  };
 
   el.innerHTML = `
   <div class="topbar">
     <div>
       <div class="page-title">Dashboard</div>
-      <div class="page-sub">${MONTHS[month]} ${year} — ${members.length} member${members.length === 1 ? "" : "s"}</div>
+      <div class="page-sub">${MONTHS[month]} ${year} · ${members.length} member${members.length === 1 ? "" : "s"} · day ${daysGone} of ${daysInMonth}</div>
     </div>
     <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="navigate('collect')">💵 Collect</button>
       <button class="btn btn-primary btn-sm" onclick="navigate('meals')">+ Meal</button>
     </div>
   </div>
-  <div class="content">
+  <div class="content dk">
     ${showOnboarding ? buildOnboardingChecklist(hasMembersAdded, hasMealsLogged, hasUtilitySet) : ""}
 
-    <!-- ── Hero stat row ── -->
-    <div class="dash-hero-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px">
-
-      <!-- Total meals -->
-      <div class="stat-card dash-stat" style="border-top:3px solid var(--accent);padding:15px 14px">
-        <div class="stat-label">🍽️ Total meals</div>
-        <div class="stat-value" style="font-size:26px;color:var(--accent);margin-top:6px;line-height:1">${round2(totalMeals)}</div>
-        <div style="margin-top:6px">${trendBadge(totalMeals, prevTotalMeals)}</div>
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
-          <div style="flex:1;height:4px;background:var(--bg4);border-radius:99px;overflow:hidden">
-            <div style="width:${Math.min(100, Math.round((totalMeals / Math.max(prevTotalMeals || totalMeals, 1)) * 100))}%;height:100%;background:var(--accent);border-radius:99px;transition:width .8s var(--ease-spring)"></div>
-          </div>
-          <span style="font-size:10px;color:var(--text3);white-space:nowrap">${mM.length}d logged</span>
-        </div>
-      </div>
-
-      <!-- Meal rate -->
-      <div class="stat-card dash-stat" style="border-top:3px solid var(--blue);padding:15px 14px">
-        <div class="stat-label">📊 Meal rate</div>
-        <div class="stat-value" style="font-size:22px;color:var(--blue);margin-top:6px;line-height:1">${fmtTk(mealRate)}</div>
-        <div style="margin-top:6px">${trendBadge(mealRate, prevMealRate)}</div>
-        <div style="margin-top:8px;font-size:10px;color:var(--text3)">${fmtTk(totalBazar)} ÷ ${round2(totalMeals)} meals</div>
-      </div>
-
-      <!-- Total bazar -->
-      <div class="stat-card dash-stat" style="border-top:3px solid var(--green);padding:15px 14px">
-        <div class="stat-label">🛒 Total bazar</div>
-        <div class="stat-value" style="font-size:22px;color:var(--green);margin-top:6px;line-height:1">${fmtTk(totalBazar)}</div>
-        <div style="margin-top:6px">${trendBadge(totalBazar, prevTotalBazar)}</div>
-        <div style="margin-top:8px;font-size:10px;color:var(--text3)">${topBazar.length} contributor${topBazar.length === 1 ? "" : "s"}</div>
-      </div>
-
-      <!-- Rent with ring -->
-      <div class="stat-card dash-stat" style="border-top:3px solid var(--amber);padding:15px 14px">
-        <div class="stat-label">🏠 Rent collected</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-          <div style="position:relative;flex-shrink:0">
-            ${ringChart(rentPct, "var(--amber)")}
-          </div>
-          <div>
-            <div style="font-size:16px;font-weight:700;color:var(--amber)">${fmtTk(totalRentPaid)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">of ${fmtTk(totalRentDue)}</div>
-            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">
-              ${rentPaidCount > 0 ? `<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:1px 6px;border-radius:99px">✓ ${rentPaidCount}</span>` : ""}
-              ${rentPartCount > 0 ? `<span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:99px">~ ${rentPartCount}</span>` : ""}
-              ${rentDueCount  > 0 ? `<span style="font-size:10px;background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:99px">! ${rentDueCount}</span>` : ""}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Utility with ring -->
-      <div class="stat-card dash-stat" style="border-top:3px solid var(--purple);padding:15px 14px">
-        <div class="stat-label">⚡ Utility collected</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-          <div style="position:relative;flex-shrink:0">
-            ${ringChart(utilPct, "var(--purple)")}
-          </div>
-          <div>
-            <div style="font-size:16px;font-weight:700;color:var(--purple)">${fmtTk(round2(totalUtilPaid))}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">of ${fmtTk(round2(totalUtil))}</div>
-            <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">
-              ${utilPaidCount > 0 ? `<span style="font-size:10px;background:var(--green-bg);color:var(--green);padding:1px 6px;border-radius:99px">✓ ${utilPaidCount}</span>` : ""}
-              ${utilPartCount > 0 ? `<span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:99px">~ ${utilPartCount}</span>` : ""}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Days logged with ring -->
-      <div class="stat-card dash-stat" style="border-top:3px solid var(--text3);padding:15px 14px">
-        <div class="stat-label">📅 Days logged</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-          <div style="position:relative;flex-shrink:0">
-            ${ringChart(logPct, "var(--text2)", 52, 5)}
-          </div>
-          <div>
-            <div style="font-size:20px;font-weight:700;color:var(--text)">${daysLogged}<span style="font-size:12px;color:var(--text3);font-weight:400"> / ${daysGone}d</span></div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${daysInMonth - daysGone} days left</div>
-          </div>
-        </div>
-      </div>
+    <!-- ── KPIs ── -->
+    <div class="stat-grid dk-kpis">
+      ${kpi("dk-gold",  "🍽️", "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, spark(mealSeries, "var(--accent)"))}
+      ${kpi("dk-blue",  "📊", "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             spark(rateSeries, "var(--blue)"))}
+      ${kpi("dk-green", "🛒", "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, spark(bazarSeries, "var(--green)"))}
+      ${kpi("dk-gray",  "📅", "Days logged", daysLogged, `of ${daysGone} so far · ${daysInMonth - daysGone} left`,
+        `<div class="dk-bar dk-bar-kpi"><i style="width:${logPct}%;background:${logPct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>`)}
     </div>
 
-
-    <!-- ── Meal heatmap ── -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title" style="margin-bottom:10px">📆 Meal activity — ${MONTHS[month]} ${year}</div>
-      <div style="display:grid;grid-template-columns:repeat(${Math.min(daysInMonth, 16)},1fr);gap:4px;margin-bottom:6px" id="dash-heatmap">
-        ${Array.from({length: daysInMonth}, (_, i) => {
-          const d = i + 1;
-          const v = dayMealMap[d] || 0;
-          const isToday = d === todayDay;
-          const pct = v / maxDayMeal;
-          const opacity = v === 0 ? 0.12 : 0.2 + pct * 0.8;
-          const bg = v === 0
-            ? "var(--bg4)"
-            : `rgba(212,168,83,${opacity.toFixed(2)})`;
-          const border = isToday ? "2px solid var(--accent)" : "1px solid transparent";
-          return `<div title="Day ${d}: ${v} meals" style="height:22px;border-radius:4px;background:${bg};border:${border};cursor:default;position:relative;display:flex;align-items:center;justify-content:center">
-            <span style="font-size:8px;color:${v > 0 ? "var(--text)" : "var(--text3)"};opacity:0.7">${d}</span>
-          </div>`;
-        }).join("")}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-        <span style="font-size:10px;color:var(--text3)">No meals</span>
-        ${[0.12, 0.35, 0.6, 0.85, 1].map(o => `<div style="width:14px;height:10px;border-radius:2px;background:rgba(212,168,83,${o})"></div>`).join("")}
-        <span style="font-size:10px;color:var(--text3)">High</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--text3)">Today = outlined box</span>
-      </div>
-    </div>
-
-    <!-- ── Today's meals ── -->
-    ${todayRec ? `
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">${isNextDay ? "Tomorrow's meals" : "Today's meals"} — ${displayStr}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:12px">
-        <div class="stat-card badge-blue"><div class="stat-label" style="color:var(--blue)">Day meals</div><div class="stat-value" style="color:var(--blue)">${todayDayTotal}</div></div>
-        <div class="stat-card badge-amber"><div class="stat-label" style="color:var(--amber)">Night meals</div><div class="stat-value" style="color:var(--amber)">${todayNightTotal}</div></div>
-        <div class="stat-card"><div class="stat-label">Total today</div><div class="stat-value">${round2(todayDayTotal + todayNightTotal)}</div></div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${members.map(m => {
-          const t = mealMemberTotal(todayRec.meals || {}, m.name);
-          const _parts = mealPartsFromObj(todayRec.meals || {}, m.name);
-          const d = _parts.day, n = _parts.night;
-          return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
-            <span style="font-size:13px;font-weight:500;color:${t > 0 ? "var(--text)" : "var(--text3)"}">${escapeHtml(m.name)}</span>
-            ${d > 0 ? `<span class="badge badge-blue">Day ${d}</span>` : ""}
-            ${n > 0 ? `<span class="badge badge-amber">Night ${n}</span>` : ""}
-            ${t === 0 ? `<span class="badge badge-red">Absent</span>` : ""}
-          </div>`;
-        }).join("")}
-      </div>
-    </div>` : `
-    <div class="card" style="margin-bottom:14px;text-align:center;padding:24px">
-      <div style="color:var(--text3);font-size:13px">No meal entry for ${isNextDay ? "tomorrow" : "today"} yet</div>
-      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="navigate('meals')">+ Add today's meals</button>
-    </div>`}
-
-    <!-- ── Bottom 2-col grid ── -->
-    <div class="grid-2" style="gap:12px;margin-bottom:14px">
-
-      <!-- Bazar leaders -->
-      <div class="card">
-        <div class="card-title">🛒 Bazar leaders — ${MONTHS[month]}</div>
-        ${topBazar.length ? topBazar.map(([name, amt], i) => {
-          const pct = Math.round((amt / maxB) * 100);
-          const col = avatarCol(i);
-          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
-            <div style="width:26px;height:26px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${initials(name)}</div>
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-                <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px">${escapeHtml(name)}</span>
-                <span style="font-size:12px;font-weight:600;color:var(--green);flex-shrink:0;margin-left:6px">${fmtTk(amt)}</span>
-              </div>
-              <div style="height:5px;background:var(--bg4);border-radius:99px;overflow:hidden">
-                <div style="width:${pct}%;height:100%;background:var(--green);border-radius:99px;transition:width .8s var(--ease-spring)"></div>
-              </div>
-            </div>
-          </div>`;
-        }).join("") : '<div class="empty">No bazar data</div>'}
-      </div>
-
-      <!-- Rent status -->
-      <div class="card">
-        <div class="card-title">🏠 Rent status — ${MONTHS[month]}</div>
-        ${rentRec?.entries?.length ? `
-          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            <div style="flex:1;min-width:70px;background:var(--green-bg);border:1px solid rgba(76,175,130,.2);border-radius:var(--radius-sm);padding:8px;text-align:center">
-              <div style="font-size:20px;font-weight:700;color:var(--green)">${rentPaidCount}</div>
-              <div style="font-size:10px;color:var(--green);margin-top:1px">Paid</div>
-            </div>
-            <div style="flex:1;min-width:70px;background:var(--accent-bg);border:1px solid rgba(212,168,83,.2);border-radius:var(--radius-sm);padding:8px;text-align:center">
-              <div style="font-size:20px;font-weight:700;color:var(--amber)">${rentPartCount}</div>
-              <div style="font-size:10px;color:var(--amber);margin-top:1px">Partial</div>
-            </div>
-            <div style="flex:1;min-width:70px;background:var(--red-bg);border:1px solid rgba(224,82,82,.2);border-radius:var(--radius-sm);padding:8px;text-align:center">
-              <div style="font-size:20px;font-weight:700;color:var(--red)">${rentDueCount}</div>
-              <div style="font-size:10px;color:var(--red);margin-top:1px">Due</div>
-            </div>
-          </div>
-          ${rentRec.entries.map(e => {
-            const paid = Number(e.paid || 0), due = Number(e.rent || 0);
-            const pct2 = due > 0 ? Math.round((paid / due) * 100) : 0;
-            const color = e.status === "paid" ? "var(--green)" : e.status === "partial" ? "var(--amber)" : "var(--red)";
-            const statusLabel = e.status === "paid" ? "✓ Paid" : e.status === "partial" ? "Partial" : "Due";
-            return `<div style="margin-bottom:8px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span style="font-size:12px;font-weight:500">${escapeHtml(e.name)}</span>
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="font-size:10px;color:${color};font-weight:600">${statusLabel}</span>
-                  <span style="font-size:11px;color:var(--text2)">${fmtTk(paid)}/${fmtTk(due)}</span>
-                </div>
-              </div>
-              <div style="height:5px;background:var(--bg4);border-radius:99px;overflow:hidden">
-                <div style="width:${pct2}%;height:100%;background:${color};border-radius:99px;transition:width .8s var(--ease-spring)"></div>
-              </div>
+    <!-- ── Today + Meal activity ── -->
+    <div class="dk-row">
+      <div class="card dk-today">
+        <div class="dk-card-title">
+          <span><span class="dk-live"></span>${isNextDay ? "Tomorrow" : "Today"} · ${escapeHtml(displayStr)}</span>
+          <button class="btn btn-ghost btn-sm" onclick="navigate('meals')">${todayRec ? "Edit" : "Add"}</button>
+        </div>
+        ${todayRec ? `
+        <div class="dk-today-nums">
+          <div><span class="stat-value" style="color:var(--blue)">${todayDayTotal}</span><small>Day</small></div>
+          <div><span class="stat-value" style="color:var(--accent)">${todayNightTotal}</span><small>Night</small></div>
+          <div><span class="stat-value">${round2(todayDayTotal + todayNightTotal)}</span><small>Total</small></div>
+        </div>
+        <div class="dk-eaters">
+          ${members.map((m, i) => {
+            const pt = mealPartsFromObj(todayRec.meals || {}, m.name), col = avatarCol(i), off = pt.day + pt.night === 0;
+            return `<div class="dk-eater${off ? " dk-off" : ""}" title="${escapeHtml(m.name)}: day ${pt.day}, night ${pt.night}">
+              <span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>
+              <span class="dk-eater-name">${escapeHtml(m.name)}</span>
+              <span class="dk-dn">${off ? `<i class="dk-absent">Off</i>` : `<i class="${pt.day ? "on-d" : ""}">D${pt.day > 1 ? pt.day : ""}</i><i class="${pt.night ? "on-n" : ""}">N${pt.night > 1 ? pt.night : ""}</i>`}</span>
             </div>`;
           }).join("")}
-        ` : '<div class="empty">No rent data this month</div>'}
+        </div>` : `
+        <div class="empty" style="padding:22px 10px">
+          <div>No meals entered for ${isNextDay ? "tomorrow" : "today"} yet</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="navigate('meals')">+ Add meals</button>
+        </div>`}
+      </div>
+
+      <div class="card dk-activity">
+        <div class="dk-card-title"><span>Meal activity · ${MONTHS[month]}</span><span class="dk-legend">less <i style="opacity:.25"></i><i style="opacity:.55"></i><i style="opacity:1"></i> more</span></div>
+        <div class="dk-cal">
+          ${["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"].map(d => `<span class="dk-wd">${d}</span>`).join("")}
+          ${Array.from({ length: lead }, () => `<span></span>`).join("")}
+          ${Array.from({ length: daysInMonth }, (_, i) => {
+            const d = i + 1, v = round2(dayMealMap[d] || 0), future = d > daysGone;
+            const a = v ? (0.22 + (v / maxDayMeal) * 0.78).toFixed(2) : 0;
+            return `<div class="dk-day${d === todayDay ? " dk-today-cell" : ""}${future ? " dk-future" : ""}" title="${MONTHS[month]} ${d}: ${v} meals"
+              ${v ? `style="--a:${a}"` : ""}><span>${d}</span>${v ? `<b>${v}</b>` : ""}</div>`;
+          }).join("")}
+        </div>
       </div>
     </div>
 
-    <!-- ── Member meal comparison ── -->
-    ${members.length > 0 && hasMealsLogged ? `
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title">👥 Member meal share — ${MONTHS[month]}</div>
-      <div style="display:grid;gap:7px">
-        ${members.map((m, i) => {
-          const v = memMeals[m.name] || 0;
-          const pct = Math.round((v / maxMemMeals) * 100);
-          const col = avatarCol(i);
-          const bazAmt = memBazar[m.name] || 0;
-          return `<div style="display:flex;align-items:center;gap:8px">
-            <div style="width:26px;height:26px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
-            <div style="width:80px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${escapeHtml(m.name)}</div>
-            <div style="flex:1;height:7px;background:var(--bg4);border-radius:99px;overflow:hidden">
-              <div style="width:${pct}%;height:100%;background:${col.fg};border-radius:99px;opacity:0.85;transition:width .8s var(--ease-spring)"></div>
-            </div>
-            <span style="font-size:12px;font-weight:600;color:var(--text);width:28px;text-align:right;flex-shrink:0">${v}</span>
-            ${bazAmt > 0 ? `<span style="font-size:10px;color:var(--green);background:var(--green-bg);padding:1px 6px;border-radius:99px;flex-shrink:0">${fmtTk(bazAmt)}</span>` : `<span style="width:48px;flex-shrink:0"></span>`}
-          </div>`;
-        }).join("")}
+    <!-- ── Collections ── -->
+    <div class="card dk-collections">
+      <div class="dk-card-title">
+        <span>Collections · ${MONTHS[month]}</span>
+        <span class="dk-outstanding">${outstanding > 0 ? `Outstanding <b>${fmtTk(outstanding)}</b>` : `<b style="color:var(--green)">✓ All collected</b>`}</span>
       </div>
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:14px;font-size:11px;color:var(--text3)">
-        <span>Bar = meals eaten</span>
-        <span style="color:var(--green)">Green pill = bazar contributed</span>
+      <div class="dk-coll-grid">
+        ${rentRec?.entries?.length
+          ? collectRow("🏠", "Room rent", totalRentPaid, totalRentDue, rentPct,
+              chip(rentPaidCount, "paid", "ok") + chip(rentPartCount, "partial", "mid") + chip(rentDueCount, "due", "bad"), "var(--accent)")
+          : `<div class="dk-coll dk-coll-empty">🏠 No rent set for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" onclick="navigate('rent')">Set rent</button></div>`}
+        ${totalUtil > 0
+          ? collectRow("⚡", "Utility", totalUtilPaid, totalUtil, utilPct,
+              chip(utilPaidCount, "paid", "ok") + chip(utilPartCount, "partial", "mid") + chip(utilDueCount, "due", "bad"), "var(--purple)")
+          : `<div class="dk-coll dk-coll-empty">⚡ No utility bills for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" onclick="navigate('utility')">Add bills</button></div>`}
+      </div>
+    </div>
+
+    <!-- ── Members ── -->
+    ${members.length ? `
+    <div class="card">
+      <div class="dk-card-title"><span>Members · ${MONTHS[month]}</span><button class="btn btn-ghost btn-sm" onclick="navigate('profiles')">Profiles →</button></div>
+      <div class="tbl-wrap">
+        <table class="dk-members">
+          <thead><tr><th>Member</th><th>Meals</th><th style="text-align:right">Bazar</th><th>Rent</th><th>Utility</th></tr></thead>
+          <tbody>
+          ${members.map((m, i) => {
+            const v = memMeals[m.name] || 0, col = avatarCol(i), bz = memBazar[m.name] || 0;
+            const re = rentBy[m.name], up = utilBy[m.name];
+            return `<tr>
+              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>${escapeHtml(m.name)}</div></td>
+              <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeals) * 100)}%;background:${col.fg}"></i></div><b>${v}</b></div></td>
+              <td style="text-align:right;color:${bz > 0 ? "var(--green)" : "var(--text3)"};font-weight:600">${bz > 0 ? fmtTk(bz) : "—"}</td>
+              <td>${re ? statusBadge(re.status, `${fmtTk(Number(re.paid || 0))}/${fmtTk(Number(re.rent || 0))}`) : `<span style="color:var(--text3)">—</span>`}</td>
+              <td>${totalUtil > 0 ? statusBadge(up?.status, up?.paid ? fmtTk(Number(up.paid)) : "") : `<span style="color:var(--text3)">—</span>`}</td>
+            </tr>`;
+          }).join("")}
+          </tbody>
+        </table>
       </div>
     </div>` : ""}
-
   </div>`;
 }

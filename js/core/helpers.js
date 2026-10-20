@@ -150,13 +150,32 @@ function togglePw() {
   }
 }
 
+/* OVERLAY CLOSE ANIMATION — `.open` is removed at once (so state checks stay instant),
+   while `.closing` keeps the overlay painted for its exit animation (css/09-fx.css). */
+const CLOSE_MS = 240;
+function animateClose(el) {
+  if (!el) return;
+  const wasOpen = el.classList.contains("open");
+  el.classList.remove("open");
+  if (!wasOpen || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  clearTimeout(el._closeT);
+  el.classList.add("closing");
+  el._closeT = setTimeout(() => el.classList.remove("closing"), CLOSE_MS);
+}
+function cancelClose(el) {
+  if (!el) return;
+  clearTimeout(el._closeT);
+  el.classList.remove("closing");
+}
+
 /* LANDING PAGE MOBILE DRAWER */
 function openLandingDrawer() {
-  document.getElementById("land-mobile-drawer").classList.add("open");
+  const d = document.getElementById("land-mobile-drawer");
+  cancelClose(d); d.classList.add("open");
   document.body.style.overflow = "hidden";
 }
 function closeLandingDrawer() {
-  document.getElementById("land-mobile-drawer").classList.remove("open");
+  animateClose(document.getElementById("land-mobile-drawer"));
   document.body.style.overflow = "";
 }
 
@@ -216,11 +235,23 @@ function requireManager(fnName) {
 }
 
 /* MODAL */
-function openModal()  { document.getElementById("modal-bg").classList.add("open"); }
+function openModal() {
+  const bg = document.getElementById("modal-bg"), m = bg.querySelector(".modal");
+  cancelClose(bg);
+  clearTimeout(m?._widthT);
+  if (m) m.style.width = "";
+  bg.classList.add("open");
+}
 function closeModal() {
-  document.getElementById("modal-bg").classList.remove("open");
-  const m = document.querySelector(".modal");
-  if (m) m.classList.remove("modal-wide");
+  const bg = document.getElementById("modal-bg"), m = bg.querySelector(".modal");
+  if (m) {
+    // keep the current width while it animates out, so a wide modal doesn't snap narrow
+    if (bg.classList.contains("open")) m.style.width = m.offsetWidth + "px";
+    m.classList.remove("modal-wide");
+    clearTimeout(m._widthT);
+    m._widthT = setTimeout(() => { m.style.width = ""; }, CLOSE_MS);
+  }
+  animateClose(bg);
 }
 
 /* TOAST */
@@ -245,10 +276,11 @@ function showConfirm({ title, body, confirmLabel = "Confirm", danger = false, on
       <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirm-ok-btn">${escapeHtml(confirmLabel)}</button>
     </div>`;
   document.getElementById("confirm-ok-btn").onclick = () => { closeConfirm(); onConfirm(); };
+  cancelClose(bg);
   bg.classList.add("open");
 }
 function closeConfirm() {
-  document.getElementById("confirm-bg").classList.remove("open");
+  animateClose(document.getElementById("confirm-bg"));
 }
 
 /* CALCULATION HELPERS */

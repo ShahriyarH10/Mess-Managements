@@ -77,7 +77,7 @@
   const queueCount = el => countIO ? countIO.observe(el) : countUp(el);
 
   /* ── Stagger indices ──────────────────────────────────────── */
-  const STAGGER_SEL = ".meal-calendar,.meal-grid,.meal-month-list,.mh-grid,tbody,.att-cal-grid,.bz-cal-grid,.nav,.mobile-nav,.hist-wrap,.onboard-wrap";
+  const STAGGER_SEL = ".meal-calendar,.meal-grid,.meal-month-list,.mh-grid,.dk-cal,.dk-eaters,tbody,.att-cal-grid,.bz-cal-grid,.nav,.mobile-nav,.hist-wrap,.onboard-wrap";
   function stagger(container) {
     const kids = container.children;
     for (let i = 0; i < kids.length; i++) kids[i].style.setProperty("--fx-i", Math.min(i, 24));
@@ -127,7 +127,7 @@
   }
 
   /* ── 3D tilt + spotlight + magnetic buttons (mouse only) ──────── */
-  const TILT_SEL = ".stat-card,.profile-card,.feature-card,.demo-role,.hero-visual,.meal-month-chip,.step,.auth-card";
+  const TILT_SEL = ".dk-card,.stat-card,.profile-card,.feature-card,.demo-role,.hero-visual,.meal-month-chip,.step,.auth-card";
   const MAG_SEL = ".hero-actions .btn,.land-cta .btn,.land-nav-actions .btn";
   let tilted = null, magnet = null;
 
