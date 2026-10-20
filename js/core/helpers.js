@@ -575,9 +575,13 @@ function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForw
 
 /* Dashboard sparkline (manager + member): draws itself in via stroke-dashoffset
    (css/09-fx.css) over a soft area. Styles: .dk-spark* in css/05-components.css. */
-function buildSparkline(values, color) {
+function buildSparkline(values, color, opts) {
   const v = values.length > 1 ? values : [0, ...(values.length ? values : [0])];
-  const W = 120, H = 34, max = Math.max(...v, 1), min = Math.min(...v, 0);
+  // fit: scale to the values' own range (for rates that never go near 0)
+  const fit = opts && opts.fit;
+  const W = 120, H = 34;
+  let max = fit ? Math.max(...v) : Math.max(...v, 1), min = fit ? Math.min(...v) : Math.min(...v, 0);
+  if (fit) { const pad = (max - min) * 0.2 || Math.abs(max) * 0.05 || 1; max += pad; min -= pad; }
   const pts = v.map((y, i) => [(i / (v.length - 1)) * W, H - 3 - ((y - min) / (max - min || 1)) * (H - 6)]);
   const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
   const last = pts[pts.length - 1];

@@ -42,7 +42,7 @@ const MANAGER_NAV = [
 
   { section:"Reports" },
   { page:"log",           label:"Monthly Log",     icon:IC.log },
-  { page:"rate-chart",    label:"Meal Rate Chart", icon:IC.chart },
+  { page:"rate-chart",    label:"Analytics",       icon:IC.chart },
   { page:"audit-log",     label:"Audit Log",       icon:IC.audit },
   { page:"mess-rules",    label:"Mess Rules",      icon:IC.rules },
   { page:"month-lock",    label:"Month Close",     icon:IC.lock },

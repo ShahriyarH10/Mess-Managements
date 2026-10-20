@@ -585,197 +585,261 @@ async function saveMessRules() {
 
 
 /* ═══════════════════════════════════════════
-   CHARTS DASHBOARD
+   ANALYTICS (nav: "Analytics", route #/app/rate-chart)
+   Monthly meal rate, bazar (with this month's projection), member bazar vs
+   meal cost, weekday pattern and a month table. Charts are drawn at the
+   container's real pixel width so text stays readable on phones, and are
+   redrawn on resize. Styles: .an-* in css/05-components.css.
 ═══════════════════════════════════════════ */
+let _anRange = 12;      // months shown: 6 | 12 | 0 (= all)
+let _anData  = null;    // last loaded rows, for range switches / resize
+let _anResizeT = null;
+
 async function renderMealRateChart(el) {
-  el.innerHTML = `<div class="topbar"><div><div class="page-title">📊 Analytics</div><div class="page-sub">Meal rate, bazar, member trends & spending breakdown</div></div></div>
-  <div class="content"><div class="empty" style="padding:32px;text-align:center"><div class="spinner"></div></div></div>`;
+  el.innerHTML = `<div class="topbar"><div><div class="page-title">Analytics</div><div class="page-sub">Loading…</div></div></div>
+    <div class="content"><div class="loading"><div class="spinner"></div></div></div>`;
+  const [allMeals, allBazar] = await Promise.all([historyRows("meals", true), historyRows("bazar", true)]);
+  _anData = { el, allMeals, allBazar };
+  drawAnalytics();
+  window.removeEventListener("resize", _anOnResize);
+  window.addEventListener("resize", _anOnResize, { passive: true });
+}
 
-  const [allMeals, allBazar, currentRentRec, currentUtilRes] = await Promise.all([
-    dbGetAll("meals"), dbGetAll("bazar"), dbGetMonth("rent", monthKey(...Object.values(thisMonth()))),
-    getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", monthKey(...Object.values(thisMonth()))).maybeSingle(),
-  ]);
-  const currentUtilRec = currentUtilRes.data;
-  const { month, year } = thisMonth();
+function _anOnResize() {
+  clearTimeout(_anResizeT);
+  _anResizeT = setTimeout(() => {
+    if (!_anData || !_anData.el.isConnected) { window.removeEventListener("resize", _anOnResize); return; }
+    _anDrawCharts();
+  }, 150);
+}
 
-  // Build per-month data
-  const monthData = {};
+function setAnalyticsRange(n) { _anRange = n; drawAnalytics(); }
+
+function _anMonths() {
+  const { allMeals, allBazar } = _anData;
+  const by = {};
+  const get = k => by[k] || (by[k] = { key: k, meals: 0, bazar: 0, days: new Set(), memMeals: {}, memBazar: {} });
   allMeals.forEach(r => {
-    const mk = String(r.date||"").slice(0,7); if (!mk) return;
-    if (!monthData[mk]) monthData[mk] = { meals:0, bazar:0, memMeals:{}, memBazar:{} };
-    const mObj = r.meals||{}, ks = Object.keys(mObj);
-    const hasSplit = ks.some(k => k.endsWith("_day")||k.endsWith("_night"));
-    if (hasSplit) ks.forEach(k => { if (k.endsWith("_day")||k.endsWith("_night")) monthData[mk].meals += Number(mObj[k])||0; });
-    else Object.values(mObj).forEach(v => { monthData[mk].meals += Number(v)||0; });
-    members.forEach(m => {
-      const v = mealMemberTotal(mObj, m.name);
-      monthData[mk].memMeals[m.name] = (monthData[mk].memMeals[m.name]||0) + v;
-    });
+    const k = String(r.date || "").slice(0, 7); if (!/^\d{4}-\d{2}$/.test(k)) return;
+    const g = get(k); let t = 0;
+    members.forEach(m => { const v = mealMemberTotal(r.meals || {}, m.name); g.memMeals[m.name] = (g.memMeals[m.name] || 0) + v; t += v; });
+    g.meals += t; if (t > 0) g.days.add(r.date);
   });
   allBazar.forEach(r => {
-    const mk = String(r.date||"").slice(0,7); if (!mk) return;
-    if (!monthData[mk]) monthData[mk] = { meals:0, bazar:0, memMeals:{}, memBazar:{} };
-    Object.values(r.bazar||{}).forEach(v => { monthData[mk].bazar += Number(v)||0; });
-    members.forEach(m => {
-      const v = Number((r.bazar||{})[m.name]||0);
-      monthData[mk].memBazar[m.name] = (monthData[mk].memBazar[m.name]||0) + v;
-    });
+    const k = String(r.date || "").slice(0, 7); if (!/^\d{4}-\d{2}$/.test(k)) return;
+    const g = get(k);
+    Object.entries(r.bazar || {}).forEach(([n, v]) => { g.memBazar[n] = (g.memBazar[n] || 0) + (Number(v) || 0); g.bazar += Number(v) || 0; });
   });
+  const keys = Object.keys(by).sort();
+  const cur = monthKey(new Date().getFullYear(), new Date().getMonth());
+  return (_anRange ? keys.slice(-_anRange) : keys).map(k => {
+    const g = by[k], [y, mm] = k.split("-").map(Number);
+    const dim = new Date(y, mm, 0).getDate();
+    const isCur = k === cur, gone = isCur ? Math.min(new Date().getDate(), dim) : dim;
+    return {
+      ...g, dim, isCur, gone,
+      label: MONTHS[mm - 1].slice(0, 3) + (keys.length > 12 || _anRange === 0 ? " '" + String(y).slice(2) : ""),
+      long:  MONTHS[mm - 1] + " " + y,
+      rate:  g.meals > 0 ? round2(g.bazar / g.meals) : 0,
+      perDay: g.days.size ? round2(g.meals / g.days.size) : 0,
+      proj:  isCur && gone < dim && gone > 0 ? round2((g.bazar / gone) * dim) : null,
+    };
+  });
+}
 
-  const sortedKeys = Object.keys(monthData).sort().slice(-12);
-  if (!sortedKeys.length) {
-    el.innerHTML = `<div class="topbar"><div><div class="page-title">📊 Analytics</div></div></div><div class="content"><div class="card"><div class="empty" style="padding:32px">No data yet.</div></div></div>`;
+function drawAnalytics() {
+  const { el } = _anData;
+  const months = _anMonths();
+  _anData.months = months;
+  const seg = [[6, "6 months"], [12, "12 months"], [0, "All"]]
+    .map(([n, t]) => `<button class="an-seg-btn${_anRange === n ? " on" : ""}" onclick="setAnalyticsRange(${n})">${t}</button>`).join("");
+  const head = `<div class="topbar">
+      <div><div class="page-title">Analytics</div>
+        <div class="page-sub">${months.length ? `${months[0].long} – ${months[months.length - 1].long} · ${members.length} members` : "No data yet"}</div></div>
+      <div class="topbar-actions"><div class="an-seg">${seg}</div></div>
+    </div>`;
+
+  if (!months.length || months.every(m => !m.meals && !m.bazar)) {
+    el.innerHTML = head + `<div class="content"><div class="card"><div class="empty" style="padding:32px">No meals or bazar yet — analytics appear once you start logging.</div></div></div>`;
     return;
   }
 
-  const rates = sortedKeys.map(k => ({
-    key: k,
-    label: MONTHS[parseInt(k.slice(5))-1]?.slice(0,3) + " '" + k.slice(2,4),
-    rate:  monthData[k].meals > 0 ? round2(monthData[k].bazar/monthData[k].meals) : 0,
-    meals: round2(monthData[k].meals),
-    bazar: round2(monthData[k].bazar),
-  }));
-  const avgRate  = round2(rates.reduce((s,r)=>s+r.rate,0)/rates.length);
-  const maxRate  = Math.max(...rates.map(r=>r.rate),1);
-  const maxBazar = Math.max(...rates.map(r=>r.bazar),1);
+  const cur = months[months.length - 1], prev = months[months.length - 2];
+  const rated = months.filter(m => m.rate > 0);
+  const avgRate = rated.length ? round2(rated.reduce((s, m) => s + m.rate, 0) / rated.length) : 0;
+  const lo = rated.reduce((a, m) => (!a || m.rate < a.rate ? m : a), null);
+  const hi = rated.reduce((a, m) => (!a || m.rate > a.rate ? m : a), null);
+  const full = months.filter(m => !m.isCur && m.bazar > 0);
+  const avgBazar = full.length ? round2(full.reduce((s, m) => s + m.bazar, 0) / full.length) : 0;
+  const pct = (a, b) => (b ? Math.round(((a - b) / b) * 100) : null);
+  const tr = (p, goodDown, vs) => p == null ? `<span class="dk-trend">no earlier data</span>`
+    : !p ? `<span class="dk-trend">→ same as ${vs}</span>`
+    : `<span class="dk-trend ${goodDown == null ? "" : (p < 0) === goodDown ? "dk-good" : "dk-bad"}">${p > 0 ? "↑" : "↓"} ${Math.abs(p)}% vs ${vs}</span>`;
+  const kpi = (cls, icon, label, value, sub, graphic) => `
+    <div class="dk-card ${cls}">
+      <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+      <div class="stat-value dk-value">${value}</div>
+      <div class="dk-sub">${sub}</div>${graphic}
+    </div>`;
+  const projBazar = cur.proj ?? cur.bazar;
 
-  // SVG helpers — taller to accommodate value labels above dots
-  const W = 700, H = 200, PAD = 40, LABEL_AREA = 24;
-  const chartW = W - PAD*2;
-  const xPos = (i, n) => PAD + (i/((n||rates.length)-1||1))*chartW;
-  const yPos = (v, max) => LABEL_AREA + ((1 - v/Math.max(max,1)) * (H - PAD - LABEL_AREA));
+  // Members (current month): bazar given vs meal cost at this month's rate
+  const memRows = members.map((m, i) => {
+    const meals = round2(cur.memMeals[m.name] || 0), bz = round2(cur.memBazar[m.name] || 0);
+    const cost = round2(meals * cur.rate);
+    return { m, i, meals, bz, cost, net: round2(bz - cost) };
+  });
+  const memMax = Math.max(1, ...memRows.map(r => Math.max(r.bz, r.cost)));
 
-  function yAxisLines(max, color) {
-    const steps = 4;
-    return Array.from({length:steps+1},(_,i)=>{
-      const v = round2((i/steps)*max);
-      const y = yPos(v, max);
-      return `<line x1="${PAD-4}" y1="${y}" x2="${W-PAD}" y2="${y}" stroke="var(--border)" stroke-width="0.5" opacity="0.6"/>
-              <text x="${PAD-6}" y="${y+3}" text-anchor="end" font-size="7" fill="var(--text3)">${v}</text>`;
-    }).join("");
-  }
+  // Weekday pattern over the range (Sat-first)
+  const wdSum = Array(7).fill(0), wdN = Array(7).fill(0);
+  const inRange = new Set(months.map(m => m.key));
+  _anData.allMeals.forEach(r => {
+    if (!inRange.has(String(r.date).slice(0, 7))) return;
+    const t = members.reduce((s, m) => s + mealMemberTotal(r.meals || {}, m.name), 0);
+    if (!t) return;
+    const [y, mo, d] = String(r.date).split("-").map(Number);
+    const wd = (new Date(y, mo - 1, d).getDay() + 1) % 7;
+    wdSum[wd] += t; wdN[wd]++;
+  });
+  const wdAvg = wdSum.map((s, i) => (wdN[i] ? round2(s / wdN[i]) : 0));
+  const wdMax = Math.max(1, ...wdAvg), wdTop = wdAvg.indexOf(Math.max(...wdAvg));
+  const WD = ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
 
-  function lineChart(data, color, maxVal, tooltipFn=null, labelFn=null) {
-    if (data.length < 2) return "";
-    const n = data.length;
-    const pts = data.map((v,i) => `${xPos(i,n)},${yPos(v,maxVal)}`).join(" ");
-    const areaBot = H-PAD;
-    const area = `${xPos(0,n)},${areaBot} ` + data.map((v,i)=>`${xPos(i,n)},${yPos(v,maxVal)}`).join(" ") + ` ${xPos(n-1,n)},${areaBot}`;
-    const dots = data.map((v,i) => {
-      const cx = xPos(i,n), cy = yPos(v,maxVal);
-      const label = labelFn ? labelFn(v) : String(v);
-      const ttip  = tooltipFn ? tooltipFn(i,v) : label;
-      // Value label above dot — alternates above/below to avoid overlap when close
-      const labelY = i%2===0 ? cy-8 : cy-8;
-      return `<circle cx="${cx}" cy="${cy}" r="4" fill="${color}" stroke="var(--bg2)" stroke-width="2"><title>${ttip}</title></circle>
-              <text x="${cx}" y="${labelY}" text-anchor="middle" font-size="8" font-weight="600" fill="${color}">${label}</text>`;
-    }).join("");
-    const xLabels = data.map((v,i) => `<text x="${xPos(i,n)}" y="${H-PAD+14}" text-anchor="middle" font-size="8" fill="var(--text3)">${rates[i]?.label||""}</text>`).join("");
-    return `
-      <polygon points="${area}" fill="${color}" opacity="0.10"/>
-      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-      ${dots}${xLabels}`;
-  }
+  el.innerHTML = head + `
+  <div class="content dk an">
+    <div class="stat-grid dk-kpis">
+      ${kpi("dk-blue", "📊", "Meal rate · " + MONTHS[Number(cur.key.slice(5)) - 1].slice(0, 3), fmtTk(cur.rate),
+          `${tr(pct(cur.rate, avgRate), true, "avg " + fmtTk(avgRate))}`, buildSparkline(months.map(m => m.rate), "var(--blue)", { fit: true }))}
+      ${kpi("dk-green", "🛒", cur.proj != null ? "Bazar · projected" : "Bazar this month", fmtTk(projBazar),
+          cur.proj != null ? `${fmtTk(round2(cur.bazar))} so far · ${tr(pct(projBazar, prev?.bazar), null, prev ? prev.label : "")}` : tr(pct(cur.bazar, prev?.bazar), null, prev ? prev.label : ""),
+          buildSparkline(months.map(m => m.proj ?? m.bazar), "var(--green)"))}
+      ${kpi("dk-gold", "🍽️", "Meals per day", cur.perDay, `${round2(cur.meals)} meals · ${tr(pct(cur.perDay, prev?.perDay), null, prev ? prev.label : "")}`,
+          buildSparkline(months.map(m => m.perDay), "var(--accent)", { fit: true }))}
+      ${kpi("dk-gray", "🏷️", "Cheapest month", lo ? fmtTk(lo.rate) : "—",
+          lo && hi ? `${lo.label} · priciest ${hi.label} ${fmtTk(hi.rate)}` : "",
+          `<div class="an-range"><i style="left:${hi && lo && hi.rate > lo.rate ? Math.round(((cur.rate - lo.rate) / (hi.rate - lo.rate)) * 100) : 50}%" title="This month"></i></div>`)}
+    </div>
 
-  // ⑰ Meal rate line chart
-  const avgY = yPos(avgRate, maxRate);
-  const rateChart = `<svg viewBox="0 0 ${W} ${H+16}" style="width:100%;display:block;overflow:visible;font-family:var(--font)">
-    ${yAxisLines(maxRate, "var(--accent)")}
-    <line x1="${PAD}" y1="${avgY}" x2="${W-PAD}" y2="${avgY}" stroke="var(--green)" stroke-width="1.2" stroke-dasharray="5,3" opacity="0.7"/>
-    <text x="${W-PAD+2}" y="${avgY-3}" font-size="8" fill="var(--green)">avg ${fmtTk(avgRate)}</text>
-    ${lineChart(rates.map(r=>r.rate), "var(--accent)", maxRate,
-      (i,v)=>`${rates[i].label}: ${fmtTk(v)}/meal`,
-      v => fmtTk(v))}
-  </svg>`;
+    <div class="card">
+      <div class="dk-card-title"><span>Meal rate per month</span><span class="dk-legend"><i class="an-key" style="background:var(--blue)"></i> rate <i class="an-key an-key-dash"></i> average ${fmtTk(avgRate)}</span></div>
+      <div class="an-chart" id="an-rate"></div>
+    </div>
 
-  // ⑱ Bazar spend trend
-  const bazarChart = `<svg viewBox="0 0 ${W} ${H+16}" style="width:100%;display:block;overflow:visible;font-family:var(--font)">
-    ${yAxisLines(maxBazar, "var(--green)")}
-    ${lineChart(rates.map(r=>r.bazar), "var(--green)", maxBazar,
-      (i,v)=>`${rates[i].label}: ${fmtTk(v)}`,
-      v => fmtTk(v))}
-  </svg>`;
-
-
-    // ⑳ Member meal-share pie (this month)
-  const curKey = monthKey(year, month);
-  const curMeals = {};
-  members.forEach(m => { curMeals[m.name] = round2(monthData[curKey]?.memMeals[m.name]||0); });
-  const totalCurMeals = Math.max(Object.values(curMeals).reduce((s,v)=>s+v,0),1);
-  const pieColors = ["var(--accent)","var(--blue)","var(--green)","var(--purple)","var(--red)","var(--amber)"];
-
-  function buildPie(segments) {
-    // segments: [{label, val, color}]
-    const total = Math.max(segments.reduce((s,c)=>s+c.val,0),1);
-    let angle = -90;
-    const CX=80, CY=80, R=68, LR=45;
-    return segments.map(c => {
-      const pct = c.val/total;
-      if (pct < 0.001) return "";
-      const sa = angle*(Math.PI/180);
-      angle += pct*360;
-      const ea = angle*(Math.PI/180);
-      const x1=CX+R*Math.cos(sa), y1=CY+R*Math.sin(sa);
-      const x2=CX+R*Math.cos(ea), y2=CY+R*Math.sin(ea);
-      const mx=CX+LR*Math.cos((sa+ea)/2), my=CY+LR*Math.sin((sa+ea)/2);
-      const pctStr = round2(pct*100) + "%";
-      return `<path d="M${CX},${CY} L${x1},${y1} A${R},${R} 0 ${pct>.5?1:0},1 ${x2},${y2} Z" fill="${c.color}" opacity="0.85">
-        <title>${c.label}: ${pctStr}</title></path>
-        ${pct >= 0.07 ? `<text x="${mx}" y="${my+3}" text-anchor="middle" font-size="9" font-weight="700" fill="white" pointer-events="none">${pctStr}</text>` : ""}`;
-    }).join("");
-  }
-
-  const mealSegments = members.map((m,i)=>({ label:m.name, val:curMeals[m.name], color:pieColors[i%6] }));
-  const piePaths  = buildPie(mealSegments);
-  const pieLegend = members.map((m,i) => `<div style="display:flex;align-items:center;gap:5px;font-size:11px"><span style="width:10px;height:10px;border-radius:2px;background:${pieColors[i%6]};display:inline-block;flex-shrink:0"></span><span>${escapeHtml(m.name)}</span><span style="color:var(--text3);margin-left:auto">${curMeals[m.name]} (${round2((curMeals[m.name]/totalCurMeals)*100)}%)</span></div>`).join("");
-
-
-    el.innerHTML = `
-  <div class="topbar"><div><div class="page-title">📊 Analytics</div><div class="page-sub">Last 12 months of data</div></div></div>
-  <div class="content">
-
-    <!-- ⑰ Meal Rate Trend -->
-    <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
-        <div class="card-title" style="margin:0">📈 Meal Rate Trend</div>
-        <div style="display:flex;gap:10px;font-size:11px">
-          <span>Avg: <b style="color:var(--green)">${fmtTk(avgRate)}</b></span>
-          <span>High: <b style="color:var(--red)">${fmtTk(Math.max(...rates.map(r=>r.rate)))}</b></span>
-          <span>Low: <b style="color:var(--blue)">${fmtTk(Math.min(...rates.filter(r=>r.rate>0).map(r=>r.rate)))}</b></span>
+    <div class="dk-row">
+      <div class="card">
+        <div class="dk-card-title"><span>Bazar per month</span><span class="dk-legend">${cur.proj != null ? `<i class="an-key an-key-ghost"></i> projected` : ""}${avgBazar ? ` · avg ${fmtTk(avgBazar)}` : ""}</span></div>
+        <div class="an-chart" id="an-bazar"></div>
+      </div>
+      <div class="card">
+        <div class="dk-card-title"><span>Meals by weekday</span><span class="dk-legend">busiest: ${WD[wdTop]}</span></div>
+        <div class="an-wd">
+          ${wdAvg.map((v, i) => `<div class="an-wd-col${i === wdTop ? " top" : ""}" title="${WD[i]}: ${v} meals on average">
+            <b>${v || "—"}</b><div class="an-wd-bar"><i style="height:${Math.round((v / wdMax) * 100)}%"></i></div><span>${WD[i]}</span></div>`).join("")}
         </div>
       </div>
-      <div style="overflow-x:auto">${rateChart}</div>
     </div>
 
-    <!-- ⑱ Bazar Spend Trend -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title" style="margin-bottom:10px">🛒 Bazar Spend Trend</div>
-      <div style="overflow-x:auto">${bazarChart}</div>
-    </div>
-
-
-    <!-- ⑳ Meal share pie -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-title" style="margin-bottom:10px">🍽️ Meal Share — ${MONTHS[month]}</div>
-      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <svg viewBox="0 0 160 160" width="160" height="160" style="flex-shrink:0">${piePaths}</svg>
-        <div style="flex:1;display:flex;flex-direction:column;gap:5px">${pieLegend}</div>
+    <div class="card">
+      <div class="dk-card-title"><span>Bazar vs meal cost · ${cur.long}</span><span class="dk-legend"><i class="an-key" style="background:var(--green)"></i> bazar given <i class="an-key" style="background:var(--accent)"></i> meal cost at ${fmtTk(cur.rate)}</span></div>
+      <div class="an-mem">
+        ${memRows.map(r => {
+          const col = avatarCol(r.i);
+          return `<div class="an-mem-row">
+            <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(r.m.id, r.m.name)}</span><span class="an-mem-name">${escapeHtml(r.m.name)}</span></div>
+            <div class="an-mem-bars">
+              <div class="dk-bar"><i style="width:${Math.round((r.bz / memMax) * 100)}%;background:var(--green)"></i></div>
+              <div class="dk-bar"><i style="width:${Math.round((r.cost / memMax) * 100)}%;background:var(--accent)"></i></div>
+            </div>
+            <div class="an-mem-vals"><span style="color:var(--green)">${fmtTk(r.bz)}</span><span style="color:var(--accent)">${fmtTk(r.cost)}</span></div>
+            <span class="badge ${Math.abs(r.net) < 0.01 ? "" : r.net > 0 ? "badge-green" : "badge-red"} an-mem-net">${Math.abs(r.net) < 0.01 ? "Even" : (r.net > 0 ? "Gets " : "Owes ") + fmtTk(Math.abs(r.net))}</span>
+          </div>`;
+        }).join("")}
       </div>
     </div>
 
-    <!-- Table breakdown -->
-    <div class="card" style="margin-top:14px">
-      <div class="card-title" style="margin-bottom:10px">Month-by-month breakdown</div>
+    <div class="card">
+      <div class="dk-card-title"><span>Month by month</span></div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Month</th><th>Meals</th><th>Total Bazar</th><th>Meal Rate</th><th>vs Avg</th></tr></thead>
-        <tbody>${rates.slice().reverse().map(r=>{
-          const diff=round2(r.rate-avgRate);
-          const dc=diff>0?"var(--red)":diff<0?"var(--green)":"var(--text3)";
-          return `<tr><td><b>${r.label}</b></td><td>${r.meals}</td><td style="color:var(--green)">${fmtTk(r.bazar)}</td><td style="color:var(--accent);font-weight:700">${fmtTk(r.rate)}</td><td style="color:${dc};font-size:12px">${diff>0?"+"+fmtTk(diff):diff<0?"-"+fmtTk(Math.abs(diff)):"—"}</td></tr>`;
+        <thead><tr><th>Month</th><th>Meals</th><th>Per day</th><th>Bazar</th><th>Meal rate</th><th>vs avg</th></tr></thead>
+        <tbody>${months.slice().reverse().map(m => {
+          const d = round2(m.rate - avgRate);
+          return `<tr><td><b>${m.long}</b>${m.isCur ? ` <span class="badge badge-amber">so far</span>` : ""}</td><td>${round2(m.meals)}</td><td>${m.perDay}</td>
+            <td style="color:var(--green)">${fmtTk(round2(m.bazar))}${m.proj != null ? `<div class="dk-mini">→ ${fmtTk(m.proj)} projected</div>` : ""}</td>
+            <td style="color:var(--blue);font-weight:700">${m.rate ? fmtTk(m.rate) : "—"}</td>
+            <td style="color:${!m.rate ? "var(--text3)" : d > 0 ? "var(--red)" : d < 0 ? "var(--green)" : "var(--text3)"}">${!m.rate || !d ? "—" : (d > 0 ? "+" : "−") + fmtTk(Math.abs(d))}</td></tr>`;
         }).join("")}</tbody>
       </table></div>
     </div>
   </div>`;
+  _anData.avgRate = avgRate;
+  _anDrawCharts();
+}
+
+/* SVG charts at real pixel width (1 unit = 1px). */
+function _anDrawCharts() {
+  const { months, avgRate } = _anData;
+  const rateBox = document.getElementById("an-rate"), bzBox = document.getElementById("an-bazar");
+  if (rateBox) rateBox.innerHTML = _anLineChart(rateBox.clientWidth, months, avgRate);
+  if (bzBox)   bzBox.innerHTML   = _anBarChart(bzBox.clientWidth, months);
+}
+
+function _anTicks(lo, hi, n) {
+  const span = hi - lo || 1, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(f => f * mag).find(s => s >= raw) || raw;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(round2(v));
+  return out;
+}
+const _anShortTk = v => v >= 100000 ? "৳" + round2(v / 100000) + "L" : v >= 1000 ? "৳" + round2(v / 1000) + "k" : "৳" + round2(v);
+
+function _anLineChart(w, months, avg) {
+  w = Math.max(w, 260);
+  const H = 210, L = 46, R = 14, T = 22, B = 26, pw = w - L - R, ph = H - T - B;
+  const pts = months.filter(m => m.rate > 0);
+  if (!pts.length) return `<div class="empty">No meal rate yet</div>`;
+  const vals = pts.map(m => m.rate).concat(avg || []);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = Math.max((hi - lo) * 0.25, hi * 0.03, 1);
+  lo = Math.max(0, lo - pad); hi = hi + pad;
+  const x = i => L + (pts.length === 1 ? pw / 2 : (i / (pts.length - 1)) * pw);
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * ph;
+  const ticks = _anTicks(lo, hi, 4);
+  const line = pts.map((m, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(m.rate).toFixed(1)).join(" ");
+  const every = Math.max(1, Math.ceil((pts.length * 44) / pw));
+  const showVal = (i) => pts.length <= Math.floor(pw / 56) || i === pts.length - 1 || pts[i] === pts.reduce((a, m) => m.rate > a.rate ? m : a) || pts[i] === pts.reduce((a, m) => m.rate < a.rate ? m : a);
+  return `<svg class="an-svg" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="Meal rate per month">
+    ${ticks.map(t => `<line class="an-grid" x1="${L}" x2="${w - R}" y1="${y(t)}" y2="${y(t)}"/><text class="an-ax" x="${L - 8}" y="${y(t) + 3.5}" text-anchor="end">${_anShortTk(t)}</text>`).join("")}
+    ${avg ? `<line class="an-avg" x1="${L}" x2="${w - R}" y1="${y(avg)}" y2="${y(avg)}"/>` : ""}
+    <path class="an-area" d="${line} L${x(pts.length - 1)} ${T + ph} L${x(0)} ${T + ph} Z" fill="var(--blue)"/>
+    <path class="an-line" d="${line}" stroke="var(--blue)" pathLength="1"/>
+    ${pts.map((m, i) => `<g class="an-pt" style="--d:${(0.5 + (i / pts.length) * 1.1).toFixed(2)}s">
+      <circle cx="${x(i)}" cy="${y(m.rate)}" r="${m.isCur ? 5 : 4}" class="${m.isCur ? "an-dot-cur" : "an-dot"}"><title>${m.long}: ${fmtTk(m.rate)}/meal${m.isCur ? " (so far)" : ""}</title></circle>
+      ${showVal(i) ? `<text class="an-val" x="${x(i)}" y="${y(m.rate) - 10}" text-anchor="${i === 0 && pts.length > 1 ? "start" : i === pts.length - 1 && pts.length > 1 ? "end" : "middle"}">${fmtTk(m.rate)}${m.isCur ? " so far" : ""}</text>` : ""}
+    </g>`).join("")}
+    ${pts.map((m, i) => i % every && i !== pts.length - 1 ? "" : `<text class="an-ax" x="${x(i)}" y="${H - 8}" text-anchor="${i === 0 && pts.length > 1 ? "start" : i === pts.length - 1 && pts.length > 1 ? "end" : "middle"}">${m.label}</text>`).join("")}
+  </svg>`;
+}
+
+function _anBarChart(w, months) {
+  w = Math.max(w, 240);
+  const H = 210, L = 44, R = 8, T = 18, B = 26, pw = w - L - R, ph = H - T - B;
+  const max = Math.max(1, ...months.map(m => Math.max(m.bazar, m.proj || 0))) * 1.08;
+  const ticks = _anTicks(0, max, 4);
+  const slot = pw / months.length, bw = Math.min(34, slot * 0.62);
+  const y = v => T + (1 - v / max) * ph;
+  const every = Math.max(1, Math.ceil((months.length * 40) / pw));
+  return `<svg class="an-svg" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="Bazar per month">
+    ${ticks.map(t => `<line class="an-grid" x1="${L}" x2="${w - R}" y1="${y(t)}" y2="${y(t)}"/><text class="an-ax" x="${L - 8}" y="${y(t) + 3.5}" text-anchor="end">${_anShortTk(t)}</text>`).join("")}
+    ${months.map((m, i) => {
+      const cx = L + slot * i + slot / 2, x0 = cx - bw / 2;
+      return `<g style="--d:${(0.15 + i * 0.05).toFixed(2)}s">
+        ${m.proj != null ? `<rect class="an-ghost" x="${x0}" y="${y(m.proj)}" width="${bw}" height="${y(0) - y(m.proj)}" rx="4"><title>${m.long}: projected ${fmtTk(m.proj)}</title></rect>` : ""}
+        <rect class="an-bar${m.isCur ? " cur" : ""}" x="${x0}" y="${y(m.bazar)}" width="${bw}" height="${Math.max(0, y(0) - y(m.bazar))}" rx="4"><title>${m.long}: ${fmtTk(round2(m.bazar))}${m.isCur ? " so far" : ""}</title></rect>
+        ${i % every && i !== months.length - 1 ? "" : `<text class="an-ax" x="${cx}" y="${H - 8}" text-anchor="middle">${m.label}</text>`}
+      </g>`;
+    }).join("")}
+  </svg>`;
 }
 
 
