@@ -644,3 +644,28 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
   .ut-row .ut-status{grid-column:2;width:120px;}
   .ut-row .ut-note{grid-column:1/-1;}
 }
+
+/* ── Room Rent (js/manager/utility.js) — reuses the .ut-row pieces ── */
+.rent-row{grid-template-columns:minmax(150px,1.4fr) 120px 120px 130px minmax(100px,1fr);}
+.rent-due .input{color:var(--text2);}
+.topbar-actions .ut-pick{margin:0;}
+.rh-row{display:grid;grid-template-columns:150px 1fr 120px 52px;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border);}
+.rh-row:last-child{border-bottom:0;}
+.rh-month b{display:block;font-size:13px;}
+.rh-month span,.rh-amt span,.rh-left{font-size:11px;color:var(--text3);}
+.rh-bar{min-width:0;}
+.rh-left{display:block;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rh-amt{text-align:right;}
+.rh-amt b{display:block;font-size:13px;}
+.rh-row .dk-chip{justify-self:end;}
+@media(max-width:768px){
+  .rent-row{grid-template-columns:1fr 1fr;}
+  .rent-row .dk-who{grid-column:1/-1;}
+  .rent-row .rent-due,.rent-row .ut-paid{grid-column:auto;}
+  .rent-row .ut-status{grid-column:1;width:100%;}
+  .rent-row .ut-note{grid-column:2;}
+  .rent-row [data-cap]::after{content:attr(data-cap);position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;pointer-events:none;}
+  .rh-row{grid-template-columns:1fr auto;gap:6px 10px;}
+  .rh-bar{grid-column:1/-1;grid-row:2;}
+  .rh-row .dk-chip{display:none;}
+}
