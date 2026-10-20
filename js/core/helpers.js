@@ -573,6 +573,21 @@ function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForw
   return { monthOptions, yearOptions };
 }
 
+/* Dashboard sparkline (manager + member): draws itself in via stroke-dashoffset
+   (css/09-fx.css) over a soft area. Styles: .dk-spark* in css/05-components.css. */
+function buildSparkline(values, color) {
+  const v = values.length > 1 ? values : [0, ...(values.length ? values : [0])];
+  const W = 120, H = 34, max = Math.max(...v, 1), min = Math.min(...v, 0);
+  const pts = v.map((y, i) => [(i / (v.length - 1)) * W, H - 3 - ((y - min) / (max - min || 1)) * (H - 6)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length - 1];
+  return `<svg class="dk-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <path class="dk-spark-area" d="${line} L${W} ${H} L0 ${H} Z" fill="${color}"/>
+    <path class="dk-spark-line" d="${line}" stroke="${color}" pathLength="1"/>
+    <circle class="dk-spark-dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${color}"/>
+  </svg>`;
+}
+
 /* ═══════════════════════════════════════════
    MONTH HISTORY — Meal Entry, Bazar Entry, member Meal Log
    One fetch per table feeds a page's recent-entries table, its month cards

@@ -138,20 +138,6 @@ async function renderDashboard(el) {
     return `<span class="dk-trend ${cls}">${up ? "↑" : "↓"} ${Math.abs(pct)}% vs ${MONTHS[prevInfo.month].slice(0, 3)}</span>`;
   }
 
-  /* Sparkline: draws itself in (stroke-dashoffset) with a soft area under it. */
-  function spark(values, color) {
-    const v = values.length > 1 ? values : [0, ...(values.length ? values : [0])];
-    const W = 120, H = 34, max = Math.max(...v, 1), min = Math.min(...v, 0);
-    const pts = v.map((y, i) => [(i / (v.length - 1)) * W, H - 3 - ((y - min) / (max - min || 1)) * (H - 6)]);
-    const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
-    const last = pts[pts.length - 1];
-    return `<svg class="dk-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-      <path class="dk-spark-area" d="${line} L${W} ${H} L0 ${H} Z" fill="${color}"/>
-      <path class="dk-spark-line" d="${line}" stroke="${color}" pathLength="1"/>
-      <circle class="dk-spark-dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${color}"/>
-    </svg>`;
-  }
-
   const pace     = daysLogged > 0 ? round2(totalMeals / daysLogged) : 0;
   const prevPace = prevDays > 0 ? prevTotalMeals / prevDays : 0;
   const bzPace     = daysGone > 0 ? round2(totalBazar / daysGone) : 0;
@@ -211,9 +197,9 @@ async function renderDashboard(el) {
 
     <!-- ── KPIs ── -->
     <div class="stat-grid dk-kpis">
-      ${kpi("dk-gold",  "🍽️", "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, spark(mealSeries, "var(--accent)"))}
-      ${kpi("dk-blue",  "📊", "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             spark(rateSeries, "var(--blue)"))}
-      ${kpi("dk-green", "🛒", "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, spark(bazarSeries, "var(--green)"))}
+      ${kpi("dk-gold",  "🍽️", "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, buildSparkline(mealSeries, "var(--accent)"))}
+      ${kpi("dk-blue",  "📊", "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             buildSparkline(rateSeries, "var(--blue)"))}
+      ${kpi("dk-green", "🛒", "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, buildSparkline(bazarSeries, "var(--green)"))}
       ${kpi("dk-gray",  "📅", "Days logged", daysLogged, `of ${daysGone} so far · ${daysInMonth - daysGone} left`,
         `<div class="dk-bar dk-bar-kpi"><i style="width:${logPct}%;background:${logPct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>`)}
     </div>
