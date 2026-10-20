@@ -74,14 +74,44 @@ const MEMBER_NAV = [
 ];
 
 /* ═══════════════════════════════════════════
-   BUILD NAV
+   VIEW AS MEMBER
+   A manager / sub-manager previews the app exactly as a member sees it, using
+   their own member record. It only changes what is shown: the role (and every
+   permission check and route guard) stays manager. Kept per browser tab and
+   tied to the member id, so another sign-in in the same tab never inherits it.
 ═══════════════════════════════════════════ */
+const VIEW_AS_KEY = "mm_view_as_member";
+const IC_EYE  = `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>`;
+const IC_BACK = `<svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 3L2 8l5 5M2 8h12"/></svg>`;
+
+function isManagerRole() { return currentUser?.role === "manager" || currentUser?.role === "sub_manager"; }
+function isMemberView() {
+  if (!isManagerRole() || !currentUser.memberId) return false;
+  try { return sessionStorage.getItem(VIEW_AS_KEY) === currentUser.memberId; } catch (_) { return false; }
+}
+function viewAsMember() {
+  if (!isManagerRole()) return;
+  if (!members.some(m => m.id === currentUser.memberId)) { toast("Your member profile wasn't found", "error"); return; }
+  try { sessionStorage.setItem(VIEW_AS_KEY, currentUser.memberId); } catch (_) { toast("Can't switch views in this browser mode", "error"); return; }
+  closeMobileMore();
+  Router.resetShell();
+  navigate("my-dashboard");
+  toast("Viewing as a member — your manager access is unchanged");
+}
+function backToManagerView() {
+  try { sessionStorage.removeItem(VIEW_AS_KEY); } catch (_) {}
+  closeMobileMore();
+  Router.resetShell();
+  navigate("dashboard");
+}
+
 /* ═══════════════════════════════════════════
    BUILD NAV
 ═══════════════════════════════════════════ */
 function buildNav() {
-  const isManager = currentUser.role === "manager";
-  const isSubMgr  = currentUser.role === "sub_manager";
+  const asMember  = isMemberView();
+  const isManager = currentUser.role === "manager" && !asMember;
+  const isSubMgr  = currentUser.role === "sub_manager" && !asMember;
   const nav = (isManager || isSubMgr) ? MANAGER_NAV : MEMBER_NAV;
 
   // Filter out pages sub_manager can't access
@@ -91,7 +121,10 @@ function buildNav() {
     : nav;
 
   /* Sidebar */
-  let sidebarHTML = "";
+  let sidebarHTML = asMember
+    ? '<div class="nav-section">Manager</div>' +
+      '<button class="nav-item view-as-item view-as-back" onclick="backToManagerView()" data-page="back-to-manager">' + IC_BACK + 'Back to manager view</button>'
+    : "";
 
   for (const i of filteredNav) {
     if (i.section) {
@@ -114,6 +147,11 @@ function buildNav() {
           badge +
         '</button>';
     }
+  }
+
+  if (isManager || isSubMgr) {
+    sidebarHTML += '<div class="nav-section">Preview</div>' +
+      '<button class="nav-item view-as-item" onclick="viewAsMember()" data-page="view-as-member">' + IC_EYE + 'View as member</button>';
   }
 
   document.getElementById("sidebar-nav").innerHTML = sidebarHTML;
@@ -190,7 +228,11 @@ function buildNav() {
   document.body.appendChild(backdrop);
 
   /* More drawer items */
-  let drawerItemsHTML = "";
+  let drawerItemsHTML = asMember
+    ? `<button class="mob-drawer-item view-as-item view-as-back" onclick="backToManagerView()" data-page="back-to-manager">${IC_BACK}<span>Back to manager view</span></button>`
+    : (isManager || isSubMgr)
+      ? `<button class="mob-drawer-item view-as-item" onclick="viewAsMember()" data-page="view-as-member">${IC_EYE}<span>View as member</span></button>`
+      : "";
 
   for (const i of mobileMoreItems) {
     let badge = "";
@@ -210,7 +252,7 @@ function buildNav() {
   if (MM_MODE === "demo") {
     drawerItemsHTML += `
     <button class="mob-drawer-item" onclick="closeMobileMore();switchDemoRole()" data-page="demo-switch">
-      ${IC.transfer}<span>Switch to ${isManager || isSubMgr ? "Member" : "Manager"} view</span>
+      ${IC.transfer}<span>Switch to ${isManagerRole() ? "a member's account" : "Manager view"}</span>
     </button>
     <button class="mob-drawer-item" onclick="closeMobileMore();resetDemo()" data-page="demo-reset">
       ${IC.audit}<span>Reset demo data</span>
@@ -267,7 +309,8 @@ function buildNav() {
   const logoutBtn = document.getElementById("sidebar-logout");
   if (logoutBtn) logoutBtn.innerHTML = IC.logout + (MM_MODE === "demo" ? "Exit demo" : "Sign out");
   const swapBtn = document.getElementById("demo-switch-label");
-  if (swapBtn) swapBtn.textContent = "Switch to " + (isManager || isSubMgr ? "Member" : "Manager") + " view";
+  // demo account switch follows the real role, not "View as member"
+  if (swapBtn) swapBtn.textContent = isManagerRole() ? "Switch to a member's account" : "Switch to Manager view";
 
   if (isManager || isSubMgr) refreshNotifBadge();
   else refreshMemberAnnounceBadge();
@@ -354,8 +397,9 @@ async function refreshMemberAnnounceBadge() {
 function updateSidebarUser() {
   if (!currentUser) return;
 
-  const isManager = currentUser.role === "manager";
-  const isSubMgr  = currentUser.role === "sub_manager";
+  const asMember  = isMemberView();
+  const isManager = currentUser.role === "manager" && !asMember;
+  const isSubMgr  = currentUser.role === "sub_manager" && !asMember;
   const idx = members.findIndex(m => m.id === currentUser.memberId);
   const col = isManager
     ? { bg:"#2a2218", fg:"#d4a853" }
@@ -370,7 +414,7 @@ function updateSidebarUser() {
 
     <div class="su-info">
       <div class="su-name">${escapeHtml(currentUser.name)}</div>
-      <div class="su-role">${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"}</div>
+      <div class="su-role">${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : asMember ? "👁 Member view" : "Member"}</div>
     </div>`;
 
   const mob = document.getElementById("mob-user-badge");
@@ -449,6 +493,14 @@ async function renderPage(page) {
   page = guardPage(page, currentUser.role);
 
   main.innerHTML = "";
+
+  if (isMemberView()) {
+    const bar = document.createElement("div");
+    bar.className = "view-as-bar";
+    bar.innerHTML = `<span>👁 You're viewing as a member — <b>${escapeHtml(currentUser.name)}</b></span>
+      <button class="btn btn-sm btn-primary" onclick="backToManagerView()">Back to manager view</button>`;
+    main.appendChild(bar);
+  }
 
   const div = document.createElement("div");
   div.className = "page-enter";

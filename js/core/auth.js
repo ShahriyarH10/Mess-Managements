@@ -7,7 +7,10 @@ function showScreen(id) { screens.forEach(s => { const el = document.getElementB
 function showLanding()    { Router.go(""); }
 function showLogin()      { Router.go("login"); }
 function showCreateMess() { Router.go("create"); }
-function homePage() { return (currentUser?.role === "manager" || currentUser?.role === "sub_manager") ? "dashboard" : "my-dashboard"; }
+function homePage() {
+  const mgr = currentUser?.role === "manager" || currentUser?.role === "sub_manager";
+  return mgr && !(typeof isMemberView === "function" && isMemberView()) ? "dashboard" : "my-dashboard";
+}
 // Legacy name: after a successful sign-in, hand over to the router.
 async function bootApp() { Router.goAfterLogin(); }
 

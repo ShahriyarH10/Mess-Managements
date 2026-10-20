@@ -12,7 +12,8 @@
 let _rcptList = [];
 let _rcptLive = {};   // month_key → live balance (same number Give Payment shows)
 
-const _isMgrRole = () => ["manager", "sub_manager", "superadmin"].includes(currentUser?.role);
+// in "View as member" a manager sees receipts exactly like a member (their own only)
+const _isMgrRole = () => ["manager", "sub_manager", "superadmin"].includes(currentUser?.role) && !isMemberView();
 
 /* Money actually kept by the mess for a receipt (amount minus change handed back). */
 function _rcptKept(p) { return round2(Number(p.amount) - Number(p.split?.change || 0)); }
