@@ -541,45 +541,110 @@ function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForw
   return { monthOptions, yearOptions };
 }
 
-function getMealMonthKeys(allMeals) {
-  const keys    = [...new Set((allMeals || []).map(r => String(r.date || "").slice(0, 7)).filter(Boolean))].sort().reverse();
-  const current = monthKey(new Date().getFullYear(), new Date().getMonth());
-  if (!keys.includes(current)) keys.unshift(current);
-  return keys.slice(0, 12);
+/* ═══════════════════════════════════════════
+   MONTH HISTORY — Meal Entry, Bazar Entry, member Meal Log
+   One fetch per table feeds a page's recent-entries table, its month cards
+   and the month calendars. Pages pass refresh=true when they render and after
+   every save/delete; month pop-ups reuse the rows already loaded.
+═══════════════════════════════════════════ */
+const _historyRows = {};
+function historyRows(table, refresh) {
+  const k = messId() + ":" + table;
+  if (refresh || !_historyRows[k]) {
+    _historyRows[k] = dbGetAll(table).catch(e => { delete _historyRows[k]; throw e; });
+  }
+  return _historyRows[k];
 }
 
-function buildMealMonthButtons(keys, onClickName, allMeals) {
-  if (!keys.length) return '<div class="empty" style="padding:18px">No meal months yet</div>';
-  if (!allMeals) {
-    return `<div class="meal-month-list">${keys.map(k => `<button class="meal-month-chip" onclick="${onClickName}('${k}')"><span>${monthLabelFromKey(k)}</span><small>View history</small></button>`).join("")}</div>`;
-  }
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
-    ${keys.map(k => {
-      const rows = (allMeals || []).filter(r => String(r.date || "").startsWith(k));
-      let total = 0, activeDays = 0;
-      const perMember = {}; members.forEach(m => { perMember[m.name] = 0; });
-      rows.forEach(r => {
-        let dayTotal = 0;
-        members.forEach(m => { const v = mealMemberTotal(r.meals || {}, m.name); perMember[m.name] += v; }); dayTotal += mealRowTotal(r.meals || {});
-        if (dayTotal > 0) activeDays++;
-        total += dayTotal;
-      });
-      const top = Object.entries(perMember).sort((a, b) => b[1] - a[1])[0];
-      const isTop = top && top[1] > 0;
-      const avg = activeDays > 0 ? round2(total / activeDays) : 0;
-      return `<button onclick="${onClickName}('${k}')" class="profile-card" style="all:unset;cursor:pointer;padding:13px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2);display:flex;flex-direction:column;gap:8px;transition:transform .15s,border-color .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-          <div style="font-family:var(--font-serif);font-size:15px;font-weight:700;line-height:1.1">${monthLabelFromKey(k)}</div>
-          <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${activeDays} day${activeDays===1?"":"s"}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <div style="background:var(--bg3);border-radius:5px;padding:6px 8px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Meals</div><div style="font-size:15px;font-weight:700;margin-top:1px">${round2(total)}</div></div>
-          <div style="background:var(--bg3);border-radius:5px;padding:6px 8px"><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Avg/day</div><div style="font-size:15px;font-weight:700;margin-top:1px">${avg}</div></div>
-        </div>
-        ${isTop ? `<div style="font-size:11px;color:var(--text2)">Top: <b style="color:var(--accent)">${escapeHtml(top[0])}</b> <span style="color:var(--text3)">· ${round2(top[1])} meals</span></div>` : `<div style="font-size:11px;color:var(--text3)">No meal data yet</div>`}
-      </button>`;
-    }).join("")}
-  </div>`;
+const MONTH_HISTORY_MAX   = 24;  // months kept in the grid
+const MONTH_HISTORY_FIRST = 6;   // shown before "Show older"
+
+/* Rows → [{ key, total, days, perName, daysByName }] newest first, in one pass.
+   valueOf(row) → { name: amount }  (one entry per member for that day). */
+function summarizeMonths(rows, valueOf) {
+  const by = new Map();
+  (rows || []).forEach(r => {
+    const key = String(r.date || "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) return;
+    let g = by.get(key);
+    if (!g) by.set(key, g = { key, total: 0, days: 0, perName: {}, daysByName: {} });
+    let day = 0;
+    Object.entries(valueOf(r) || {}).forEach(([name, v]) => {
+      const n = Number(v) || 0;
+      if (!n) return;
+      g.perName[name] = (g.perName[name] || 0) + n;
+      g.daysByName[name] = (g.daysByName[name] || 0) + 1;
+      day += n;
+    });
+    if (day > 0) { g.total += day; g.days++; }
+  });
+  const cur = monthKey(new Date().getFullYear(), new Date().getMonth());
+  if (!by.has(cur)) by.set(cur, { key: cur, total: 0, days: 0, perName: {}, daysByName: {} });
+  return [...by.values()].sort((a, b) => b.key.localeCompare(a.key)).slice(0, MONTH_HISTORY_MAX);
+}
+
+/* Per-member meal totals of one meals row (handles the day/night split). */
+function mealsByMember(r) {
+  const o = {};
+  members.forEach(m => { o[m.name] = mealMemberTotal(r.meals || {}, m.name); });
+  return o;
+}
+
+/* Month cards. opts: { onClick, money, memberName, id, emptyText } */
+function buildMonthHistory(months, opts) {
+  const { onClick, money = false, memberName = null, id = "mh", emptyText = "No months yet" } = opts;
+  if (!months.length || months.every(m => !m.total)) return `<div class="empty" style="padding:18px">${emptyText}</div>`;
+  const cur = monthKey(new Date().getFullYear(), new Date().getMonth());
+  const val  = m => memberName ? round2(m.perName[memberName] || 0) : round2(m.total);
+  const days = m => memberName ? (m.daysByName[memberName] || 0) : m.days;
+  // trend compares the average per active day, so a month still in progress isn't always "down"
+  const pace = m => days(m) > 0 ? val(m) / days(m) : 0;
+  const fmtV = v => money ? fmtTk(v) : String(round2(v));
+  const max = Math.max(1, ...months.map(val));
+
+  const cards = months.map((m, i) => {
+    const v = val(m), prev = months[i + 1], d = days(m);
+    const pv = prev ? pace(prev) : 0;
+    const trend = prev && pv > 0 && d > 0 ? Math.round(((pace(m) - pv) / pv) * 100) : null;
+    const top = Object.entries(m.perName).sort((a, b) => b[1] - a[1])[0];
+    const share = memberName && m.total > 0 ? Math.round((v / m.total) * 100) : null;
+    const avg = d > 0 ? round2(v / d) : 0;
+    return `
+    <button class="mh-card${m.key === cur ? " mh-cur" : ""}${i >= MONTH_HISTORY_FIRST ? " mh-older" : ""}" onclick="${onClick}('${m.key}')">
+      <div class="mh-head">
+        <span class="mh-month">${monthLabelFromKey(m.key)}</span>
+        ${m.key === cur ? `<span class="mh-tag">This month</span>` : ""}
+      </div>
+      <div class="mh-val">${fmtV(v)}${!money ? `<small> meals</small>` : ""}</div>
+      <div class="mh-bar"><i style="width:${Math.round((v / max) * 100)}%"></i></div>
+      <div class="mh-meta">
+        <span>${d} day${d === 1 ? "" : "s"} · ${fmtV(avg)}/day</span>
+        ${trend == null ? "" : `<span class="${!money ? "" : trend > 0 ? "mh-up" : trend < 0 ? "mh-down" : ""}" title="Average per day vs previous month">${trend > 0 ? "↑" : trend < 0 ? "↓" : "→"} ${Math.abs(trend)}%</span>`}
+      </div>
+      <div class="mh-foot">${
+        memberName
+          ? (share != null ? `${share}% of ${fmtV(m.total)} mess ${money ? "total" : "meals"}` : "No mess data yet")
+          : top && top[1] > 0 ? `${money ? "🥇 " : "Top: "}<b>${escapeHtml(_unescapeName(top[0]))}</b> · ${fmtV(top[1])}` : "No entries yet"
+      }</div>
+    </button>`;
+  }).join("");
+
+  const older = Math.max(0, months.length - MONTH_HISTORY_FIRST);
+  return `<div class="mh-grid" id="${id}">${cards}</div>
+    ${older ? `<button class="btn btn-ghost btn-sm mh-more" onclick="toggleMonthHistory('${id}', this)">Show ${older} older month${older === 1 ? "" : "s"}</button>` : ""}`;
+}
+
+/* Member names come back HTML-escaped in members[] but raw as JSON keys; show them once-escaped. */
+function _unescapeName(s) {
+  return String(s).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
+
+function toggleMonthHistory(id, btn) {
+  const grid = document.getElementById(id);
+  if (!grid) return;
+  const open = grid.classList.toggle("mh-all");
+  const n = grid.querySelectorAll(".mh-older").length;
+  if (btn) btn.textContent = open ? "Show fewer" : `Show ${n} older month${n === 1 ? "" : "s"}`;
 }
 
 function buildMemberMealCalendar(memberName, allMeals, key) {
@@ -605,7 +670,7 @@ function buildMemberMealCalendar(memberName, allMeals, key) {
 }
 
 async function openMemberMealMonth(memberName, key) {
-  const allMeals = await dbGetAll("meals");
+  const allMeals = await historyRows("meals");
   const cal      = buildMemberMealCalendar(memberName, allMeals, key);
   const modal    = document.getElementById("modal-content");
   modal.innerHTML = `
@@ -622,7 +687,8 @@ async function openMemberMealMonth(memberName, key) {
 }
 
 async function openManagerMealMonth(key) {
-  const allMeals = await dbGetAll("meals");
+  // only this month's rows: each member's calendar would otherwise re-scan the whole table
+  const allMeals = (await historyRows("meals")).filter(r => String(r.date || "").startsWith(key));
   const monthLabel = monthLabelFromKey(key);
   const perMember = members.map(m => { const cal = buildMemberMealCalendar(m.name, allMeals, key); return { name: m.name, ...cal }; });
   const grandMeals = round2(perMember.reduce((s, p) => s + p.total, 0));

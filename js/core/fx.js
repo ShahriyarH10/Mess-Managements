@@ -77,7 +77,7 @@
   const queueCount = el => countIO ? countIO.observe(el) : countUp(el);
 
   /* ── Stagger indices ──────────────────────────────────────── */
-  const STAGGER_SEL = ".meal-calendar,.meal-grid,.meal-month-list,tbody,.att-cal-grid,.bz-cal-grid,.nav,.mobile-nav,.hist-wrap,.onboard-wrap";
+  const STAGGER_SEL = ".meal-calendar,.meal-grid,.meal-month-list,.mh-grid,tbody,.att-cal-grid,.bz-cal-grid,.nav,.mobile-nav,.hist-wrap,.onboard-wrap";
   function stagger(container) {
     const kids = container.children;
     for (let i = 0; i < kids.length; i++) kids[i].style.setProperty("--fx-i", Math.min(i, 24));

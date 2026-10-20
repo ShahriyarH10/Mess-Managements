@@ -26,8 +26,7 @@ async function renderMyMeals(el) {
   const member = await getMe();
   if (!member) return;
 
-  const allMeals = await dbGetAll("meals");
-  const monthKeys = getMealMonthKeys(allMeals);
+  const allMeals = await historyRows("meals", true); // also feeds the month calendar pop-up
 
   const myRows = allMeals
     .filter(r => mealMemberTotal(r.meals || {}, member.name) > 0)
@@ -150,7 +149,8 @@ async function renderMyMeals(el) {
         <div class="modal-sub" style="margin-bottom:12px">
           Click a month to open your colored meal calendar.
         </div>
-        ${buildMealMonthButtons(monthKeys, "openMyMealMonth", allMeals)}
+        ${buildMonthHistory(summarizeMonths(allMeals, mealsByMember),
+          { onClick: "openMyMealMonth", memberName: member.name, id: "mh-my-meals", emptyText: "No meal months yet" })}
       </div>
     </div>
   </div>
