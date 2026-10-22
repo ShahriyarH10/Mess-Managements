@@ -296,12 +296,11 @@ function buildCollectTable() {
     const pctRent = Math.round((rentRem / barTotal) * 100);
 
     const av = avatarColors[idx % avatarColors.length];
-    const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
 
     return `
       <div class="cp-mcard" id="cpr-${m.id}">
         <div class="cp-mcard-head">
-          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
+          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
             <div class="cp-mcard-name">${m.name}</div>
             ${r.messCredit > 0 ? `<span class="cp-carry-tag is-green" title="Carry-forward credit from a previous month, reducing this month's total">↩ −${fmtTk(r.messCredit)} carried-forward credit</span>` : ''}
@@ -549,7 +548,6 @@ function buildReturnTable() {
   const cards = rows.map(({ m, amts }, idx) => {
     const { changeRemaining, owesRemaining, alreadyCarried, total } = amts;
     const av       = avatarColors[idx % avatarColors.length];
-    const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
     const pct = v => (total > 0 ? Math.round((v / total) * 100) : 0);
 
     const breakdown = [];
@@ -572,7 +570,7 @@ function buildReturnTable() {
       <div class="cp-mcard cp-mcard-ret" id="retr-${m.id}">
         ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" onclick="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">✕</button>` : ""}
         <div class="cp-mcard-head">
-          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${initials}</div>
+          <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
             <div class="cp-mcard-name">${m.name}</div>
             <div style="font-size:11px;color:var(--green);margin-top:1px">Return money to this member</div>

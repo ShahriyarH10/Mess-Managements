@@ -65,7 +65,7 @@ async function loadAnnouncements(isAdmin) {
         <div class="ac${a.pinned ? " ac-pin" : ""}">
           ${a.pinned ? `<div class="ac-pin-bar"><span class="ac-pin-badge">&#128204; Pinned</span></div>` : ""}
           <div class="ac-body">
-            <div class="ac-avatar">${initials}</div>
+            <div class="ac-avatar">${avFaceByName(a.author) || initials}</div>
             <div class="ac-main">
               <div class="ac-title-row">
                 <div class="ac-title">${escapeHtml(a.title)}</div>

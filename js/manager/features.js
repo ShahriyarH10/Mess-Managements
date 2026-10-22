@@ -186,7 +186,7 @@ async function loadAbsenceCalendar() {
         const m = entry.member;
         const col = avatarCol(m.id); // hash on member ID for stable colors
         const borderStyle = entry.source === "meal_zero" ? "dashed" : "solid";
-        const label = memberInitials(m.id, m.name); // collision-aware initials
+        const label = avFace(m.id, m.name); // photo, else collision-aware initials
         return `<div title="${escapeHtml(m.name)}${entry.source === "meal_zero" ? " (from meal entry)" : " (marked absent)"}"
           style="width:24px;height:24px;border-radius:50%;background:${col.bg};color:${col.fg};
                  display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;
