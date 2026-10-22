@@ -482,82 +482,110 @@ async function sendBroadcast() {
 /* ═══════════════════════════════════════════
    MESS RULES — Markdown editor + live preview
 ═══════════════════════════════════════════ */
+/* Small, safe Markdown → HTML for mess rules: # headings, - lists, **bold**, *italic*,
+   paragraphs. Escapes first, works line by line, so lists stay one <ul>. */
 function renderMarkdown(text) {
   if (!text) return "";
-  return text
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm,  "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm,   "<h1>$1</h1>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g,    "<em>$1</em>")
-    .replace(/^- (.+)$/gm,    "<li>$1</li>")
-    .replace(/(<li>.*<\/li>)/s, "<ul>$1</ul>")
-    .replace(/\n{2,}/g, "</p><p>")
-    .replace(/\n/g, "<br>")
-    .replace(/^(?!<[hul])(.+)$/gm, "<p>$1</p>");
+  const esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = t => t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<em>$2</em>");
+  const out = []; let para = [], list = false;
+  const flush = () => { if (para.length) { out.push(`<p>${inline(para.join("<br>"))}</p>`); para = []; } };
+  const close = () => { if (list) { out.push("</ul>"); list = false; } };
+  esc.split(/\r?\n/).forEach(line => {
+    let m;
+    if ((m = /^(#{1,3})\s+(.+)$/.exec(line))) { flush(); close(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); }
+    else if ((m = /^\s*[-*•]\s+(.+)$/.exec(line))) { flush(); if (!list) { out.push("<ul>"); list = true; } out.push(`<li>${inline(m[1])}</li>`); }
+    else if (!line.trim()) { flush(); close(); }
+    else { close(); para.push(line); }
+  });
+  flush(); close();
+  return out.join("");
 }
 
 async function renderMessRules(el, isManager) {
   const rules = await dbGetMessRules();
   if (isManager) {
     el.innerHTML = `
-    <div class="topbar"><div><div class="page-title">📌 Mess Rules & Info</div><div class="page-sub">WiFi, bank info, rules, contacts — supports **bold**, *italic*, # headings, - lists</div></div>
-      <div class="topbar-actions"><button class="btn btn-primary btn-sm" onclick="saveMessRules()">💾 Save</button></div>
+    <div class="topbar"><div><div class="page-title">Mess Rules & Info</div><div class="page-sub">What members see on their Mess Info page</div></div>
+      <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" onclick="saveMessRules()">💾 Save</button></div>
     </div>
-    <div class="content">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
-        <div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-title">🔑 WiFi Password</div>
-            <input type="text" class="input" id="mr-wifi" value="${escapeHtml(rules?.wifi_pass||"")}" placeholder="e.g. MyWiFi@123" style="margin-top:8px;font-family:monospace"/>
+    <div class="content dk">
+      <div class="mr-grid">
+        <div class="card mr-info">
+          <div class="dk-card-title"><span>Quick info</span></div>
+          <div class="field">
+            <label>📶 WiFi password</label>
+            <input type="text" class="input mr-mono" id="mr-wifi" value="${escapeHtml(rules?.wifi_pass||"")}" placeholder="e.g. MyWiFi@123" oninput="markRulesDirty()"/>
           </div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-title">💳 Bank / Payment Info</div>
-            <textarea class="input" id="mr-bank" rows="4" placeholder="e.g. bKash: 01712345678 (Personal)" style="margin-top:8px">${escapeHtml(rules?.bank_info||"")}</textarea>
+          <div class="field">
+            <label>💳 Payment info</label>
+            <textarea class="input" id="mr-bank" rows="3" placeholder="e.g. bKash: 01712345678 (Personal)" oninput="markRulesDirty()">${escapeHtml(rules?.bank_info||"")}</textarea>
           </div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-title">📞 Emergency Contacts</div>
-            <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx, Gas: 016xxx" style="margin-top:8px">${escapeHtml(rules?.contacts||"")}</textarea>
+          <div class="field" style="margin-bottom:0">
+            <label>📞 Emergency contacts</label>
+            <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx&#10;Gas: 016xxx" oninput="markRulesDirty()">${escapeHtml(rules?.contacts||"")}</textarea>
           </div>
         </div>
-        <div>
-          <div class="card">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div class="card-title" style="margin:0">📜 Mess Rules <span style="font-size:10px;color:var(--text3);font-weight:400">(Markdown supported)</span></div>
-              <div style="display:flex;gap:4px">
-                <button class="btn btn-ghost btn-sm" onclick="insertMd('**','**')" title="Bold">B</button>
-                <button class="btn btn-ghost btn-sm" onclick="insertMd('*','*')" title="Italic" style="font-style:italic">I</button>
-                <button class="btn btn-ghost btn-sm" onclick="insertMd('# ','')" title="Heading">H</button>
-                <button class="btn btn-ghost btn-sm" onclick="insertMd('- ','')" title="List">•</button>
-              </div>
+
+        <div class="card mr-rules">
+          <div class="dk-card-title">
+            <span>📜 House rules</span>
+            <div class="an-seg" id="mr-tabs">
+              <button class="an-seg-btn on" data-tab="write" onclick="setRulesTab('write')">Write</button>
+              <button class="an-seg-btn" data-tab="preview" onclick="setRulesTab('preview')">Preview</button>
             </div>
-            <textarea class="input" id="mr-rules" rows="12" placeholder="# Mess Rules&#10;&#10;- No guests after 11pm&#10;- Clean dishes immediately&#10;- **Pay rent by 5th of every month**" style="font-family:monospace;font-size:12px" oninput="updateRulesPreview()">${escapeHtml(rules?.rules_text||"")}</textarea>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-              <div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Preview</div>
-              <div id="mr-preview" style="font-size:13px;line-height:1.7;color:var(--text2);min-height:60px">${renderMarkdown(rules?.rules_text||"") || '<span style="color:var(--text3)">Preview will appear here...</span>'}</div>
+          </div>
+          <div id="mr-pane-write">
+            <div class="mr-tools">
+              <button class="ml-chip" onclick="insertMd('**','**')" title="Bold"><b>B</b></button>
+              <button class="ml-chip" onclick="insertMd('*','*')" title="Italic"><i>I</i></button>
+              <button class="ml-chip" onclick="insertMd('## ','')" title="Heading">Heading</button>
+              <button class="ml-chip" onclick="insertMd('- ','')" title="Bullet">• List</button>
+              <span class="mr-hint">**bold** · *italic* · ## heading · - list</span>
             </div>
+            <textarea class="input mr-mono" id="mr-rules" rows="14" placeholder="## House rules&#10;&#10;- No guests after 11pm&#10;- Clean dishes right away&#10;- **Rent by the 5th of every month**" oninput="updateRulesPreview();markRulesDirty()">${escapeHtml(rules?.rules_text||"")}</textarea>
+          </div>
+          <div id="mr-pane-preview" style="display:none">
+            <div id="mr-preview" class="md-body">${renderMarkdown(rules?.rules_text||"") || '<span style="color:var(--text3)">Nothing written yet.</span>'}</div>
           </div>
         </div>
       </div>
     </div>`;
   } else {
     const hasAny = rules && (rules.wifi_pass || rules.bank_info || rules.rules_text || rules.contacts);
+    const info = (icon, title, body, extra = "") => `<div class="card mi-card"><div class="dk-card-title"><span>${icon} ${title}</span>${extra}</div>${body}</div>`;
     el.innerHTML = `
-    <div class="topbar"><div><div class="page-title">📌 Mess Info</div><div class="page-sub">Rules, WiFi, payment info, contacts</div></div></div>
-    <div class="content">${hasAny ? `
-      ${rules.wifi_pass ? `<div class="card" style="margin-bottom:12px"><div class="card-title">🔑 WiFi Password</div><div style="font-size:18px;font-weight:700;font-family:monospace;background:var(--bg4);padding:10px 14px;border-radius:var(--radius-sm);user-select:all;margin-top:6px">${escapeHtml(rules.wifi_pass)}</div></div>` : ""}
-      ${rules.bank_info ? `<div class="card" style="margin-bottom:12px"><div class="card-title">💳 Payment Info</div><div style="font-size:13px;white-space:pre-wrap;color:var(--text2);margin-top:6px;line-height:1.6">${escapeHtml(rules.bank_info)}</div></div>` : ""}
-      ${rules.rules_text ? `<div class="card" style="margin-bottom:12px"><div class="card-title">📜 Mess Rules</div><div style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.7">${renderMarkdown(rules.rules_text)}</div></div>` : ""}
-      ${rules.contacts ? `<div class="card" style="margin-bottom:12px"><div class="card-title">📞 Emergency Contacts</div><div style="font-size:13px;white-space:pre-wrap;color:var(--text2);margin-top:6px;line-height:1.6">${escapeHtml(rules.contacts)}</div></div>` : ""}
-    ` : '<div class="card"><div class="empty" style="padding:24px">No mess info has been set by the manager yet.</div></div>'}</div>`;
+    <div class="topbar"><div><div class="page-title">Mess Info</div><div class="page-sub">WiFi, how to pay, contacts and the house rules</div></div></div>
+    <div class="content dk">${hasAny ? `
+      <div class="mi-grid">
+        ${rules.wifi_pass ? info("📶", "WiFi", `<div class="mi-wifi" id="mi-wifi">${escapeHtml(rules.wifi_pass)}</div>`, `<button class="btn btn-ghost btn-sm" onclick="copyMessWifi(this)">Copy</button>`) : ""}
+        ${rules.bank_info ? info("💳", "How to pay", `<div class="mi-text">${escapeHtml(rules.bank_info)}</div>`, `<button class="btn btn-ghost btn-sm" onclick="navigate('give-payment')">Give payment</button>`) : ""}
+        ${rules.contacts ? info("📞", "Contacts", `<div class="mi-text">${escapeHtml(rules.contacts)}</div>`) : ""}
+      </div>
+      ${rules.rules_text ? info("📜", "House rules", `<div class="md-body">${renderMarkdown(rules.rules_text)}</div>`) : ""}
+    ` : '<div class="card"><div class="empty" style="padding:28px"><div>📌</div><div>The manager hasn\'t added any mess info yet.</div></div></div>'}</div>`;
   }
+}
+
+function setRulesTab(tab) {
+  ["write", "preview"].forEach(t => { const p = document.getElementById("mr-pane-" + t); if (p) p.style.display = t === tab ? "" : "none"; });
+  document.querySelectorAll("#mr-tabs .an-seg-btn").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  if (tab === "preview") updateRulesPreview();
+}
+function markRulesDirty() {
+  const b = document.getElementById("mr-save");
+  if (b && !b.classList.contains("mr-dirty")) { b.classList.add("mr-dirty"); b.innerHTML = "💾 Save changes"; }
+}
+async function copyMessWifi(btn) {
+  const t = document.getElementById("mi-wifi")?.textContent || "";
+  try { await navigator.clipboard.writeText(t); if (btn) { btn.textContent = "✓ Copied"; setTimeout(() => btn.textContent = "Copy", 1500); } }
+  catch (_) { toast("Copy failed — press and hold to copy", "error"); }
 }
 
 function updateRulesPreview() {
   const text = document.getElementById("mr-rules")?.value || "";
   const preview = document.getElementById("mr-preview");
-  if (preview) preview.innerHTML = renderMarkdown(text) || '<span style="color:var(--text3)">Preview will appear here...</span>';
+  if (preview) preview.innerHTML = renderMarkdown(text) || '<span style="color:var(--text3)">Nothing written yet.</span>';
 }
 
 function insertMd(before, after) {
@@ -581,6 +609,8 @@ async function saveMessRules() {
     });
     await logAudit("update", "mess_rules", "", "Updated mess rules & info");
     toast("Mess info saved ✓", "success");
+    const b = document.getElementById("mr-save");
+    if (b) { b.classList.remove("mr-dirty"); b.innerHTML = "💾 Save"; }
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
