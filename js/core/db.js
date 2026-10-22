@@ -97,29 +97,39 @@ async function dbGetMembers() {
   return sanitize(data || []);
 }
 
+/* Columns that older databases may not have yet (added by later migrations).
+   If the server says one is missing, the save is retried without it, so editing
+   members never breaks on a database that hasn't been migrated. */
+const OPTIONAL_MEMBER_COLS = { meal_default_day: "member-meal-defaults.sql", meal_default_night: "member-meal-defaults.sql", photo: "member-photos.sql" };
+
 async function dbSaveMember(row) {
   const payload = {
     name: row.name, username: row.username,
     role: row.role || "member", room: row.room || "",
     phone: row.phone || "", joined: row.joined || null, mess_id: messId(),
-    meal_default_day:   row.meal_default_day   ?? 1,
-    meal_default_night: row.meal_default_night ?? 1,
   };
+  // Only send what the form actually set — never reset an untouched value to a default
+  if (row.meal_default_day   != null && !isNaN(row.meal_default_day))   payload.meal_default_day   = row.meal_default_day;
+  if (row.meal_default_night != null && !isNaN(row.meal_default_night)) payload.meal_default_night = row.meal_default_night;
   // Only include password in payload if explicitly provided (avoids overwriting with undefined)
   if (row.password) payload.password = row.password;
   // Photo only when it changed (undefined = keep); null removes it
   if (row.photo !== undefined) payload.photo = row.photo;
-  const photoErr = (e) => e && /photo/i.test(e.message || "")
-    ? new Error("Profile photos need the database update — run supabase/member-photos.sql") : e;
+  if (!row.id && !payload.password) throw new Error("Password is required for new members");
 
-  if (row.id) {
-    const { error } = await getClient().from("members").update(payload).eq("id", row.id);
-    if (error) throw photoErr(error);
-  } else {
-    // New member must have a password
-    if (!payload.password) throw new Error("Password is required for new members");
-    const { error } = await getClient().from("members").insert(payload);
-    if (error) throw photoErr(error);
+  const write = (p) => row.id
+    ? getClient().from("members").update(p).eq("id", row.id)
+    : getClient().from("members").insert(p);
+
+  // Retry without any optional column the database doesn't have yet (at most once per column)
+  for (let i = 0; i <= Object.keys(OPTIONAL_MEMBER_COLS).length; i++) {
+    const { error } = await write(payload);
+    if (!error) return;
+    const col = Object.keys(OPTIONAL_MEMBER_COLS).find(c => c in payload && (error.message || "").includes(c));
+    if (!col) throw error;
+    if (col === "photo") throw new Error("Profile photos need a database update — run supabase/member-photos.sql");
+    console.warn(`[members] "${col}" column missing — run supabase/${OPTIONAL_MEMBER_COLS[col]}; saved without it`);
+    delete payload[col];
   }
 }
 
