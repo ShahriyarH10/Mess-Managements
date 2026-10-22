@@ -105,12 +105,12 @@ async function loadAbsenceCalendar() {
           <span style="color:var(--text2)">All meals off</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
-          <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block"></span>
-          <span style="color:var(--text2)">Day off only</span>
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--blue);display:inline-block"></span>
+          <span style="color:var(--text2)">☀ Day off only</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
-          <span style="color:var(--text2)">Night off only</span>
+          <span style="color:var(--text2)">🌙 Night off only</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--bg3);border:1.5px dashed var(--text3);display:inline-block"></span>
@@ -209,8 +209,10 @@ async function loadAbsenceCalendar() {
         // Group rows by type with tiny section labels
         const sections = [];
         if (allOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${allOff.map(e   => avatarDot(e, "var(--red)",     "#fef2f2")).join("")}</div>`);
-        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${dayOff.map(e   => avatarDot(e, "#f59e0b", "#fffbeb")).join("")}</div>`);
-        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${nightOff.map(e => avatarDot(e, "var(--accent)", "#f0f9ff")).join("")}</div>`);
+        // Day off = blue ☀, night off = gold 🌙 — same colours as the D/N chips everywhere else
+        const tag = (icon) => `<span style="font-size:9px;line-height:24px;width:12px;text-align:center;flex-shrink:0" aria-hidden="true">${icon}</span>`;
+        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Day meal off">${tag("☀")}${dayOff.map(e   => avatarDot(e, "var(--blue)", "")).join("")}</div>`);
+        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Night meal off">${tag("🌙")}${nightOff.map(e => avatarDot(e, "var(--accent)", "")).join("")}</div>`);
         content = `<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">${sections.join("")}</div>`;
       } else if (isPast && hasData) {
         // ✅ Only show "All ate" when we KNOW there was real meal data for this day
