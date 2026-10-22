@@ -107,15 +107,19 @@ async function dbSaveMember(row) {
   };
   // Only include password in payload if explicitly provided (avoids overwriting with undefined)
   if (row.password) payload.password = row.password;
+  // Photo only when it changed (undefined = keep); null removes it
+  if (row.photo !== undefined) payload.photo = row.photo;
+  const photoErr = (e) => e && /photo/i.test(e.message || "")
+    ? new Error("Profile photos need the database update — run supabase/member-photos.sql") : e;
 
   if (row.id) {
     const { error } = await getClient().from("members").update(payload).eq("id", row.id);
-    if (error) throw error;
+    if (error) throw photoErr(error);
   } else {
     // New member must have a password
     if (!payload.password) throw new Error("Password is required for new members");
     const { error } = await getClient().from("members").insert(payload);
-    if (error) throw error;
+    if (error) throw photoErr(error);
   }
 }
 

@@ -146,7 +146,7 @@ async function loadAuditEntries(reset = false) {
         const col = avatarCol(Math.max(0, mIdx));
         return `<div class="au-item au-${e.action || "update"}">
           <span class="au-dot"></span>
-          <span class="dk-av" style="background:${col.bg};color:${col.fg}">${initials(e.actor_name || "?")}</span>
+          <span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFaceByName(e.actor_name)}</span>
           <div class="au-body">
             <div class="au-line"><b>${escapeHtml(e.actor_name)}</b> <span class="au-act">${actionWord[e.action] || e.action}</span> · ${escapeHtml(e.summary)}</div>
             <div class="au-meta"><span class="au-cat-tag au-c-${escapeHtml(e.entity)}">${escapeHtml(catLabel[e.entity] || e.entity)}</span>${e.entity_id ? `<span>${escapeHtml(e.entity_id)}</span>` : ""}</div>

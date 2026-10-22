@@ -221,7 +221,7 @@ async function renderDashboard(el) {
           ${members.map((m, i) => {
             const pt = mealPartsFromObj(todayRec.meals || {}, m.name), col = avatarCol(i), off = pt.day + pt.night === 0;
             return `<div class="dk-eater${off ? " dk-off" : ""}" title="${escapeHtml(m.name)}: day ${pt.day}, night ${pt.night}">
-              <span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>
+              <span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
               <span class="dk-eater-name">${escapeHtml(m.name)}</span>
               <span class="dk-dn">${off ? `<i class="dk-absent">Off</i>` : `<i class="${pt.day ? "on-d" : ""}">D${pt.day > 1 ? pt.day : ""}</i><i class="${pt.night ? "on-n" : ""}">N${pt.night > 1 ? pt.night : ""}</i>`}</span>
             </div>`;
@@ -278,7 +278,7 @@ async function renderDashboard(el) {
             const v = memMeals[m.name] || 0, col = avatarCol(i), bz = memBazar[m.name] || 0;
             const re = rentBy[m.name], up = utilBy[m.name];
             return `<tr>
-              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>${escapeHtml(m.name)}</div></td>
+              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}</div></td>
               <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeals) * 100)}%;background:${col.fg}"></i></div><b>${v}</b></div></td>
               <td style="text-align:right;color:${bz > 0 ? "var(--green)" : "var(--text3)"};font-weight:600">${bz > 0 ? fmtTk(bz) : "—"}</td>
               <td>${re ? statusBadge(re.status, `${fmtTk(Number(re.paid || 0))}/${fmtTk(Number(re.rent || 0))}`) : `<span style="color:var(--text3)">—</span>`}</td>

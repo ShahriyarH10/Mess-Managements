@@ -33,6 +33,7 @@ create table if not exists members (
   created_at timestamptz default now(),
   meal_default_day float  default 1,
   meal_default_night float default 1,
+  photo      text,                       -- 160×160 JPEG data: URL (see supabase/member-photos.sql)
   unique(mess_id, username)
 );
 

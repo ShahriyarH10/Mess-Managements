@@ -57,7 +57,7 @@ function renderRolesList() {
     const isSubMgr = m.role === "sub_manager";
     const isMgr = m.role === "manager";
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:11px;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
+      <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:11px;flex-shrink:0">${avFace(m.id, m.name)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600">${escapeHtml(m.name)}</div>
         <div style="font-size:11px;color:var(--text3)">@${escapeHtml(m.username)} · Room ${escapeHtml(m.room || "—")}</div>

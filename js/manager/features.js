@@ -318,7 +318,7 @@ async function loadAbsenceCalendar() {
               const dayOffDays   = mEntries.filter(a => !a.day_meal &&  a.night_meal).length;
               const nightOffDays = mEntries.filter(a =>  a.day_meal && !a.night_meal).length;
               return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;display:flex;align-items:flex-start;gap:8px">
-                <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
+                <div style="width:28px;height:28px;border-radius:50%;background:${col.bg};color:${col.fg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${avFace(m.id, m.name)}</div>
                 <div style="min-width:0">
                   <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(m.name)}</div>
                   <div style="font-size:10px;color:var(--text3);margin-top:3px;display:flex;flex-direction:column;gap:1px">
@@ -777,7 +777,7 @@ function drawAnalytics() {
         ${memRows.map(r => {
           const col = avatarCol(r.i);
           return `<div class="an-mem-row">
-            <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(r.m.id, r.m.name)}</span><span class="an-mem-name">${escapeHtml(r.m.name)}</span></div>
+            <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(r.m.id, r.m.name)}</span><span class="an-mem-name">${escapeHtml(r.m.name)}</span></div>
             <div class="an-mem-bars">
               <div class="dk-bar"><i style="width:${Math.round((r.bz / memMax) * 100)}%;background:var(--green)"></i></div>
               <div class="dk-bar"><i style="width:${Math.round((r.cost / memMax) * 100)}%;background:var(--accent)"></i></div>

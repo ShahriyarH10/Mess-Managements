@@ -573,6 +573,52 @@ function buildMonthOptions(selectedMonth, selectedYear, yearsBack = 5, yearsForw
   return { monthOptions, yearOptions };
 }
 
+/* ═══════════════════════════════════════════
+   MEMBER PHOTOS — stored as a small JPEG data: URL in members.photo
+═══════════════════════════════════════════ */
+const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const isPhoto = p => typeof p === "string" && p.length <= 60000 && PHOTO_RE.test(p);
+
+/* Avatar contents for a member: their photo, else collision-aware initials. */
+function avFace(id, name) {
+  const m = (typeof members !== "undefined" ? members : []).find(x => x.id === id);
+  return m && isPhoto(m.photo) ? `<img class="av-img" src="${m.photo}" alt="" loading="lazy" decoding="async"/>` : memberInitials(id, name);
+}
+/* Same, looked up by display name (audit log actors, etc.). */
+function avFaceByName(name) {
+  const m = (typeof members !== "undefined" ? members : []).find(x => x.name === name);
+  return m ? avFace(m.id, m.name) : initials(name || "?");
+}
+
+/* Read an image file → centre-cropped 160×160 JPEG data: URL (≤ ~25 KB).
+   FileReader (not blob: URLs) because the CSP only allows data: images. */
+function compressMemberPhoto(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error("Choose an image file (JPG, PNG or WebP)"));
+    if (file.size > 15 * 1024 * 1024) return reject(new Error("That image is too large (max 15 MB)"));
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error("Couldn't read that file"));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("This image format isn't supported here — try a JPG or PNG"));
+      img.onload = () => {
+        const S = 160, side = Math.min(img.naturalWidth, img.naturalHeight);
+        const c = document.createElement("canvas");
+        c.width = c.height = S;
+        const ctx = c.getContext("2d");
+        ctx.imageSmoothingQuality = "high";
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, S, S);           // transparent PNGs → white, not black
+        ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+        let q = 0.86, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 25000 && q > 0.4) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+        isPhoto(out) ? resolve(out) : reject(new Error("Couldn't process that image"));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
 /* Dashboard sparkline (manager + member): draws itself in via stroke-dashoffset
    (css/09-fx.css) over a soft area. Styles: .dk-spark* in css/05-components.css. */
 function buildSparkline(values, color, opts) {
@@ -761,7 +807,7 @@ async function openManagerMealMonth(key) {
         const nPct = p.total > 0 ? 100 - dPct : 0;
         return `<div class="card mc-compact" style="padding:14px;${dim ? "opacity:.55" : ""};border-color:${p.total>0?"var(--accent)":"var(--border)"}">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-            <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${memberInitials(p.id, p.name)}</div>
+            <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:12px;flex-shrink:0">${avFace(p.id, p.name)}</div>
             <div style="min-width:0;flex:1">
               <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.name)}</div>
               <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${monthLabel}</div>

@@ -281,7 +281,7 @@ async function renderMyDashboard(el) {
           ${members.map((m, i) => {
             const pt = mealPartsFromObj(todayRec.meals || {}, m.name), col = avatarCol(i), off = pt.day + pt.night === 0;
             return `<div class="dk-eater${off ? " dk-off" : ""}${m.name === member.name ? " dk-me" : ""}">
-              <span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>
+              <span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
               <span class="dk-eater-name">${escapeHtml(m.name)}</span>
               <span class="dk-dn">${off ? `<i class="dk-absent">Off</i>` : `<i class="${pt.day ? "on-d" : ""}">D</i><i class="${pt.night ? "on-n" : ""}">N</i>`}</span>
             </div>`;
@@ -316,7 +316,7 @@ async function renderMyDashboard(el) {
             const v = round2(memMeals[m.name] || 0), bz = round2(memBazar[m.name] || 0), col = avatarCol(i);
             const bal = round2(bz - v * curMonthMealRate), isMe = m.name === member.name;
             return `<tr class="${isMe ? "dk-me-row" : ""}">
-              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>${escapeHtml(m.name)}${isMe ? ` <span class="badge badge-amber">You</span>` : ""}</div></td>
+              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}${isMe ? ` <span class="badge badge-amber">You</span>` : ""}</div></td>
               <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeal) * 100)}%;background:${isMe ? "var(--accent)" : col.fg}"></i></div><b>${v}</b></div></td>
               <td style="text-align:right;color:${bz > 0 ? "var(--green)" : "var(--text3)"};font-weight:600">${bz > 0 ? fmtTk(bz) : "—"}</td>
               <td style="text-align:right">${Math.abs(bal) < 0.01 ? `<span class="badge">Settled</span>`
@@ -834,7 +834,7 @@ async function loadMyProfile(member) {
   ${multiPeriodBanner}
   <div class="card pf-head ${pays ? "mb-pay" : gets ? "mb-get" : ""}">
     <div class="pf-id">
-      <div class="avatar pf-av" style="background:${col.bg};color:${col.fg}">${memberInitials(member.id, member.name)}</div>
+      <div class="avatar pf-av" style="background:${col.bg};color:${col.fg}">${avFace(member.id, member.name)}</div>
       <div class="pf-who">
         <div class="pf-name">${member.name}</div>
         <div class="pf-meta">Room ${member.room || "—"} · @${member.username || "—"} · joined ${member.joined || "—"}</div>

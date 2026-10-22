@@ -111,7 +111,7 @@ function buildMealGrid() {
     const dA = abDay[m.id], nA = abNight[m.id], col = avatarCol(i);
     return `
     <div class="ent-cell${dA && nA ? " ent-off" : ""}">
-      <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>
+      <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
         <span class="ent-name">${escapeHtml(m.name)}</span>${dA || nA ? `<span class="badge badge-red">${dA && nA ? "absent" : dA ? "day off" : "night off"}</span>` : ""}</div>
       ${step("md-"+m.id, mealDayVals[m.id]??0, dA, "☀ Day")}
       ${step("mn-"+m.id, mealNightVals[m.id]??0, nA, "🌙 Night")}
@@ -241,7 +241,7 @@ function renderBazar(el) {
 function buildBazarGrid() {
   const g=document.getElementById("bazar-grid"); if(!g) return;
   g.innerHTML=members.map((m,i)=>{ const col=avatarCol(i); return `<div class="ent-cell">
-    <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span><span class="ent-name">${escapeHtml(m.name)}</span></div>
+    <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span><span class="ent-name">${escapeHtml(m.name)}</span></div>
     <div class="ml-amt ent-amt"><span>৳</span><input type="number" class="input" id="bz-${m.id}" min="0" placeholder="0" oninput="updBazarSum()"/></div>
   </div>`; }).join("");
 }
@@ -273,7 +273,7 @@ function loadBazarRecent(all) {
     const bt=Object.values(r.bazar||{}).reduce((s,v)=>s+Number(v||0),0);
     return `<div class="ent-bz-row">
       <span class="ent-dt">${entNiceDate(r.date)}</span>
-      <span class="ent-buyers">${buyers.length ? buyers.map(x=>{ const col=avatarCol(x.i); return `<span class="ent-buyer"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(x.m.id, x.m.name)}</span>${escapeHtml(x.m.name.split(" ")[0])} <b>${fmtTk(x.v)}</b></span>`; }).join("") : `<span class="ent-zero">nobody</span>`}</span>
+      <span class="ent-buyers">${buyers.length ? buyers.map(x=>{ const col=avatarCol(x.i); return `<span class="ent-buyer"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(x.m.id, x.m.name)}</span>${escapeHtml(x.m.name.split(" ")[0])} <b>${fmtTk(x.v)}</b></span>`; }).join("") : `<span class="ent-zero">nobody</span>`}</span>
       <b class="ent-bz-total">${fmtTk(round2(bt))}</b>
       <button class="btn btn-ghost btn-sm btn-icon" onclick="delBazar('${r.id}')" title="Delete this day">✕</button>
     </div>`;

@@ -196,7 +196,7 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
         const col     = avatarCol(i);
         return `
         <div class="ut-row" id="utr-${m.id}" data-status="${status}">
-          <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>${m.name}</div>
+          <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${m.name}</div>
           <div class="ut-due"><b>${fmtTk(effectiveDue)}</b>${credit > 0 ? `<div class="dk-mini" style="color:var(--blue)">↩ ${fmtTk(credit)} carried</div>` : ""}</div>
           <div class="ml-amt ut-paid"><span>৳</span><input type="number" class="input input-sm" id="up-${m.id}" value="${paid}" min="0" step="1"
             data-due="${effectiveDue}" oninput="onUtilPaidInput('${m.id}', ${effectiveDue})"/></div>

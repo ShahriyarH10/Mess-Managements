@@ -7,19 +7,10 @@ function renderMembers(el) {
   <div class="topbar">
     <div><div class="page-title">Members</div><div class="page-sub">Manage accounts, roles, and transfers</div></div>
     <div class="topbar-actions">
-      <div style="display:flex;gap:0;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
-        <button id="mem-tab-members" onclick="switchMembersTab('members')"
-          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:var(--accent);color:#0f0f0f">
-          👥 Members
-        </button>
-        <button id="mem-tab-roles" onclick="switchMembersTab('roles')"
-          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:transparent;color:var(--text2)">
-          ⚡ Roles
-        </button>
-        <button id="mem-tab-transfer" onclick="switchMembersTab('transfer')"
-          style="padding:6px 16px;font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:transparent;color:var(--text2)">
-          👑 Transfer
-        </button>
+      <div class="an-seg">
+        <button id="mem-tab-members" class="an-seg-btn on" onclick="switchMembersTab('members')">👥 Members</button>
+        <button id="mem-tab-roles" class="an-seg-btn" onclick="switchMembersTab('roles')">⚡ Roles</button>
+        <button id="mem-tab-transfer" class="an-seg-btn" onclick="switchMembersTab('transfer')">👑 Transfer</button>
       </div>
       <button class="btn btn-primary btn-sm" id="mem-add-btn" onclick="openAddMemberModal()">+ Add member</button>
     </div>
@@ -78,10 +69,7 @@ function switchMembersTab(tab) {
   ['members','roles','transfer'].forEach(t => {
     document.getElementById('mem-pane-' + t).style.display = t === tab ? '' : 'none';
     const btn = document.getElementById('mem-tab-' + t);
-    if (btn) {
-      btn.style.background = t === tab ? 'var(--accent)' : 'transparent';
-      btn.style.color = t === tab ? '#0f0f0f' : 'var(--text2)';
-    }
+    btn?.classList.toggle('on', t === tab);
   });
   const addBtn = document.getElementById('mem-add-btn');
   if (addBtn) addBtn.style.display = tab === 'members' ? '' : 'none';
@@ -94,7 +82,7 @@ function renderMembersTable() {
   <tbody>${members.map((m, i) => {
     const col = avatarCol(i); const isMgr = m.role === "manager";
     return `<tr>
-      <td><div class="avatar" style="background:${col.bg};color:${col.fg};width:26px;height:26px;font-size:10px">${memberInitials(m.id, m.name)}</div></td>
+      <td><button class="avatar mm-tbl-av" style="background:${col.bg};color:${col.fg}" onclick="openEditMemberModal('${m.id}')" title="${isPhoto(m.photo) ? "Change photo" : "Add a photo"}">${avFace(m.id, m.name)}${isPhoto(m.photo) ? "" : `<span class="mm-cam">📷</span>`}</button></td>
       <td><b>${m.name}</b></td>
       <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
       <td>${isMgr ? `<span class="badge badge-amber">👑 Manager</span>` : m.role === 'sub_manager' ? `<span class="badge badge-blue">⚡ Sub</span>` : `<span class="badge">Member</span>`}</td>
@@ -119,7 +107,7 @@ function renderRolesList() {
     const isSubMgr = m.role === "sub_manager";
     const isMgr = m.role === "manager";
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:11px;flex-shrink:0">${memberInitials(m.id, m.name)}</div>
+      <div class="avatar" style="background:${col.bg};color:${col.fg};width:34px;height:34px;font-size:11px;flex-shrink:0">${avFace(m.id, m.name)}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600">${escapeHtml(m.name)}</div>
         <div style="font-size:11px;color:var(--text3)">@${escapeHtml(m.username)}</div>
@@ -166,7 +154,7 @@ function _renderTransferList() {
     const col = avatarCol(members.indexOf(m));
     return `<label style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s" class="transfer-option">
       <input type="radio" name="transfer-target" value="${m.id}" style="accent-color:var(--accent)"/>
-      <div class="avatar" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</div>
+      <div class="avatar" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</div>
       <div><div style="font-weight:600">${m.name}</div><div style="font-size:12px;color:var(--text3)">@${m.username}</div></div>
     </label>`;
   }).join("");
@@ -203,7 +191,21 @@ async function doTransferRole() {
 
 /* ── Member form helpers ── */
 function memberModalHTML(m) {
+  window._mmPhoto = { value: m && isPhoto(m.photo) ? m.photo : null, changed: false };
+  const idx = m ? members.findIndex(x => x.id === m.id) : members.length;
+  const col = avatarCol(Math.max(0, idx));
   return `
+  <div class="mm-photo">
+    <div class="mm-photo-prev" id="mm-photo-prev" style="background:${col.bg};color:${col.fg}">${m ? avFace(m.id, m.name) : "📷"}</div>
+    <div class="mm-photo-ctl">
+      <div class="mm-photo-title">Profile photo</div>
+      <div class="mm-photo-btns">
+        <label class="btn btn-ghost btn-sm mm-upload">📷 ${m && isPhoto(m.photo) ? "Change" : "Upload"} photo<input type="file" accept="image/*" id="mm-photo-file" onchange="pickMemberPhoto(this)"/></label>
+        <button class="btn btn-ghost btn-sm" id="mm-photo-rm" onclick="removeMemberPhoto()" ${m && isPhoto(m.photo) ? "" : "hidden"}>Remove</button>
+      </div>
+      <div class="mm-photo-hint">Cropped to a square and resized — any JPG or PNG works.</div>
+    </div>
+  </div>
   <div class="field"><label>Full name *</label><input type="text" class="input" id="mm-name" value="${escapeHtml(m?.name||"")}" placeholder="e.g. Rakib Hasan"/></div>
   <div class="grid-2">
     <div class="field"><label>Username *</label><input type="text" class="input" id="mm-user" value="${escapeHtml(m?.username||"")}" placeholder="e.g. rakib"/></div>
@@ -236,7 +238,34 @@ function getMemberFormData(existingRole) {
     phone:    cleanText(document.getElementById("mm-phone")?.value),
     joined:   document.getElementById("mm-joined")?.value || null,
     meal_default_day: parseFloat(document.getElementById("mm-meal-day")?.value ?? 1),
+    // undefined = unchanged (not sent); null = removed
+    photo:    window._mmPhoto?.changed ? window._mmPhoto.value : undefined,
   };
+}
+
+/* ── Profile photo picker (Add / Edit member) ── */
+async function pickMemberPhoto(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const prev = document.getElementById("mm-photo-prev");
+  if (prev) prev.classList.add("mm-busy");
+  try {
+    const data = await compressMemberPhoto(file);
+    window._mmPhoto = { value: data, changed: true };
+    if (prev) { prev.innerHTML = `<img class="av-img" src="${data}" alt=""/>`; prev.classList.remove("mm-pop"); void prev.offsetWidth; prev.classList.add("mm-pop"); }
+    document.getElementById("mm-photo-rm")?.removeAttribute("hidden");
+  } catch (e) {
+    toast(e.message, "error");
+  } finally {
+    if (prev) prev.classList.remove("mm-busy");
+    input.value = "";                 // picking the same file again still fires change
+  }
+}
+function removeMemberPhoto() {
+  window._mmPhoto = { value: null, changed: true };
+  const prev = document.getElementById("mm-photo-prev");
+  if (prev) prev.textContent = (document.getElementById("mm-name")?.value || "?").split(" ").map(w => w[0] || "").join("").slice(0, 2).toUpperCase() || "📷";
+  document.getElementById("mm-photo-rm")?.setAttribute("hidden", "");
 }
 async function addMember() {
   if (!requireManager("addMember")) return;
@@ -248,7 +277,7 @@ async function addMember() {
   try {
     d.password = await hashPassword(d.password);
     await dbSaveMember(d); await logAudit("create", "member", d.name, `Member "${d.name}" added`);
-    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast(d.name + " added", "success"); renderMembersTable();
+    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast(d.name + " added", "success"); renderMembersTable(); renderRolesList();
   } catch(e) { toast("Error: " + e.message, "error"); }
 }
 async function updateMember(id) {
@@ -259,7 +288,7 @@ async function updateMember(id) {
   try {
     if (d.password) { d.password = await hashPassword(d.password); } else { delete d.password; }
     await dbSaveMember(d); await logAudit("update", "member", d.name, `Member "${d.name}" updated`);
-    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast("Updated", "success"); renderMembersTable();
+    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast("Updated", "success"); renderMembersTable(); renderRolesList(); updateSidebarUser();
   } catch(e) { toast("Error: " + e.message, "error"); }
 }
 

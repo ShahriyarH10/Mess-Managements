@@ -289,7 +289,7 @@ function buildNav() {
 
     <div class="mob-drawer-user">
       <div class="avatar" style="background:${currentUser._col?.bg || "#2a2218"};color:${currentUser._col?.fg || "#d4a853"};width:36px;height:36px;font-size:13px">
-        ${initials(currentUser.name)}
+        ${avFace(currentUser.memberId, currentUser.name)}
       </div>
 
       <div>
@@ -410,7 +410,7 @@ function updateSidebarUser() {
 
   document.getElementById("sidebar-user").innerHTML = `
     <div class="su-avatar" style="background:${col.bg};color:${col.fg}">
-      ${initials(currentUser.name)}
+      ${avFace(currentUser.memberId, currentUser.name)}
     </div>
 
     <div class="su-info">
@@ -423,7 +423,7 @@ function updateSidebarUser() {
   if (mob) {
     mob.style.background = col.bg;
     mob.style.color = col.fg;
-    mob.textContent = initials(currentUser.name);
+    mob.innerHTML = avFace(currentUser.memberId, currentUser.name);
   }
 }
 

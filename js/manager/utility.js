@@ -45,7 +45,7 @@ async function loadRentMonth() {
     const notes=e.notes||"";
     const col=avatarCol(i);
     return `<div class="ut-row rent-row" id="rr-${m.id}" data-status="${status}">
-      <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${memberInitials(m.id, m.name)}</span>${escapeHtml(m.name)}${m.room ? `<span class="dk-mini" style="margin-left:4px">· ${escapeHtml(m.room)}</span>` : ""}</div>
+      <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}${m.room ? `<span class="dk-mini" style="margin-left:4px">· ${escapeHtml(m.room)}</span>` : ""}</div>
       <div class="ml-amt ut-paid rent-due" data-cap="rent"><span>৳</span><input type="number" class="input input-sm" id="rd-${m.id}" value="${due}" oninput="updRentDue('${m.id}')" title="Rent for this month"/></div>
       <div class="ml-amt ut-paid" data-cap="paid"><span>৳</span><input type="number" class="input input-sm" id="rp-${m.id}" value="${paid}" data-due="${due}" oninput="updRentAutoStatus('${m.id}')" title="Amount paid"/></div>
       <select class="input input-sm ut-status" id="rs-${m.id}" onchange="rentStatusChanged('${m.id}')">
