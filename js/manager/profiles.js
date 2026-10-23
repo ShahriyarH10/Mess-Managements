@@ -2,12 +2,13 @@
    MANAGER — Profiles: member stats, profile cards, profile detail modal
    ═══════════════════════════════════════════════ */
 let selectedProfileId = null;
+let _profSort = "due";
 async function renderProfiles(el) {
   el.innerHTML=`
   <div class="topbar">
-    <div><div class="page-title">Member Profiles</div><div class="page-sub">Individual summaries</div></div>
+    <div><div class="page-title">Member Profiles</div><div class="page-sub">Who owes what — tap a member for the full breakdown</div></div>
     <div class="topbar-actions">
-      <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:180px">
+      <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:160px">
         <option value="1" selected>This month</option>
         <option value="last">Last month</option>
         <option value="3">Last 3 months</option>
@@ -16,8 +17,23 @@ async function renderProfiles(el) {
       </select>
     </div>
   </div>
-  <div class="content"><div class="grid-auto" id="profile-card-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px"></div></div>`;
+  <div class="content dk">
+    <div id="prof-summary"></div>
+    <div class="pc-bar">
+      <div class="an-seg" id="prof-sort">
+        <button class="an-seg-btn on" data-v="due" onclick="setProfileSort('due')">Owes most</button>
+        <button class="an-seg-btn" data-v="name" onclick="setProfileSort('name')">A–Z</button>
+        <button class="an-seg-btn" data-v="meals" onclick="setProfileSort('meals')">Most meals</button>
+      </div>
+    </div>
+    <div class="pc-grid" id="profile-card-grid"><div class="loading"><div class="spinner"></div></div></div>
+  </div>`;
   await loadProfiles();
+}
+function setProfileSort(v) {
+  _profSort = v;
+  document.querySelectorAll("#prof-sort .an-seg-btn").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  if (window._profArgs) buildProfileCards(...window._profArgs);
 }
 
 async function loadProfiles() {
@@ -38,7 +54,8 @@ async function loadProfiles() {
     getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
     dbGetMonth("rent", key),
   ]);
-  buildProfileCards(allMeals,allBazar,allRent,allUtil||[],curUtilRes.data,prevUtilRes.data);
+  window._profArgs = [allMeals,allBazar,allRent,allUtil||[],curUtilRes.data,prevUtilRes.data];
+  buildProfileCards(...window._profArgs);
   if (selectedProfileId) showProfileDetail(selectedProfileId,allMeals,allBazar,allRent,allUtil||[],curRentRec,curUtilRes.data,prevUtilRes.data,curM,curY);
 }
 async function refreshProfiles() { await loadProfiles(); }
@@ -457,67 +474,63 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
   const currentRentRec  = allR.find(r => r.month_key === settlementKey) || null;
   const isSinglePeriod  = (period === "1" || period === "last");
 
-  grid.innerHTML=members.map((m,i)=>{
-    const s   = getMemberStats(m, meals, bazar, rent, utility, filteredUtility);
-    const col = avatarCol(i);
-
-    // Canonical per-member settlement for the resolved month — keeps
-    // card numbers in sync with Monthly Log + What-I-Owe detail panel.
-    const p = calcMemberSettlement(m, allM, allB, currentRentRec, curUtilRec, prevUtilRec, settlementKey);
-
-    // Outstanding balance from ALL past unpaid settlements — walks the
-    // full chain (calcPrevDueForMember), not just the previous month.
+  const rows = members.map((m, i) => {
+    const st  = getMemberStats(m, meals, bazar, rent, utility, filteredUtility);
+    const p   = calcMemberSettlement(m, allM, allB, currentRentRec, curUtilRec, prevUtilRec, settlementKey);
     p.prevDue = calcPrevDueForMember(m, allM, allB, allR, allU, settlementKey);
     p.netWithPrevDue = round2(p.netPayable + p.prevDue);
+    return { m, i, s: st, p };
+  });
+  const sorters = {
+    due:   (a, b) => b.p.netWithPrevDue - a.p.netWithPrevDue,
+    name:  (a, b) => String(a.m.name).localeCompare(String(b.m.name)),
+    meals: (a, b) => b.s.totalMeals - a.s.totalMeals,
+  };
+  rows.sort(sorters[_profSort] || sorters.due);
 
-    // Status badges always reflect the *current* settlement record
-    // (so the manager always sees the actionable state, regardless of period).
-    const rentStatus = p.rentStatus    || "unpaid";
-    const utilStatus = p.utilityStatus || "unpaid";
-    const rc = rentStatus==="paid"?"badge-green":rentStatus==="partial"?"badge-amber":"badge-red";
-    const uc = utilStatus==="paid"?"badge-green":utilStatus==="partial"?"badge-amber":"badge-red";
+  // Summary tiles
+  const owing = rows.filter(r => r.p.netWithPrevDue > 0.01);
+  const owed  = rows.filter(r => r.p.netWithPrevDue < -0.01);
+  const outstanding = round2(owing.reduce((t, r) => t + r.p.netWithPrevDue, 0));
+  const carried = round2(rows.reduce((t, r) => t + (r.p.prevDue || 0), 0));
+  const sum = document.getElementById("prof-summary");
+  const tile = (icon, label, value, sub, color) => `<div class="pf-tile"><div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+    <div class="stat-value pf-val" ${color ? `style="color:${color}"` : ""}>${value}</div><div class="dk-sub">${sub}</div></div>`;
+  if (sum) sum.innerHTML = `<div class="pf-tiles">
+    ${tile("📌", "Outstanding", fmtTk(outstanding), `${owing.length} of ${rows.length} members owe · ${monthLabelFromKey(settlementKey)}`, outstanding > 0 ? "var(--red)" : "var(--green)")}
+    ${tile("⏪", "From earlier months", fmtTk(carried), carried > 0 ? "unpaid dues carried forward" : "nothing carried forward", carried > 0 ? "var(--red)" : null)}
+    ${tile("✅", "Settled", rows.length - owing.length - owed.length, "members with nothing to pay", "var(--green)")}
+    ${tile("💚", "Mess owes", owed.length, owed.length ? fmtTk(round2(Math.abs(owed.reduce((t, r) => t + r.p.netWithPrevDue, 0)))) + " to return" : "nobody to pay back", owed.length ? "var(--green)" : null)}
+  </div>`;
+  const maxMeals = Math.max(1, ...rows.map(r => r.s.totalMeals));
+  const periodLabel = isSinglePeriod ? monthLabelFromKey(settlementKey) : (period === "all" ? "All time" : "Last " + period + " months");
 
-    const netCls   = p.netWithPrevDue > 0 ? "net-neg" : p.netWithPrevDue < 0 ? "net-pos" : "";
-    const netLabel = p.netWithPrevDue > 0
-      ? "Pay "  + fmtTk(p.netWithPrevDue)
-      : p.netWithPrevDue < 0
-        ? "Get " + fmtTk(Math.abs(p.netWithPrevDue))
-        : "✓ Settled";
-    const periodLabel = isSinglePeriod
-      ? monthLabelFromKey(settlementKey)
-      : (period === "all" ? "All time" : "Last " + period + " months");
-
-    return `<div class="profile-card" onclick="selectProfile('${m.id}')" style="padding:16px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div class="avatar" style="background:${col.bg};color:${col.fg};width:40px;height:40px;font-size:14px;flex-shrink:0">${avFace(m.id, m.name)}</div>
-        <div style="min-width:0;flex:1">
-          <div style="font-weight:700;font-size:15px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <span class="badge ${rc}" style="font-size:10px">${rentStatus==="paid"?"Rent ✓":rentStatus==="partial"?"Rent ~":"Rent due"}</span>
-            <span class="badge ${uc}" style="font-size:10px">${utilStatus==="paid"?"Utility ✓":utilStatus==="partial"?"Utility ~":"Utility due"}</span>
-          </div>
-        </div>
+  grid.innerHTML = rows.map(({ m, i, s: st, p }) => {
+    const col = avatarCol(i), net = p.netWithPrevDue;
+    const pays = net > 0.01, gets = net < -0.01;
+    const chip = (label, status) => {
+      const st2 = status || "unpaid";
+      return `<span class="pc-chip ${st2 === "paid" ? "ok" : st2 === "partial" ? "mid" : "bad"}">${label} ${st2 === "paid" ? "✓" : st2 === "partial" ? "partial" : "due"}</span>`;
+    };
+    return `<button class="pc-card ${pays ? "pc-pay" : gets ? "pc-get" : "pc-ok"}" onclick="selectProfile('${m.id}')">
+      <div class="pc-head">
+        <span class="avatar pc-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
+        <div class="pc-who"><div class="pc-name">${m.name}</div><div class="pc-meta">${m.room ? "Room " + m.room + " · " : ""}${m.role === "manager" ? "👑 Manager" : m.role === "sub_manager" ? "⚡ Sub-manager" : "Member"}</div></div>
+        <span class="pc-go">›</span>
       </div>
-
-      <div style="background:var(--accent-bg);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">
-            Net payable · ${monthLabelFromKey(settlementKey)}${!isSinglePeriod ? ' <span style="font-weight:400;opacity:.7">(latest)</span>' : ''}
-          </div>
-        </div>
-        <div class="${netCls}" style="font-size:18px;font-weight:800;margin-top:2px">${netLabel}</div>
-        ${p.prevDue > 0 ? `<div style="font-size:10px;color:var(--red);margin-top:2px">⚠️ Includes ${fmtTk(p.prevDue)} due from before</div>` : ""}
+      <div class="pc-net">
+        <span class="pc-net-lbl">${pays ? "To pay" : gets ? "Mess owes" : "Balance"}</span>
+        <span class="pc-net-amt">${pays || gets ? fmtTk(Math.abs(net)) : "✓ Settled"}</span>
       </div>
-
-      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">${periodLabel} · totals</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div class="stat-card" style="padding:10px"><div class="stat-label" style="font-size:11px">Meals</div><div style="font-size:18px;font-weight:700">${s.totalMeals}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label" style="font-size:11px">Avg/day</div><div style="font-size:18px;font-weight:700">${s.avgMeals}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label" style="font-size:11px">Bazar</div><div style="font-size:14px;font-weight:700">${fmtTk(s.totalBazar)}</div></div>
-        <div class="stat-card" style="padding:10px"><div class="stat-label" style="font-size:11px">Utility paid</div><div style="font-size:14px;font-weight:700;color:var(--green)">${fmtTk(round2(s.utilityPaid))}</div></div>
-        <div class="stat-card" style="padding:10px;grid-column:span 2"><div class="stat-label" style="font-size:11px">Rent paid</div><div style="font-size:14px;font-weight:700;color:var(--green)">${fmtTk(s.rentPaid)}</div></div>
+      ${p.prevDue > 0 ? `<div class="pc-warn">incl. ${fmtTk(p.prevDue)} from earlier months</div>` : ""}
+      <div class="pc-chips">${chip("Rent", p.rentStatus)}${chip("Utility", p.utilityStatus)}</div>
+      <div class="pc-stats">
+        <div><b>${st.totalMeals}</b><span>meals</span></div>
+        <div><b>${st.avgMeals}</b><span>per day</span></div>
+        <div><b>${fmtTk(st.totalBazar)}</b><span>bazar</span></div>
       </div>
-    </div>`;
+      <div class="dk-bar pc-bar-meals" title="${st.totalMeals} meals · ${periodLabel}"><i style="width:${Math.round((st.totalMeals / maxMeals) * 100)}%;background:${col.fg}"></i></div>
+    </button>`;
   }).join("");
 }
 
@@ -542,6 +555,15 @@ async function selectProfile(id) {
   showProfileDetail(id,allM,allB,allR,allU||[],rentRes,curUtilRes.data,prevUtilRes.data,curM,curY);
 }
 
+/* Net payable for one settlement month, including dues carried from earlier months. */
+function monthlyNetFor(member, allM, allB, allR, allU, key) {
+  const rentRec = allR.find(r => r.month_key === key) || null;
+  const utilRec = allU.find(r => r.month_key === key) || null;
+  const prevRec = allU.find(r => r.month_key === previousMonthFromKey(key).key) || null;
+  const p = calcMemberSettlement(member, allM, allB, rentRec, utilRec, prevRec, key);
+  return round2(p.netPayable + calcPrevDueForMember(member, allM, allB, allR, allU, key));
+}
+
 function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,prevUtilRec,curM,curY) {
   const member=members.find(m=>m.id===id); if(!member) return;
   selectedProfileId = id;
@@ -552,8 +574,6 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const filteredUtility = getFilteredUtilityOnly(allU, period);
   const s=getMemberStats(member,meals,bazar,rent,utility,filteredUtility);
   const col=avatarCol(members.indexOf(member));
-  const allMK=Object.keys(s.byMonth).sort(), r8=allMK.slice(-8);
-  const maxM=Math.max(...r8.map(k=>s.byMonth[k]?.meals||0),1);
 
   // Meal pay/get uses the selected month: bazar credit + meal_paid − meal cost
   const mealNet  = getPrevMonthMealBalance(member, allM, allB, curM, curY, currentUtilRec);
@@ -572,49 +592,15 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const rentBadge = fmtBal(rentNet, "+",   "−");
   const utilBadge = fmtBal(utilNet, "+",   "−");
 
-  const allMealsTotal=allM.reduce((s,r)=>{
-    const mObj=r.meals||{}; const keys=Object.keys(mObj);
-    const hasSplit=keys.some(k=>k.endsWith("_day")||k.endsWith("_night"));
-    if(hasSplit) return s+keys.reduce((a,k)=>(k.endsWith("_day")||k.endsWith("_night"))?a+(Number(mObj[k])||0):a,0);
-    return s+Object.values(mObj).reduce((a,v)=>a+(Number(v)||0),0);
-  },0);
-  const allBazarTotal=allB.reduce((s,r)=>s+Object.values(r.bazar||{}).reduce((a,v)=>a+Number(v),0),0);
+  const allMealsTotal = meals.reduce((t, r) => t + mealRowTotal(r.meals || {}), 0);
+  const allBazarTotal = bazar.reduce((t, r) => t + Object.values(r.bazar || {}).reduce((a, v) => a + Number(v || 0), 0), 0);
   const mealShare=allMealsTotal>0?Math.round((s.totalMeals/allMealsTotal)*100):0;
   const bazarShare=allBazarTotal>0?Math.round((s.totalBazar/allBazarTotal)*100):0;
-
-  // Per-month canonical settlement so Recent-months table can show
-  // each month's Net payable (matches Monthly Log).
-  const rentByKey = {}; allR.forEach(r => { rentByKey[r.month_key] = r; });
-  const utilByKey = {}; allU.forEach(r => { utilByKey[r.month_key] = r; });
-  const monthlyNet = {};
-  allMK.forEach(k => {
-    const prevK = previousMonthFromKey(k).key;
-    const p = calcMemberSettlement(member, allM, allB, rentByKey[k] || null, utilByKey[k] || null, utilByKey[prevK] || null, k);
-    const prevDueForMonth = calcPrevDueForMember(member, allM, allB, allR, allU, k);
-    monthlyNet[k] = round2(p.netPayable + prevDueForMonth);
-  });
 
   // Outstanding balance from ALL past unpaid settlements, for the
   // currently-selected settlement month — feeds the What I Owe panel below.
   const currentKeyForOwe = monthKey(curY || thisMonth().year, curM !== undefined ? curM : thisMonth().month);
   const prevDueForOwe = calcPrevDueForMember(member, allM, allB, allR, allU, currentKeyForOwe);
-
-  // Fix 2: Recent months + What I Owe side by side
-  const recentMonthsHTML =
-    '<div class="card" style="padding:16px">' +
-    '<div class="card-title">Recent months</div>' +
-    '<div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Rent paid</th><th>Util paid</th><th>Net</th></tr></thead>' +
-    '<tbody>' + allMK.slice(-6).reverse().map(k=>{
-      const d=s.byMonth[k]||{};
-      const net = monthlyNet[k] || 0;
-      const netCell = net > 0
-        ? '<b class="net-neg">Pay '+fmtTk(net)+'</b>'
-        : net < 0
-          ? '<b class="net-pos">Get '+fmtTk(Math.abs(net))+'</b>'
-          : '<b style="color:var(--green)">✓</b>';
-      return '<tr><td>'+MONTHS[parseInt(k.slice(5))-1]+' '+k.slice(0,4)+'</td><td>'+(d.meals||0)+'</td><td>'+fmtTk(d.bazar||0)+'</td><td style="color:var(--green)">'+fmtTk(d.rentPaid||0)+'</td><td style="color:var(--green)">'+fmtTk(d.utilityPaid||0)+'</td><td>'+netCell+'</td></tr>';
-    }).join("") +
-    '</tbody></table></div></div>';
 
   const whatIOweHTML = buildWhatIOweHTML(member,allM,allB,currentRentRec,currentUtilRec,prevUtilRec,curM,curY,prevDueForOwe);
 
@@ -625,46 +611,66 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
       ℹ️ <span>Stats cover <b>${period === "all" ? "all time" : "last " + period + " months"}</b>. 
       Net payable and "What I Owe" are always pinned to the <b>latest settlement month (${monthLabelFromKey(settlKey2)})</b>.</span>
     </div>` : "";
+  // History always spans every month (not just the selected period)
+  const allTime = getMemberStats(member, allM, allB, allR, allU, null);
+  const histKeys = Object.keys(allTime.byMonth).sort().slice(-8);
+  const histMax = Math.max(1, ...histKeys.map(k => allTime.byMonth[k]?.meals || 0));
+  const net = round2(monthlyNetFor(member, allM, allB, allR, allU, currentKeyForOwe));
+  const pays = net > 0.01, gets = net < -0.01;
+  const chipB = (label, b) => `<span class="pf-chip ${b.cls === "net-neg" ? "bad" : "ok"}"><span>${label}</span><b>${b.html}</b></span>`;
+  const tile = (icon, label, value, sub, bar) => `<div class="pf-tile"><div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
+    <div class="stat-value pf-val">${value}</div><div class="dk-sub">${sub}</div>${bar != null ? `<div class="dk-bar pf-share"><i style="width:${bar}%"></i></div>` : ""}</div>`;
+  const recentRows = Object.keys(allTime.byMonth).sort().slice(-6).reverse().map(k => {
+    const d = allTime.byMonth[k] || {}, n = monthlyNetFor(member, allM, allB, allR, allU, k);
+    const cell = n > 0.01 ? `<b class="net-neg">Pay ${fmtTk(n)}</b>` : n < -0.01 ? `<b class="net-pos">Get ${fmtTk(Math.abs(n))}</b>` : `<b class="net-pos">✓</b>`;
+    return `<tr><td style="white-space:nowrap"><b>${MONTHS[parseInt(k.slice(5)) - 1].slice(0, 3)} ${k.slice(0, 4)}</b></td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(round2((d.rentPaid || 0) + (d.utilityPaid || 0)))}</td><td style="text-align:right">${cell}</td></tr>`;
+  }).join("");
+
   document.getElementById("modal-content").innerHTML=`
     ${multiMonthBanner}
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">
-        <div class="avatar" style="width:46px;height:46px;font-size:15px;flex-shrink:0;background:${col.bg};color:${col.fg};border:2px solid var(--accent)">${avFace(member.id, member.name)}</div>
-        <div style="min-width:0">
-          <div style="font-family:var(--font-serif);font-size:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${member.name}</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Room ${member.room||"—"} · @${member.username||"—"} · Joined: ${member.joined||"—"}</div>
+    <div class="pf-head pd-head ${pays ? "mb-pay" : gets ? "mb-get" : ""}">
+      <div class="pf-id">
+        <div class="avatar pf-av" style="background:${col.bg};color:${col.fg}">${avFace(member.id, member.name)}</div>
+        <div class="pf-who">
+          <div class="pf-name">${member.name}</div>
+          <div class="pf-meta">Room ${member.room || "—"} · @${member.username || "—"} · joined ${member.joined || "—"}${member.phone ? " · " + member.phone : ""}</div>
+          <div class="pf-chips">${chipB("Meals", mealBadge)}${chipB("Rent", rentBadge)}${chipB("Utility", utilBadge)}</div>
         </div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;width:100%">
-        <div style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Meal pay/get</div>
-          <div style="font-size:16px;font-weight:700" class="${mealBadge.cls}">${mealBadge.html}</div>
-        </div>
-        <div style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Rent balance</div>
-          <div style="font-size:16px;font-weight:700" class="${rentBadge.cls}">${rentBadge.html}</div>
-        </div>
-        <div style="flex:1;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Utility balance</div>
-          <div style="font-size:16px;font-weight:700" class="${utilBadge.cls}">${utilBadge.html}</div>
+      <div class="pf-net">
+        <div class="mb-hero-lbl">Net payable · ${monthLabelFromKey(currentKeyForOwe)}</div>
+        <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "Pays " : gets ? "Gets " : "✓ Settled"}${pays || gets ? fmtTk(Math.abs(net)) : ""}</div>
+        <div class="pf-net-btns">
+          ${pays ? `<button class="btn btn-primary btn-sm" onclick="closeModal();navigate('collect')">💵 Collect</button>` : ""}
+          <button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button>
         </div>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:18px">
-      ${[["Total meals",s.totalMeals,null],["Active days",s.activeDays,null],["Avg/day",s.avgMeals,null],["Bazar spent",fmtTk(s.totalBazar),null],["Meal cost",fmtTk(s.mealCost),null],["Rent paid",fmtTk(s.rentPaid),"var(--green)"],["Utility paid",fmtTk(round2(s.utilityPaid)),"var(--green)"]].map(([l,v,c])=>'<div class="stat-card" style="padding:10px"><div class="stat-label">'+l+'</div><div style="font-size:15px;font-weight:600;margin-top:4px'+(c?";color:"+c:"")+'">'+v+'</div></div>').join("")}
+
+    <div class="pf-tiles">
+      ${tile("🍽️", "Meals", s.totalMeals, `${s.activeDays} days · ${s.avgMeals}/day`, null)}
+      ${tile("🧾", "Meal cost", fmtTk(s.mealCost), `${mealShare}% of mess meals`, mealShare)}
+      ${tile("🛒", "Bazar spent", fmtTk(s.totalBazar), `${bazarShare}% of mess bazar`, bazarShare)}
+      ${tile("✅", "Paid", fmtTk(round2(s.rentPaid + s.utilityPaid)), `rent ${fmtTk(s.rentPaid)} · utility ${fmtTk(round2(s.utilityPaid))}`, null)}
     </div>
-    <div class="detail-section"><div class="detail-section-title">Share in mess</div>
-      <div class="mini-bar"><div class="mini-bar-label">Meal share</div><div class="mini-bar-track" style="height:8px"><div class="mini-bar-fill" style="width:${mealShare}%"></div></div><div class="mini-bar-val">${mealShare}%</div></div>
-      <div class="mini-bar"><div class="mini-bar-label">Bazar share</div><div class="mini-bar-track" style="height:8px"><div class="mini-bar-fill" style="width:${bazarShare}%"></div></div><div class="mini-bar-val">${bazarShare}%</div></div>
-    </div>
-    <div class="detail-section"><div class="detail-section-title">Monthly meal history</div>
-      ${r8.length?`<div class="hist-labels">${r8.map(k=>`<span>${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}</span>`).join("")}</div><div class="hist-wrap">${r8.map(k=>{const v=s.byMonth[k]?.meals||0;const h=Math.max(Math.round((v/maxM)*44),3);return`<div class="hist-b" style="height:${h}px"><div class="tip">${MONTHS[parseInt(k.slice(5))-1].slice(0,3)}: ${v}</div></div>`;}).join("")}</div>`:'<div style="color:var(--text3);font-size:13px">No history</div>'}
-    </div>
-    <div class="profile-detail-bottom-grid" style="display:grid;gap:12px;margin-top:14px">
-      ${recentMonthsHTML}
-      ${whatIOweHTML}
-    </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
+
+    <div class="pf-grid">
+      <div class="pf-col">
+        <div class="card">
+          <div class="dk-card-title"><span>Meals per month</span><span class="dk-legend">last ${histKeys.length} month${histKeys.length === 1 ? "" : "s"}</span></div>
+          ${histKeys.length ? `<div class="an-wd pf-hist" style="grid-template-columns:repeat(${histKeys.length},minmax(0,1fr))">
+            ${histKeys.map(k => { const v = round2(allTime.byMonth[k]?.meals || 0);
+              return `<div class="an-wd-col${k === currentKeyForOwe ? " top" : ""}" title="${monthLabelFromKey(k)}: ${v} meals"><b>${v}</b><div class="an-wd-bar"><i style="height:${Math.max(3, Math.round((v / histMax) * 100))}%"></i></div><span>${MONTHS[parseInt(k.slice(5)) - 1].slice(0, 3)}</span></div>`; }).join("")}
+          </div>` : `<div class="empty">No history yet</div>`}
+        </div>
+        <div class="card">
+          <div class="dk-card-title"><span>Recent months</span></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Paid</th><th style="text-align:right">Net</th></tr></thead>
+          <tbody>${recentRows || `<tr><td colspan="5" class="empty">No data</td></tr>`}</tbody></table></div>
+        </div>
+      </div>
+      <div class="pf-col">${whatIOweHTML}</div>
+    </div>`;
   document.querySelector(".modal").classList.add("modal-wide");
   openModal();
 }
