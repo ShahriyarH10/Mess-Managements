@@ -84,7 +84,7 @@ async function renderMyDashboard(el) {
           <span class="mb-notice-msg">${escapeHtml(b.message)}</span>
           <span class="mb-notice-by">${escapeHtml(b.author)}</span>
         </div>`).join("")}
-        ${bcs.length > 3 ? `<button class="btn btn-ghost btn-sm" onclick="navigate('my-messages')">All ${bcs.length} messages →</button>` : ""}
+        ${bcs.length > 3 ? `<button class="btn btn-ghost btn-sm" data-on-click="navigate('my-messages')">All ${bcs.length} messages →</button>` : ""}
       </div>`;
     }
   } catch (_) {}
@@ -224,8 +224,8 @@ async function renderMyDashboard(el) {
       <div class="page-sub">${member.name} · ${MONTHS[month]} ${year} · day ${daysGone} of ${daysInMonth}</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" onclick="navigate('my-receipts')">🧾 My receipts</button>
-      <button class="btn btn-primary btn-sm" onclick="navigate('give-payment')">💵 Give payment</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="navigate('my-receipts')">🧾 My receipts</button>
+      <button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">💵 Give payment</button>
     </div>
   </div>
   <div class="content dk">
@@ -241,8 +241,8 @@ async function renderMyDashboard(el) {
           ${(calc.prevDue || 0) > 0 ? `<div class="mb-hero-warn">Includes ${fmtTk(calc.prevDue)} unpaid from before ${MONTHS[prevInfo.month]} ${prevInfo.year}</div>` : ""}
         </div>
         <div class="mb-hero-actions">
-          ${pays ? `<button class="btn btn-primary btn-sm" onclick="navigate('give-payment')">Pay now</button>` : ""}
-          <button class="btn btn-ghost btn-sm" onclick="showMySettlementBreakdown()">📊 Breakdown</button>
+          ${pays ? `<button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">Pay now</button>` : ""}
+          <button class="btn btn-ghost btn-sm" data-on-click="showMySettlementBreakdown()">📊 Breakdown</button>
         </div>
       </div>
       ${calc.totalPay > 0 ? `
@@ -267,8 +267,8 @@ async function renderMyDashboard(el) {
     <div class="dk-row">
       <div class="card dk-today">
         <div class="dk-card-title">
-          <span><span class="dk-live"></span>${isNextDay ? "Tomorrow" : "Today"} · ${escapeHtml(displayStr)}</span>
-          <button class="btn btn-ghost btn-sm" onclick="navigate('my-meals')">Change</button>
+          <span><span class="dk-live"></span>${isNextDay ? "Tomorrow" : "Today"} · ${new Date(displayStr + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
+          <button class="btn btn-ghost btn-sm" data-on-click="navigate('my-meals')">Change</button>
         </div>
         ${todayRec ? `
         <div class="mb-me ${eating ? "" : "mb-me-off"}">
@@ -514,7 +514,7 @@ function showMySettlementBreakdown() {
     </div>
 
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-ghost" data-on-click="closeModal()">Close</button>
     </div>
   `;
 
@@ -667,9 +667,9 @@ async function renderMessOverview(el) {
       <div class="card" style="margin-bottom:12px">
         <div class="month-sel">
           <label>Month</label>
-          <select class="input" id="mo-month" style="width:150px" onchange="loadMessOverview()">${opts.monthOptions}</select>
+          <select class="input" id="mo-month" style="width:150px" data-on-change="loadMessOverview()">${opts.monthOptions}</select>
           <label>Year</label>
-          <select class="input" id="mo-year" style="width:95px" onchange="loadMessOverview()">${opts.yearOptions}</select>
+          <select class="input" id="mo-year" style="width:95px" data-on-change="loadMessOverview()">${opts.yearOptions}</select>
         </div>
       </div>
       <div id="mo-body"><div class="loading"><div class="spinner"></div>Loading…</div></div>
@@ -700,7 +700,7 @@ async function renderMyProfile(el) {
   <div class="topbar">
     <div><div class="page-title">My Profile</div><div class="page-sub">Your stats, balances and history</div></div>
     <div class="topbar-actions">
-      <select class="input" id="my-prof-period" onchange="refreshMyProfile()" style="width:180px">
+      <select class="input" id="my-prof-period" data-on-change="refreshMyProfile()" style="width:180px">
         <option value="next">Next month</option>
         <option value="1" selected>This month</option>
         <option value="last">Last month</option>
@@ -849,8 +849,8 @@ async function loadMyProfile(member) {
       <div class="mb-hero-lbl">Net payable · ${monthLabelFromKey(curKey)}</div>
       <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "You pay " : gets ? "You get " : "✓ Settled"}${pays || gets ? `<span class="stat-value">${fmtTk(Math.abs(net))}</span>` : ""}</div>
       <div class="pf-net-btns">
-        ${pays ? `<button class="btn btn-primary btn-sm" onclick="navigate('give-payment')">💵 Give payment</button>` : ""}
-        <button class="btn btn-ghost btn-sm" onclick="navigate('my-receipts')">🧾 Receipts</button>
+        ${pays ? `<button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">💵 Give payment</button>` : ""}
+        <button class="btn btn-ghost btn-sm" data-on-click="navigate('my-receipts')">🧾 Receipts</button>
       </div>
     </div>
   </div>
@@ -903,8 +903,8 @@ function openChangePasswordModal(memberId) {
     <div id="cp-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:8px"></div>
 
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="doChangePassword('${memberId}')">Update password</button>
+      <button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button>
+      <button class="btn btn-primary" data-on-click="doChangePassword('${memberId}')">Update password</button>
     </div>`;
   openModal();
 }
@@ -924,28 +924,25 @@ async function doChangePassword(memberId) {
   if (newPw === currentPw)       return showErr("New password must be different from current.");
 
   try {
-    // Verify current password against DB
-    const currentHash = await hashPassword(currentPw);
-    const { data: member } = await getClient().from("members").select("id, password")
-      .eq("id", memberId).maybeSingle();
-
-    if (!member) return showErr("Incorrect password. Please try again.");
-
-    // Support both hashed and legacy plaintext passwords during transition
-    const isHashed  = member.password === currentHash;
-    const isLegacy  = member.password === currentPw;
-    if (!isHashed && !isLegacy) return showErr("Incorrect password. Please try again.");
-
-    // Save new hashed password
-    const newHash = await hashPassword(newPw);
-    const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId);
-    if (error) throw error;
+    const r = await mmAuth("change_password", { current: currentPw, next: newPw }, _getSessionToken());
+    if (!r.unavailable) {
+      if (r.error) return showErr(r.error);
+    } else {
+      // Fallback (sandbox, or before mm-auth is deployed). The old check re-hashed with a NEW
+      // random salt, so it never matched — compare with the stored salt instead.
+      const { data: member } = await getClient().from("members").select("id, password")
+        .eq("id", memberId).eq("mess_id", messId()).maybeSingle();
+      if (!member || !(await comparePassword(currentPw, member.password))) return showErr("Current password is incorrect.");
+      const newHash = await hashPassword(newPw);
+      const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId).eq("mess_id", messId());
+      if (error) throw error;
+    }
 
     closeModal();
     toast("Password updated successfully ✓", "success");
 
-    // Refresh session so it stays valid
-    saveSession(currentUser, currentMess);
+    // keep the same signed session token
+    saveSession(currentUser, currentMess, _getSessionToken());
   } catch (e) {
     showErr("Error: " + e.message);
   }

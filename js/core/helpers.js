@@ -50,11 +50,16 @@ const initials = (name) => name.trim().split(/\s+/).map(w => w[0]).join("").slic
 
 // avatarCol: accepts either a member ID string (stable hash) or a numeric index (legacy)
 function avatarCol(idOrIndex) {
-  if (typeof idOrIndex === "number") return PALETTE[idOrIndex % PALETTE.length];
-  let h = 0;
-  const s = String(idOrIndex);
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return PALETTE[Math.abs(h) % PALETTE.length];
+  let p;
+  if (typeof idOrIndex === "number") p = PALETTE[((idOrIndex % PALETTE.length) + PALETTE.length) % PALETTE.length];
+  else {
+    let h = 0;
+    const s = String(idOrIndex);
+    for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    p = PALETTE[Math.abs(h) % PALETTE.length];
+  }
+  // a translucent tint of the member's colour reads well on dark and light backgrounds
+  return { bg: p.fg + "2e", fg: p.fg };
 }
 
 function escapeHtml(v) {
@@ -200,14 +205,15 @@ function clearSession() {
 }
 
 /* ROLE GUARD */
-// Actions only the full manager (or superadmin) can do — never sub_manager
+// Actions only the full manager can do — never sub_manager
 const FULL_MANAGER_ONLY_FNS = new Set([
   "addMember", "updateMember", "deleteMember", "openLeavingFlow",
   "openManagerResetPasswordModal", "doManagerResetPassword",
-  "setSubManager", "renderManagerRoles",
+  "setSubManager",
   "toggleMonthLock",
   "saveMessRules",
   "saveFundEntry", "deleteFundEntry",
+  "doTransferRole",
 ]);
 
 function requireManager(fnName) {
@@ -218,9 +224,8 @@ function requireManager(fnName) {
   }
   const isManager    = currentUser.role === "manager";
   const isSubManager = currentUser.role === "sub_manager";
-  const isSuperAdmin = currentUser.role === "superadmin";
 
-  if (!isManager && !isSubManager && !isSuperAdmin) {
+  if (!isManager && !isSubManager) {
     console.warn(`[Security] ${fnName} blocked — insufficient role: ${currentUser.role}`);
     toast("Manager access required", "error");
     return false;
@@ -272,7 +277,7 @@ function showConfirm({ title, body, confirmLabel = "Confirm", danger = false, on
     <div class="confirm-title">${escapeHtml(title)}</div>
     <div class="confirm-body">${escapeHtml(body)}</div>
     <div class="confirm-actions">
-      <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-ghost" data-on-click="closeConfirm()">Cancel</button>
       <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirm-ok-btn">${escapeHtml(confirmLabel)}</button>
     </div>`;
   document.getElementById("confirm-ok-btn").onclick = () => { closeConfirm(); onConfirm(); };
@@ -715,7 +720,7 @@ function buildMonthHistory(months, opts) {
     const share = memberName && m.total > 0 ? Math.round((v / m.total) * 100) : null;
     const avg = d > 0 ? round2(v / d) : 0;
     return `
-    <button class="mh-card${m.key === cur ? " mh-cur" : ""}${i >= MONTH_HISTORY_FIRST ? " mh-older" : ""}" onclick="${onClick}('${m.key}')">
+    <button class="mh-card${m.key === cur ? " mh-cur" : ""}${i >= MONTH_HISTORY_FIRST ? " mh-older" : ""}" data-on-click="${onClick}('${m.key}')">
       <div class="mh-head">
         <span class="mh-month">${monthLabelFromKey(m.key)}</span>
         ${m.key === cur ? `<span class="mh-tag">This month</span>` : ""}
@@ -736,7 +741,7 @@ function buildMonthHistory(months, opts) {
 
   const older = Math.max(0, months.length - MONTH_HISTORY_FIRST);
   return `<div class="mh-grid" id="${id}">${cards}</div>
-    ${older ? `<button class="btn btn-ghost btn-sm mh-more" onclick="toggleMonthHistory('${id}', this)">Show ${older} older month${older === 1 ? "" : "s"}</button>` : ""}`;
+    ${older ? `<button class="btn btn-ghost btn-sm mh-more" data-on-click="toggleMonthHistory('${id}', this)">Show ${older} older month${older === 1 ? "" : "s"}</button>` : ""}`;
 }
 
 /* Member names come back HTML-escaped in members[] but raw as JSON keys; show them once-escaped. */
@@ -786,7 +791,7 @@ async function openMemberMealMonth(memberName, key) {
       <div class="stat-card"><div class="stat-label">Meal days</div><div class="stat-value">${cal.active}</div></div>
     </div>
     ${cal.html}
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
+    <div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Close</button></div>`;
   document.querySelector(".modal").classList.remove("modal-wide");
   openModal();
 }
@@ -838,7 +843,7 @@ async function openManagerMealMonth(key) {
         </div>`;
       }).join("")}
     </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Close</button></div>`;
+    <div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Close</button></div>`;
   document.querySelector(".modal").classList.add("modal-wide");
   openModal();
 }
@@ -849,7 +854,7 @@ function buildOnboardingChecklist(hasMembersAdded, hasMealsLogged, hasUtilitySet
     <div class="onboard-step">
       <span style="font-size:16px">${done ? "✅" : "⬜"}</span>
       <span style="${done ? "color:var(--text3);text-decoration:line-through" : ""}">${text}</span>
-      ${!done && action ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="${action}">Go →</button>` : ""}
+      ${!done && action ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto" data-on-click="${action}">Go →</button>` : ""}
     </div>`;
   return `
     <div class="onboard-wrap">

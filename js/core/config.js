@@ -12,7 +12,7 @@ const SUPABASE_KEY = "sb_publishable__22c2PXW3UFp8RGF_C1rpQ_uvcyFXnb"; // publis
 let MM_MODE = "demo";   // current backend mode
 let sb = null;          // anon client (live) or mock client (demo) — set by useBackend()
 let _demoDb = null;     // demo data store; null → re-seed on next useBackend("demo")
-let _authedClient = null, _authedToken = null;
+let _authedClient = null, _authedToken = null, _anonClient = null;
 
 async function useBackend(mode) {
   if (mode === "live" && !MM_ENV.liveLogin) mode = "demo"; // sandbox-only builds never build a live client
@@ -24,7 +24,12 @@ async function useBackend(mode) {
     sb = MMDemo.createClient(_demoDb);
   } else {
     await loadScripts(SCRIPT_GROUPS.live);
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // The app manages its own session (mm_session); Supabase Auth isn't used, so neither
+    // client may persist or refresh one — and they need separate storage keys.
+    // one anon client for the page's lifetime (re-creating it warns "Multiple GoTrueClient instances")
+    sb = _anonClient = _anonClient || supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "mm-anon" },
+    });
   }
 }
 
@@ -40,10 +45,17 @@ function getClient() {
     _authedToken = token;
     _authedClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
       global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "mm-authed" },
     });
   }
   return _authedClient;
+}
+
+/* Claims inside the live session token (mm-auth), or null. */
+function _tokenClaims() {
+  const t = _getSessionToken();
+  if (!t) return null;
+  try { return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch (_) { return null; }
 }
 
 function _getSessionToken() {
@@ -116,18 +128,6 @@ function hexToBytes(hex) {
   for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.slice(i*2, i*2+2), 16);
   return arr;
 }
-
-/* ═══════════════════════════════════════════
-   SUPERADMIN
-   Hash stored as PBKDF2. To rotate:
-     hashPassword("yourNewPassword").then(console.log)
-   Then paste the result below.
-═══════════════════════════════════════════ */
-const SUPERADMIN = {
-  username: "superadmin",
-  passwordHash: "pbkdf2:a3f1b2c4d5e6f708a9b0c1d2e3f40516:7fb3ccf24ee474f31ef17a269c153be6f58febae8d39de86b4259227a01529d2",
-  role: "superadmin",
-};
 
 /* ═══════════════════════════════════════════
    SESSION — 30-day expiry, localStorage only

@@ -47,7 +47,7 @@ function _payDate(iso) {
 
 function _payStatus(p) { return PAY_STATUS[p.status] || PAY_STATUS.pending; }
 
-/* Ids go inside onclick="fn('…')" — only ever let uuid-shaped values through. */
+/* Ids go inside data-on-click="fn('…')" — only ever let uuid-shaped values through. */
 function _safeId(id) { return /^[\w-]+$/.test(String(id)) ? String(id) : ""; }
 
 function _cachePayments(list) { list.forEach(p => _paymentCache.set(p.id, p)); }
@@ -105,7 +105,7 @@ function receiptLink(id) { return _safeId(id) ? Router.pageUrl("receipt", _safeI
 
 function paymentReceiptData(p) {
   const sp = p.split;
-  const mgr = ["manager", "sub_manager", "superadmin"].includes(currentUser?.role);
+  const mgr = ["manager", "sub_manager"].includes(currentUser?.role);
   const m = mgr ? (typeof members !== "undefined" ? members : []).find(x => x.id === p.member_id) : null;
   return {
     // member names are HTML-escaped by the receipt, so hand it escaped plain text
@@ -157,8 +157,8 @@ async function renderGivePayment(el) {
   <div class="content">
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <select class="input" id="gp-month" style="width:148px" onchange="loadGivePayment(true)">${opts.monthOptions}</select>
-        <select class="input" id="gp-year"  style="width:92px"  onchange="loadGivePayment(true)">${opts.yearOptions}</select>
+        <select class="input" id="gp-month" style="width:148px" data-on-change="loadGivePayment(true)">${opts.monthOptions}</select>
+        <select class="input" id="gp-year"  style="width:92px"  data-on-change="loadGivePayment(true)">${opts.yearOptions}</select>
         <span style="font-size:12px;color:var(--text3)">Settlement month</span>
       </div>
     </div>
@@ -203,7 +203,7 @@ async function loadGivePayment(resetSent) {
     if (token !== ctx.token) return;
     const body = document.getElementById("gp-body");
     if (body) body.innerHTML = `<div class="card"><div class="empty">Could not load: ${escapeHtml(e.message)}</div>
-      <div style="text-align:center"><button class="btn btn-ghost btn-sm" onclick="loadGivePayment(false)">Retry</button></div></div>`;
+      <div style="text-align:center"><button class="btn btn-ghost btn-sm" data-on-click="loadGivePayment(false)">Retry</button></div></div>`;
   }
 }
 
@@ -254,12 +254,12 @@ function buildGivePayment() {
         <div style="position:relative">
           <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:700;color:var(--text3);pointer-events:none">৳</span>
           <input type="number" class="input gp-amt" id="gp-amount" min="0" step="1" placeholder="e.g. 1500"
-                 value="${left > 0.01 ? left : ""}" oninput="onGiveAmtInput()"
-                 onkeydown="if(event.key==='Enter') submitGivePayment()"/>
+                 value="${left > 0.01 ? left : ""}" data-on-input="onGiveAmtInput()"
+                 data-on-keydown="if(event.key==='Enter') submitGivePayment()"/>
         </div>
       </div>
       <div class="gp-chips" id="gp-chips"></div>
-      <button class="btn btn-primary" id="gp-send" onclick="submitGivePayment()" style="margin-top:14px;width:100%;justify-content:center">Send payment to manager</button>
+      <button class="btn btn-primary" id="gp-send" data-on-click="submitGivePayment()" style="margin-top:14px;width:100%;justify-content:center">Send payment to manager</button>
       <div style="font-size:11px;color:var(--text3);margin-top:8px">
         Nothing is credited until the manager confirms. Split order: previous due → rent → utility → meal.
       </div>`}
@@ -302,7 +302,7 @@ function buildGiveHistory() {
             <td style="font-weight:700">${fmtTk(Number(p.amount))}</td>
             <td><span class="badge ${st.cls}">${st.label}</span>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">${p.source === "manager" ? "🧑‍💼 " : "🙋 "}${escapeHtml(paymentGeneratedBy(p))}</div></td>
-            <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="showPaymentReceipt('${_safeId(p.id)}')">Receipt</button></td>
+            <td style="text-align:right"><button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${_safeId(p.id)}')">Receipt</button></td>
           </tr>`;
         }).join("")}</tbody></table></div>`);
 }

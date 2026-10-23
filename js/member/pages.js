@@ -85,9 +85,9 @@ async function renderMyMeals(el) {
     <div class="ms-step">
       <div class="ms-step-lbl">${icon} ${label}</div>
       <div class="ms-step-ctl">
-        <button class="ms-btn" onclick="stepMyMeal('${id}',-1)" aria-label="One less ${label.toLowerCase()} meal">−</button>
+        <button class="ms-btn" data-on-click="stepMyMeal('${id}',-1)" aria-label="One less ${label.toLowerCase()} meal">−</button>
         <input type="number" class="input" id="${id}" min="0" max="4" step="0.5" value="0"/>
-        <button class="ms-btn" onclick="stepMyMeal('${id}',1)" aria-label="One more ${label.toLowerCase()} meal">+</button>
+        <button class="ms-btn" data-on-click="stepMyMeal('${id}',1)" aria-label="One more ${label.toLowerCase()} meal">+</button>
       </div>
     </div>`;
 
@@ -114,12 +114,12 @@ async function renderMyMeals(el) {
           <div class="field">
             <label>Date</label>
             <div class="ml-date">
-              <input type="date" class="input" id="my-meal-date" value="${dt}" onchange="fillMyMealFromDate()"/>
+              <input type="date" class="input" id="my-meal-date" value="${dt}" data-on-change="fillMyMealFromDate()"/>
             </div>
             <div class="ml-quick">
-              <button class="ml-chip" onclick="${setDate(shift(-1))}">Yesterday</button>
-              <button class="ml-chip" onclick="${setDate(shift(0))}">Today</button>
-              <button class="ml-chip" onclick="${setDate(shift(1))}">Tomorrow</button>
+              <button class="ml-chip" data-on-click="${setDate(shift(-1))}">Yesterday</button>
+              <button class="ml-chip" data-on-click="${setDate(shift(0))}">Today</button>
+              <button class="ml-chip" data-on-click="${setDate(shift(1))}">Tomorrow</button>
             </div>
           </div>
           <div class="ms-steps">
@@ -130,7 +130,7 @@ async function renderMyMeals(el) {
             <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
             <input type="text" class="input" id="my-meal-note" placeholder="e.g. Guest for dinner"/>
           </div>
-          <button class="btn btn-primary ml-save" onclick="saveMyMealEntry()">✓ Save my meals</button>
+          <button class="btn btn-primary ml-save" data-on-click="saveMyMealEntry()">✓ Save my meals</button>
           <div class="ml-hint">Saved straight away; the manager is notified. Tip: tap a day on the calendar to edit it.</div>
         </div>
 
@@ -145,8 +145,8 @@ async function renderMyMeals(el) {
             <label class="ma-skip"><input type="checkbox" id="abs-skip-night" checked/><span>🌙 Skip night</span></label>
           </div>
           <div class="ml-2" style="margin-top:12px">
-            <button class="btn btn-primary" style="justify-content:center" onclick="markAbsenceRange()">✗ Mark off</button>
-            <button class="btn btn-ghost" style="justify-content:center" onclick="clearAbsenceRange()">✓ I'll eat</button>
+            <button class="btn btn-primary" style="justify-content:center" data-on-click="markAbsenceRange()">✗ Mark off</button>
+            <button class="btn btn-ghost" style="justify-content:center" data-on-click="clearAbsenceRange()">✓ I'll eat</button>
           </div>
           <div class="ma-head">Coming up</div>
           <div id="upcoming-absences">${buildUpcomingAbsences(upcoming)}</div>
@@ -165,7 +165,7 @@ async function renderMyMeals(el) {
               const a = v ? (0.3 + (v / myMax) * 0.7).toFixed(2) : 0;
               return `<button class="dk-day${d === now.getDate() ? " dk-today-cell" : ""}${d > gone && !off ? " dk-future" : ""}${off ? " ma-off" : ""}"
                 ${v ? `style="--a:${a}"` : ""} title="${MONTHS[mo]} ${d}: ${v} meal${v === 1 ? "" : "s"}${off ? " · " + off + " off" : ""}"
-                onclick="${setDate(date)}"><span>${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">✗</b>` : ""}</button>`;
+                data-on-click="${setDate(date)}"><span>${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">✗</b>` : ""}</button>`;
             }).join("")}
           </div>
         </div>
@@ -189,34 +189,6 @@ function stepMyMeal(id, delta) {
   if (!el) return;
   el.value = Math.min(4, Math.max(0, (parseFloat(el.value) || 0) + delta));
   el.classList.remove("ms-bump"); void el.offsetWidth; el.classList.add("ms-bump");
-}
-
-function switchMyMealTab(tab) {
-  ['meals','bazar'].forEach(t => {
-    const pane = document.getElementById('myml-pane-' + t);
-    if (pane) pane.style.display = t === tab ? '' : 'none';
-    const btn = document.getElementById('myml-tab-' + t);
-    if (btn) {
-      btn.style.background = t === tab ? 'var(--accent)' : 'transparent';
-      btn.style.color = t === tab ? '#0f0f0f' : 'var(--text2)';
-    }
-  });
-  if (tab === 'bazar') { fillMyBazarFromDate(); loadMyBazarRecent(); }
-}
-
-async function loadMyBazarRecent() {
-  const wrap = document.getElementById("my-bazar-recent-wrap"); if (!wrap) return;
-  const member = await getMe(); if (!member) return;
-  const allBazar = await dbGetAll("bazar");
-  const myRows = allBazar
-    .filter(r => Number((r.bazar||{})[member.name]||0) > 0)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .slice(0, 15);
-  if (!myRows.length) { wrap.innerHTML = '<div class="empty">No bazar entries yet.</div>'; return; }
-  wrap.innerHTML = `<div class="tbl-wrap"><table>
-    <thead><tr><th>Date</th><th>Amount</th></tr></thead>
-    <tbody>${myRows.map(r => `<tr><td>${r.date}</td><td style="color:var(--green);font-weight:600">${fmtTk(Number((r.bazar||{})[member.name]||0))}</td></tr>`).join("")}
-    </tbody></table></div>`;
 }
 
 async function fillMyMealFromDate() {
@@ -259,6 +231,9 @@ async function saveMyMealEntry() {
 
   if (day < 0 || night < 0) {
     toast("Meal count cannot be negative");
+    return;
+  }
+  if (!(await ensureMonthOpen(date))) {
     return;
   }
 
@@ -382,23 +357,23 @@ async function renderMyBazar(el) {
         <div class="field">
           <label>Date</label>
           <div class="ml-date">
-            <input type="date" class="input" id="my-bazar-date" value="${today()}" onchange="fillMyBazarFromDate()"/>
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('my-bazar-date').value='${ymd(now)}';fillMyBazarFromDate()">Today</button>
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('my-bazar-date').value='${ymd(yday)}';fillMyBazarFromDate()">Yesterday</button>
+            <input type="date" class="input" id="my-bazar-date" value="${today()}" data-on-change="fillMyBazarFromDate()"/>
+            <button class="btn btn-ghost btn-sm" data-on-click="document.getElementById('my-bazar-date').value='${ymd(now)}';fillMyBazarFromDate()">Today</button>
+            <button class="btn btn-ghost btn-sm" data-on-click="document.getElementById('my-bazar-date').value='${ymd(yday)}';fillMyBazarFromDate()">Yesterday</button>
           </div>
         </div>
         <div class="field">
           <label>Amount</label>
-          <div class="ml-amt"><span>৳</span><input type="number" class="input" id="my-bazar-amount" min="0" placeholder="0" onkeydown="if(event.key==='Enter') saveMyBazarEntry()"/></div>
+          <div class="ml-amt"><span>৳</span><input type="number" class="input" id="my-bazar-amount" min="0" placeholder="0" data-on-keydown="if(event.key==='Enter') saveMyBazarEntry()"/></div>
           <div class="ml-quick">
-            ${[500, 1000, 1500, 2000].map(v => `<button class="ml-chip" onclick="${setAmt(v)}">${fmtTk(v)}</button>`).join("")}
+            ${[500, 1000, 1500, 2000].map(v => `<button class="ml-chip" data-on-click="${setAmt(v)}">${fmtTk(v)}</button>`).join("")}
           </div>
         </div>
         <div class="field">
           <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
           <input type="text" class="input" id="my-bazar-note" placeholder="e.g. Vegetables and fish"/>
         </div>
-        <button class="btn btn-primary ml-save" onclick="saveMyBazarEntry()">✓ Save bazar</button>
+        <button class="btn btn-primary ml-save" data-on-click="saveMyBazarEntry()">✓ Save bazar</button>
         <div class="ml-hint">Saving the same date again replaces that day's amount. The manager is notified.</div>
       </div>
 
@@ -411,7 +386,7 @@ async function renderMyBazar(el) {
               <span class="ml-day">${niceDate(x.date)}</span>
               <div class="dk-bar ml-bar"><i style="width:${Math.max(4, Math.round((x.amt / maxAmt) * 100))}%;background:var(--green)"></i></div>
               <b class="ml-val">${fmtTk(x.amt)}</b>
-              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('my-bazar-date').value='${x.date}';fillMyBazarFromDate()" title="Load this day into the form">Edit</button>
+              <button class="btn btn-ghost btn-sm" data-on-click="document.getElementById('my-bazar-date').value='${x.date}';fillMyBazarFromDate()" title="Load this day into the form">Edit</button>
             </div>`).join("")}
         `).join("") : `<div class="empty"><div>🛒</div><div>No bazar yet — add your first one on the left.</div></div>`}
       </div>
@@ -447,6 +422,8 @@ async function saveMyBazarEntry() {
     toast("Select a date");
     return;
   }
+
+  if (!(await ensureMonthOpen(date))) return;
 
   if (amount < 0) {
     toast("Amount cannot be negative");
@@ -546,7 +523,7 @@ async function renderMyPayments(el) {
       <div class="page-sub">Record a rent or utility payment you made — it's credited right away</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" onclick="navigate('give-payment')" title="Or send money to the manager to confirm">💵 Give payment instead</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="navigate('give-payment')" title="Or send money to the manager to confirm">💵 Give payment instead</button>
     </div>
   </div>
 
@@ -566,7 +543,7 @@ async function renderMyPayments(el) {
         <div class="field">
           <label>What did you pay?</label>
           <div class="ml-types">
-            ${types.map(([v, ic, t]) => `<button class="ml-type" data-type="${v}" onclick="pickBpType(this)">${ic}<span>${t}</span></button>`).join("")}
+            ${types.map(([v, ic, t]) => `<button class="ml-type" data-type="${v}" data-on-click="pickBpType(this)">${ic}<span>${t}</span></button>`).join("")}
           </div>
         </div>
         <div class="ml-2">
@@ -579,20 +556,20 @@ async function renderMyPayments(el) {
           <label>Amount</label>
           <div class="ml-amt"><span>৳</span><input type="number" class="input" id="bp-amount" min="0" placeholder="0"/></div>
           ${rentLeft || utilLeft ? `<div class="ml-quick">
-            ${rentLeft ? `<button class="ml-chip" onclick="fillBpDue('rent',${rentLeft})">Remaining rent ${fmtTk(rentLeft)}</button>` : ""}
-            ${utilLeft ? `<button class="ml-chip" onclick="fillBpDue('elec',${utilLeft})">Remaining utility ${fmtTk(utilLeft)}</button>` : ""}
+            ${rentLeft ? `<button class="ml-chip" data-on-click="fillBpDue('rent',${rentLeft})">Remaining rent ${fmtTk(rentLeft)}</button>` : ""}
+            ${utilLeft ? `<button class="ml-chip" data-on-click="fillBpDue('elec',${utilLeft})">Remaining utility ${fmtTk(utilLeft)}</button>` : ""}
           </div>` : ""}
         </div>
         <div class="field">
           <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
           <input type="text" class="input" id="bp-note" placeholder="e.g. Paid the full electricity bill"/>
         </div>
-        <button class="btn btn-primary ml-save" onclick="saveMyPaymentEntry()">✓ Save payment</button>
+        <button class="btn btn-primary ml-save" data-on-click="saveMyPaymentEntry()">✓ Save payment</button>
         <div class="ml-hint">Credited immediately and added to My Receipts. The manager is notified.</div>
       </div>
 
       <div class="card">
-        <div class="dk-card-title"><span>Payment history</span><button class="btn btn-ghost btn-sm" onclick="navigate('my-receipts')">Receipts →</button></div>
+        <div class="dk-card-title"><span>Payment history</span><button class="btn btn-ghost btn-sm" data-on-click="navigate('my-receipts')">Receipts →</button></div>
         ${hist.length ? `<div class="tbl-wrap"><table class="ml-hist">
           <thead><tr><th>Month</th><th>For</th><th style="text-align:right">Paid</th><th>Status</th></tr></thead>
           <tbody>${hist.slice(0, 24).map(h => `<tr>
@@ -636,6 +613,7 @@ async function saveMyPaymentEntry() {
     toast("Enter a valid amount");
     return;
   }
+  if (!(await ensureMonthOpen(monthKey(year, month)))) return;
 
   const member = await getMe();
   const key = monthKey(year, month);
@@ -832,7 +810,7 @@ function renderMyMonthLog(el) {
         <select class="input" id="mylog-year" style="width:95px">
           ${opts.yearOptions}
         </select>
-        <button class="btn btn-primary" onclick="loadMyMonthLog()">Generate Report</button>
+        <button class="btn btn-primary" data-on-click="loadMyMonthLog()">Generate Report</button>
       </div>
 
       <div id="mylog-content">
@@ -1032,7 +1010,7 @@ async function loadMyMonthLog() {
                   <button
                     class="btn btn-ghost btn-sm"
                     style="font-size:11px;padding:3px 7px;margin-bottom:3px"
-                    onclick="showSettlementBreakdown(${idx})"
+                    data-on-click="showSettlementBreakdown(${idx})"
                   >Details</button>
                   <div>
                     <b class="${p.netWithPrevDue > 0 ? 'net-neg' : p.netWithPrevDue < 0 ? 'net-pos' : ''}" style="font-size:14px">

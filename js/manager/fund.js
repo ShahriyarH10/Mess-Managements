@@ -16,24 +16,24 @@ async function renderMessFund(el) {
         <div class="dk-card-title"><span>Add to the fund log</span></div>
         <input type="hidden" id="fund-type" value="deposit"/>
         <div class="an-seg fd-seg" id="fund-type-seg">
-          <button class="an-seg-btn on" data-v="deposit" onclick="setFundType('deposit')">↓ Money in</button>
-          <button class="an-seg-btn" data-v="withdrawal" onclick="setFundType('withdrawal')">↑ Money out</button>
+          <button class="an-seg-btn on" data-v="deposit" data-on-click="setFundType('deposit')">↓ Money in</button>
+          <button class="an-seg-btn" data-v="withdrawal" data-on-click="setFundType('withdrawal')">↑ Money out</button>
         </div>
         <div class="field">
           <label>Amount</label>
           <div class="ml-amt"><span>৳</span><input type="number" class="input" id="fund-amount" min="1" step="1" placeholder="0"/></div>
-          <div class="ml-quick">${[200, 500, 1000, 6000].map(v => `<button class="ml-chip" onclick="document.getElementById('fund-amount').value='${v}'">${fmtTk(v)}</button>`).join("")}</div>
+          <div class="ml-quick">${[200, 500, 1000, 6000].map(v => `<button class="ml-chip" data-on-click="document.getElementById('fund-amount').value='${v}'">${fmtTk(v)}</button>`).join("")}</div>
         </div>
         <div class="field">
           <label>Date</label>
           <div class="ml-date"><input type="date" class="input" id="fund-date" value="${today()}"/>
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('fund-date').value='${ymd(new Date())}'">Today</button></div>
+            <button class="btn btn-ghost btn-sm" data-on-click="document.getElementById('fund-date').value='${ymd(new Date())}'">Today</button></div>
         </div>
         <div class="field">
           <label>What for?</label>
-          <input type="text" class="input" id="fund-note" placeholder="e.g. Monthly contribution, cleaning supplies…" onkeydown="if(event.key==='Enter') saveFundEntry()"/>
+          <input type="text" class="input" id="fund-note" placeholder="e.g. Monthly contribution, cleaning supplies…" data-on-keydown="if(event.key==='Enter') saveFundEntry()"/>
         </div>
-        <button class="btn btn-primary ml-save" id="fund-save" onclick="saveFundEntry()">✓ Save money in</button>
+        <button class="btn btn-primary ml-save" id="fund-save" data-on-click="saveFundEntry()">✓ Save money in</button>
       </div>
       <div class="card">
         <div class="dk-card-title"><span>History</span><span class="dk-legend" id="fund-count"></span></div>
@@ -101,35 +101,13 @@ async function loadFund() {
           <div class="fd-body"><div class="fd-note">${escapeHtml(e.note || (dep ? "Deposit" : "Withdrawal"))}</div>
             <div class="fd-meta">${nice(e.date)} · by ${escapeHtml(e.actor || "—")}</div></div>
           <div class="fd-amt"><b style="color:${dep ? "var(--green)" : "var(--red)"}">${dep ? "+" : "−"}${fmtTk(e.amount)}</b><span>bal ${fmtTk(e.after)}</span></div>
-          <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteFundEntry('${e.month_key}','${e.id}')" title="Delete entry">✕</button>
+          <button class="btn btn-ghost btn-sm btn-icon" data-on-click="deleteFundEntry('${e.month_key}','${e.id}')" title="Delete entry">✕</button>
         </div>`;
       }).join("")}`;
     }).join("");
   } catch(e) {
     wrap.innerHTML = `<div class="empty">Error: ${escapeHtml(e.message)}</div>`;
   }
-}
-
-function openFundEntryModal() {
-  document.getElementById("modal-content").innerHTML = `
-    <div class="modal-title">💰 Fund Entry</div>
-    <div class="modal-sub">Add a deposit or withdrawal to the mess fund</div>
-    <div class="grid-2">
-      <div class="field"><label>Type *</label>
-        <select class="input" id="fund-type">
-          <option value="deposit">↓ Deposit</option>
-          <option value="withdrawal">↑ Withdrawal</option>
-        </select>
-      </div>
-      <div class="field"><label>Amount (৳) *</label><input type="number" class="input" id="fund-amount" min="1" step="1" placeholder="e.g. 500"/></div>
-    </div>
-    <div class="field"><label>Date *</label><input type="date" class="input" id="fund-date" value="${today()}"/></div>
-    <div class="field"><label>Note</label><input type="text" class="input" id="fund-note" placeholder="e.g. Cleaning supplies, electricity meter token..."/></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveFundEntry()">Save entry</button>
-    </div>`;
-  openModal();
 }
 
 async function saveFundEntry() {
@@ -144,6 +122,7 @@ async function saveFundEntry() {
   const key = date.slice(0, 7);
   const [y, m] = key.split("-").map(Number);
   const month = m - 1;
+  if (!(await ensureMonthOpen(key))) return;
 
   try {
     const { data: cur } = await getClient().from("utility_payments").select("*")
@@ -158,7 +137,6 @@ async function saveFundEntry() {
     });
     await dbUpsertUtility(month, year_from_key(key), key, bills, cur?.payments || {});
     await logAudit("create", "fund", date, `Fund ${type}: ${fmtTk(amount)}${note ? " — " + note : ""}`);
-    closeModal();
     toast(`Fund ${type} saved ✓`, "success");
     ["fund-amount", "fund-note"].forEach(id => { const i = document.getElementById(id); if (i) i.value = ""; });
     await loadFund();
@@ -169,6 +147,7 @@ function year_from_key(key) { return parseInt(key.slice(0, 4)); }
 
 async function deleteFundEntry(monthKey, entryId) {
   if (!requireManager("deleteFundEntry")) return;
+  if (!(await ensureMonthOpen(monthKey))) return;
   showConfirm({
     title: "Delete fund entry?",
     body: "This transaction will be removed from the fund history.",

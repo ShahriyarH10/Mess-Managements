@@ -8,7 +8,7 @@
      #/create        real signup         #/demo/create      sandbox signup
      #/app/<page>    the app             #/demo/app/<page>  the app, same code
      #/app/<page>/<id>                   #/demo/app/<page>/<id>   (e.g. a receipt link)
-     #/admin/<page>  super-admin         #/demo             one click → sample mess as manager
+                                         #/demo             one click → sample mess as manager
                                          (role switching happens inside the app)
 
      #/ · #/features · #/how-it-works · #/engineering   landing page (+ scroll to section)
@@ -67,7 +67,6 @@ const Router = (() => {
     } catch (_) { return null; }
   }
   function goAfterLogin() {
-    if (currentUser?.role === "superadmin") return go("admin/messes", true);
     go(takeReturn() || prefix() + homePage(), true);
   }
 
@@ -118,7 +117,14 @@ const Router = (() => {
       try {
         const { data: fresh } = await getClient().from("members").select("role,name,username").eq("id", currentUser.memberId).maybeSingle();
         if (!fresh) { clearSession(); resetShell(); go(MM_MODE === "demo" ? "demo" : "login", true); return false; }
-        if (fresh.role !== currentUser.role) {
+        const tokenRole = MM_MODE === "live" ? _tokenClaims()?.app_role : null;
+        if (fresh.role !== currentUser.role || (tokenRole && fresh.role !== tokenRole)) {
+          // the session token carries the old role — the database would keep enforcing it
+          if (MM_MODE === "live") {
+            clearSession(); resetShell();
+            if (typeof toast === "function") toast("Your role was changed — please sign in again", "success");
+            go("login", true); return false;
+          }
           currentUser.role = fresh.role;
           saveSession(currentUser, currentMess, _getSessionToken());
           await loadAppScripts(currentUser.role);
@@ -133,7 +139,7 @@ const Router = (() => {
   async function startDemo(role) {
     await useBackend("demo");
     const acct = MMDemo.ACCOUNTS[role];
-    const { data: row } = await sb.from("members").select("*, messes(*)").eq("username", acct.username).maybeSingle();
+    const { data: row } = await sb.from("members").select("id,name,username,role,mess_id,messes(*)").eq("username", acct.username).maybeSingle();
     if (!row) throw new Error("Demo data is unavailable");
     resetShell();
     saveSession({ name: row.name, username: row.username, role: row.role, memberId: row.id }, row.messes, null);
@@ -170,7 +176,7 @@ const Router = (() => {
   /* Wraps every navigation with the progress bar; entering the app earns the branded splash. */
   async function route() {
     const [a, b] = parse();
-    const intoApp = (a === "demo" && b !== "login" && b !== "create") || a === "app" || a === "admin";
+    const intoApp = (a === "demo" && b !== "login" && b !== "create") || a === "app";
     window.MMMotion?.begin({ splash: intoApp });
     try { await routeInner(); } finally { window.MMMotion?.end(); }
   }
@@ -187,7 +193,7 @@ const Router = (() => {
       if (!a || LANDING_SECTIONS[a]) {
         if (!a && wasFirst && MM_ENV.liveLogin) {          // returning, signed-in real user → straight to the app
           selectWorld("live");
-          if (currentUser) return go(currentUser.role === "superadmin" ? "admin/messes" : "app/" + homePage(), true);
+          if (currentUser) return go("app/" + homePage(), true);
         }
         document.body.classList.remove("is-demo");
         showScreen("landing-page"); setTitle("");
@@ -222,7 +228,7 @@ const Router = (() => {
       }
 
       /* ═════════ REAL WORLD ═════════ */
-      if (["login", "create", "app", "admin"].includes(a)) {
+      if (["login", "create", "app"].includes(a)) {
         if (!MM_ENV.liveLogin) return go("demo", true);     // sandbox-only build
         selectWorld("live");
 
@@ -236,17 +242,8 @@ const Router = (() => {
           setTitle(a === "login" ? "Sign in" : "Create a mess"); window.scrollTo(0, 0);
           return;
         }
-        if (a === "admin") {
-          if (currentUser?.role !== "superadmin") return go("login", true);
-          await ensureBackend();
-          if (stale()) return;
-          setTitle("Super Admin");
-          bootSuperAdmin(b === "metrics" ? "metrics" : "messes");
-          return;
-        }
         // a === "app"
         if (!currentUser) { rememberReturn(); return go("login", true); }
-        if (currentUser.role === "superadmin") return go("admin/messes", true);
         return renderApp(b, stale, c);
       }
 
@@ -277,7 +274,7 @@ const Router = (() => {
 async function switchDemoRole() {
   if (MM_MODE !== "demo" || !currentUser) return;
   const toMember = currentUser.role === "manager" || currentUser.role === "sub_manager";
-  const { data: rows } = await getClient().from("members").select("*, messes(*)")
+  const { data: rows } = await getClient().from("members").select("id,name,username,role,mess_id,messes(*)")
     .eq("mess_id", currentMess.id).eq("role", toMember ? "member" : "manager").order("created_at");
   const row = rows && rows[0];
   if (!row) {

@@ -50,7 +50,7 @@ const MANAGER_NAV = [
 
   { section:"Mess" },
   { page:"messages",      label:"Messages",        icon:IC.broadcast },
-  { page:"notifications", label:"Notifications",   icon:IC.bell },
+  { page:"notifications", label:"Member Updates",  icon:IC.bell },
   { page:"members",       label:"Members",         icon:IC.members },
 
   { section:"Account" },
@@ -65,7 +65,7 @@ const MEMBER_NAV = [
   { section:"Mess" },
   { page:"my-meals",      label:"Meal Log",       icon:IC.meal },
   { page:"my-bazar",      label:"Bazar Log",      icon:IC.bazar },
-  { page:"my-payments",   label:"Utility/Rent",   icon:IC.rent },
+  { page:"my-payments",   label:"Utility & Rent", icon:IC.rent },
   { page:"give-payment",  label:"Give Payment",   icon:IC.fund },
   { page:"my-receipts",   label:"My Receipts",    icon:IC.log },
   { page:"my-month-log",  label:"Monthly Log",    icon:IC.log },
@@ -115,7 +115,7 @@ function buildNav() {
   const nav = (isManager || isSubMgr) ? MANAGER_NAV : MEMBER_NAV;
 
   // Filter out pages sub_manager can't access
-  const subMgrBlocked = ["members","transfer","manager-roles"];
+  const subMgrBlocked = FULL_MANAGER_ONLY_PAGES;
   const filteredNav = isSubMgr
     ? nav.filter(i => !i.page || !subMgrBlocked.includes(i.page))
     : nav;
@@ -123,7 +123,7 @@ function buildNav() {
   /* Sidebar */
   let sidebarHTML = asMember
     ? '<div class="nav-section">Manager</div>' +
-      '<button class="nav-item view-as-item view-as-back" onclick="backToManagerView()" data-page="back-to-manager">' + IC_BACK + 'Back to manager view</button>'
+      '<button class="nav-item view-as-item view-as-back" data-on-click="backToManagerView()" data-page="back-to-manager">' + IC_BACK + 'Back to manager view</button>'
     : "";
 
   for (const i of filteredNav) {
@@ -136,12 +136,12 @@ function buildNav() {
         badge = '<span class="notif-badge" id="notif-badge" style="display:none">0</span>';
       }
 
-      if (i.page === "my-announce") {
+      if (i.page === "my-messages") {
         badge = '<span class="notif-badge" id="announce-notif-badge" style="display:none">0</span>';
       }
 
       sidebarHTML +=
-        '<button class="nav-item" onclick="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
+        '<button class="nav-item" data-on-click="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
           i.icon +
           i.label +
           badge +
@@ -151,7 +151,7 @@ function buildNav() {
 
   if (isManager || isSubMgr) {
     sidebarHTML += '<div class="nav-section">Preview</div>' +
-      '<button class="nav-item view-as-item" onclick="viewAsMember()" data-page="view-as-member">' + IC_EYE + 'View as member</button>';
+      '<button class="nav-item view-as-item" data-on-click="viewAsMember()" data-page="view-as-member">' + IC_EYE + 'View as member</button>';
   }
 
   document.getElementById("sidebar-nav").innerHTML = sidebarHTML;
@@ -190,12 +190,12 @@ function buildNav() {
       badge = '<span class="notif-badge mob-inline-badge" id="notif-badge-mobile" style="display:none">0</span>';
     }
 
-    if (i.page === "my-announce") {
+    if (i.page === "my-messages") {
       badge = '<span class="notif-badge mob-inline-badge" id="announce-notif-badge-mobile" style="display:none">0</span>';
     }
 
     mobileNavHTML +=
-      '<button class="mob-nav-btn" onclick="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
+      '<button class="mob-nav-btn" data-on-click="navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
         i.icon +
         '<span>' + i.label + '</span>' +
         badge +
@@ -203,7 +203,7 @@ function buildNav() {
   }
 
   mobileNavHTML += `
-    <button class="mob-nav-btn" onclick="toggleMobileMore()" id="mob-more-btn" data-page="more">
+    <button class="mob-nav-btn" data-on-click="toggleMobileMore()" id="mob-more-btn" data-page="more">
       <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <circle cx="3" cy="8" r="1.2" fill="currentColor"/>
         <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
@@ -229,20 +229,20 @@ function buildNav() {
 
   /* More drawer items */
   let drawerItemsHTML = asMember
-    ? `<button class="mob-drawer-item view-as-item view-as-back" onclick="backToManagerView()" data-page="back-to-manager">${IC_BACK}<span>Back to manager view</span></button>`
+    ? `<button class="mob-drawer-item view-as-item view-as-back" data-on-click="backToManagerView()" data-page="back-to-manager">${IC_BACK}<span>Back to manager view</span></button>`
     : (isManager || isSubMgr)
-      ? `<button class="mob-drawer-item view-as-item" onclick="viewAsMember()" data-page="view-as-member">${IC_EYE}<span>View as member</span></button>`
+      ? `<button class="mob-drawer-item view-as-item" data-on-click="viewAsMember()" data-page="view-as-member">${IC_EYE}<span>View as member</span></button>`
       : "";
 
   for (const i of mobileMoreItems) {
     let badge = "";
 
-    if (i.page === "my-announce") {
+    if (i.page === "my-messages") {
       badge = '<span class="notif-badge" id="announce-notif-badge-drawer" style="display:none">0</span>';
     }
 
     drawerItemsHTML +=
-      '<button class="mob-drawer-item" onclick="closeMobileMore();navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
+      '<button class="mob-drawer-item" data-on-click="closeMobileMore();navigate(\'' + i.page + '\')" data-page="' + i.page + '">' +
         i.icon +
         '<span>' + i.label + '</span>' +
         badge +
@@ -251,27 +251,27 @@ function buildNav() {
 
   if (MM_MODE === "demo") {
     drawerItemsHTML += `
-    <button class="mob-drawer-item" onclick="closeMobileMore();switchDemoRole()" data-page="demo-switch">
+    <button class="mob-drawer-item" data-on-click="closeMobileMore();switchDemoRole()" data-page="demo-switch">
       ${IC.transfer}<span>Switch to ${isManagerRole() ? "a member's account" : "Manager view"}</span>
     </button>
-    <button class="mob-drawer-item" onclick="closeMobileMore();resetDemo()" data-page="demo-reset">
+    <button class="mob-drawer-item" data-on-click="closeMobileMore();resetDemo()" data-page="demo-reset">
       ${IC.audit}<span>Reset demo data</span>
     </button>`;
   }
 
   drawerItemsHTML += `
-    <button class="mob-drawer-item" onclick="toggleTheme();closeMobileMore()" data-page="theme">
+    <button class="mob-drawer-item" data-on-click="toggleTheme();closeMobileMore()" data-page="theme">
       ${IC.moon}
       ${IC.sun}
       <span class="drawer-theme-label">Light mode</span>
     </button>
 
-    <button class="mob-drawer-item" onclick="closeMobileMore();openChangePasswordModal(currentUser?.memberId)" data-page="change-pw">
+    <button class="mob-drawer-item" data-on-click="closeMobileMore();openChangePasswordModal(currentUser?.memberId)" data-page="change-pw">
       <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
       <span>Change Password</span>
     </button>
 
-    <button class="mob-drawer-item mob-drawer-signout" onclick="doLogout()" data-page="logout">
+    <button class="mob-drawer-item mob-drawer-signout" data-on-click="doLogout()" data-page="logout">
       ${IC.logout}
       <span>${MM_MODE === "demo" ? "Exit demo" : "Sign out"}</span>
     </button>`;
@@ -284,11 +284,11 @@ function buildNav() {
 
     <div class="mob-drawer-header">
       <div class="mob-drawer-title">More options</div>
-      <button onclick="closeMobileMore()" class="mob-drawer-close">✕</button>
+      <button data-on-click="closeMobileMore()" class="mob-drawer-close">✕</button>
     </div>
 
     <div class="mob-drawer-user">
-      <div class="avatar" style="background:${currentUser._col?.bg || "#2a2218"};color:${currentUser._col?.fg || "#d4a853"};width:36px;height:36px;font-size:13px">
+      <div class="avatar" style="background:${currentUser._col?.bg || "#d4a8532e"};color:${currentUser._col?.fg || "#d4a853"};width:36px;height:36px;font-size:13px">
         ${avFace(currentUser.memberId, currentUser.name)}
       </div>
 
@@ -403,9 +403,9 @@ function updateSidebarUser() {
   const isSubMgr  = currentUser.role === "sub_manager" && !asMember;
   const idx = members.findIndex(m => m.id === currentUser.memberId);
   const col = isManager
-    ? { bg:"#2a2218", fg:"#d4a853" }
+    ? { bg:"#d4a8532e", fg:"#d4a853" }
     : isSubMgr
-      ? { bg:"#1a2a3a", fg:"#5b9bd5" }
+      ? { bg:"#5b9bd52e", fg:"#5b9bd5" }
       : avatarCol(idx);
 
   document.getElementById("sidebar-user").innerHTML = `
@@ -461,7 +461,9 @@ function showPage(page) {
 }
 
 // Single source of truth for who may open what (also used by the router guard).
-const FULL_MANAGER_ONLY_PAGES = ["members", "transfer", "manager-roles"];
+// Pages whose actions are full-manager only (FULL_MANAGER_ONLY_FNS) — hidden from sub-managers
+// so they never see a form they can't save.
+const FULL_MANAGER_ONLY_PAGES = ["members", "transfer", "manager-roles", "mess-rules", "month-lock", "mess-fund"];
 const MANAGER_OR_SUB_PAGES = [
   "dashboard", "profiles", "meals", "bazar", "utility", "rent",
   "collect", "log", "notifications",
@@ -499,7 +501,7 @@ async function renderPage(page) {
     const bar = document.createElement("div");
     bar.className = "view-as-bar";
     bar.innerHTML = `<span>👁 You're viewing as a member — <b>${escapeHtml(currentUser.name)}</b></span>
-      <button class="btn btn-sm btn-primary" onclick="backToManagerView()">Back to manager view</button>`;
+      <button class="btn btn-sm btn-primary" data-on-click="backToManagerView()">Back to manager view</button>`;
     main.appendChild(bar);
   }
 

@@ -1,4 +1,10 @@
 -- ══════════════════════════════════════════════════════
+-- ⚠ SUPERSEDED — DO NOT RUN. Use supabase/security-lockdown.sql instead.
+-- This draft left members (incl. password hashes) readable and insertable by
+-- anyone, and relied on sign-session-jwt, which signs tokens without a password.
+-- ══════════════════════════════════════════════════════
+
+-- ══════════════════════════════════════════════════════
 -- MessManager — Row Level Security Policies
 -- Run this in: Supabase Dashboard → SQL Editor → New query
 --

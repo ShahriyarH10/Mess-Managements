@@ -22,7 +22,7 @@ async function renderNotifications(el) {
       <div class="page-sub" id="nt-sub"></div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" onclick="markAllNotificationsSeen()">✓ Mark all seen</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="markAllNotificationsSeen()">✓ Mark all seen</button>
     </div>
   </div>
   <div class="content dk">
@@ -42,7 +42,7 @@ function drawNotifications() {
   const count = f => f === "all" ? all.length : f === "new" ? fresh.length : all.filter(n => NOTIF_GROUPS[f].includes(n.type)).length;
   const seg = document.getElementById("nt-seg");
   if (seg) seg.innerHTML = [["all", "All"], ["new", "New"], ["meals", "🍽️ Meals"], ["bazar", "🛒 Bazar"], ["payments", "💵 Payments"]]
-    .map(([f, t]) => `<button class="an-seg-btn${_notifFilter === f ? " on" : ""}" onclick="setNotifFilter('${f}')">${t} <span class="nt-c">${count(f)}</span></button>`).join("");
+    .map(([f, t]) => `<button class="an-seg-btn${_notifFilter === f ? " on" : ""}" data-on-click="setNotifFilter('${f}')">${t} <span class="nt-c">${count(f)}</span></button>`).join("");
 
   const list = document.getElementById("nt-list");
   if (!list) return;
@@ -61,7 +61,7 @@ function drawNotifications() {
     <div class="nt-day">${g.k === tKey ? "Today" : g.k === yKey ? "Yesterday" : g.d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
     ${g.items.map(notifCard).join("")}`).join("") + `
     <div class="nt-more">${matching.length > shown.length
-      ? `<span>Showing ${shown.length} of ${matching.length}</span><button class="btn btn-ghost btn-sm" onclick="showMoreNotifications()">Show ${Math.min(NOTIF_PAGE, matching.length - shown.length)} more</button>`
+      ? `<span>Showing ${shown.length} of ${matching.length}</span><button class="btn btn-ghost btn-sm" data-on-click="showMoreNotifications()">Show ${Math.min(NOTIF_PAGE, matching.length - shown.length)} more</button>`
       : `<span>All ${matching.length} shown</span>`}</div>`;
 }
 
@@ -197,13 +197,14 @@ function notifCard(n) {
     </div>
     <div class="nt-side">
       <span class="nt-time">${time}</span>
-      ${n.type === "payment_request" ? `<button class="btn btn-primary btn-sm" onclick="navigate('collect')">Review</button>` : ""}
-      ${isNew ? `<button class="btn btn-ghost btn-sm nt-seen" onclick="markNotificationSeen('${n.id}')" title="Mark as seen">✓ Seen</button>` : ""}
+      ${n.type === "payment_request" ? `<button class="btn btn-primary btn-sm" data-on-click="navigate('collect')">Review</button>` : ""}
+      ${isNew ? `<button class="btn btn-ghost btn-sm nt-seen" data-on-click="markNotificationSeen('${n.id}')" title="Mark as seen">✓ Seen</button>` : ""}
     </div>
   </div>`;
 }
 
 async function markNotificationSeen(id) {
+  if (!requireManager("markNotificationSeen")) return;
   try {
     await dbUpdateNotifStatus(id, "seen");
     const n = _notifAll.find(x => x.id === id); if (n) n.status = "seen";
@@ -216,6 +217,7 @@ async function markNotificationSeen(id) {
 }
 
 async function markAllNotificationsSeen() {
+  if (!requireManager("markAllNotificationsSeen")) return;
   try {
     const all = await dbGetNotifications();
     const fresh = all.filter(n => n.status === "new" || n.status === "pending");

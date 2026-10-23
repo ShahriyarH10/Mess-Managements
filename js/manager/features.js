@@ -236,8 +236,8 @@ async function loadAbsenceCalendar() {
 
       cells.push(`
         <div class="att-cal-cell" style="position:relative;${cellExtraStyle}border:${cellBorder};border-radius:8px;padding:5px 5px 5px;min-height:82px;cursor:default;transition:border-color .15s,box-shadow .15s;overflow:hidden"
-             onmouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'"
-             onmouseout="this.style.borderColor='${isToday ? "var(--accent)" : totalAbsent > 0 ? "rgba(239,68,68,.35)" : isPast && hasData ? "rgba(34,197,94,.3)" : "var(--border)"}';this.style.boxShadow='none'">
+             data-on-mouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'"
+             data-on-mouseout="this.style.borderColor='${isToday ? "var(--accent)" : totalAbsent > 0 ? "rgba(239,68,68,.35)" : isPast && hasData ? "rgba(34,197,94,.3)" : "var(--border)"}';this.style.boxShadow='none'">
           ${statusBar}
           <div style="font-size:11px;font-weight:700;color:${dayNumColor};line-height:1">${d}</div>
           ${badge}
@@ -404,7 +404,9 @@ async function clearAbsenceRange() {
 
 async function cancelAbsence(id) {
   try {
-    const { error } = await getClient().from("meal_attendance").delete().eq("id", id);
+    // only this member's own day-off, in this mess
+    const { error } = await getClient().from("meal_attendance").delete()
+      .eq("id", id).eq("mess_id", messId()).eq("member_id", window._attMemberId);
     if (error) throw error;
     toast("Absence cancelled ✓", "success");
     await refreshUpcomingAbsences(window._attMemberId);
@@ -420,7 +422,7 @@ function buildUpcomingAbsences(upcoming) {
     return `<div class="ma-row">
       <span class="ma-date">${nice(a.date)}</span>
       <span class="badge badge-red">${off} off</span>
-      <button class="btn btn-ghost btn-sm" onclick="cancelAbsence('${a.id}')" title="Cancel this day off">✕</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="cancelAbsence('${a.id}')" title="Cancel this day off">✕</button>
     </div>`;
   }).join("");
 }
@@ -442,7 +444,6 @@ async function refreshUpcomingAbsences(memberId) {
 /* ═══════════════════════════════════════════
    BROADCASTS (Manager) — with ⑪ Pin to top
 ═══════════════════════════════════════════ */
-async function renderBroadcasts(el) { await renderMessages(el, true); }
 
 
 function openBroadcastModal() {
@@ -455,11 +456,12 @@ function openBroadcastModal() {
       <div class="field"><label>Auto-expire after</label><select class="input" id="bc-expiry"><option value="">Never</option><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">1 week</option></select></div>
     </div>
     <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bc-pin" style="width:16px;height:16px"> 📌 Pin to top (always visible first)</label></div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="sendBroadcast()">📢 Send</button></div>`;
+    <div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button><button class="btn btn-primary" data-on-click="sendBroadcast()">📢 Send</button></div>`;
   openModal();
 }
 
 async function sendBroadcast() {
+  if (!requireManager("sendBroadcast")) return;
   const msg = document.getElementById("bc-msg")?.value?.trim();
   if (!msg) { toast("Write a message first", "error"); document.getElementById("bc-msg")?.focus(); return; }
   const priority = document.getElementById("bc-priority")?.value || "normal";
@@ -511,8 +513,8 @@ async function renderMessRules(el, isManager) {
   const rules = await dbGetMessRules();
   if (isManager) {
     el.innerHTML = `
-    <div class="topbar"><div><div class="page-title">Mess Rules & Info</div><div class="page-sub">What members see on their Mess Info page</div></div>
-      <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" onclick="saveMessRules()">💾 Save</button></div>
+    <div class="topbar"><div><div class="page-title">Mess Rules</div><div class="page-sub">What members see on their Mess Info page</div></div>
+      <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" data-on-click="saveMessRules()">💾 Save</button></div>
     </div>
     <div class="content dk">
       <div class="mr-grid">
@@ -520,15 +522,15 @@ async function renderMessRules(el, isManager) {
           <div class="dk-card-title"><span>Quick info</span></div>
           <div class="field">
             <label>📶 WiFi password</label>
-            <input type="text" class="input mr-mono" id="mr-wifi" value="${escapeHtml(rules?.wifi_pass||"")}" placeholder="e.g. MyWiFi@123" oninput="markRulesDirty()"/>
+            <input type="text" class="input mr-mono" id="mr-wifi" value="${escapeHtml(rules?.wifi_pass||"")}" placeholder="e.g. MyWiFi@123" data-on-input="markRulesDirty()"/>
           </div>
           <div class="field">
             <label>💳 Payment info</label>
-            <textarea class="input" id="mr-bank" rows="3" placeholder="e.g. bKash: 01712345678 (Personal)" oninput="markRulesDirty()">${escapeHtml(rules?.bank_info||"")}</textarea>
+            <textarea class="input" id="mr-bank" rows="3" placeholder="e.g. bKash: 01712345678 (Personal)" data-on-input="markRulesDirty()">${escapeHtml(rules?.bank_info||"")}</textarea>
           </div>
           <div class="field" style="margin-bottom:0">
             <label>📞 Emergency contacts</label>
-            <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx&#10;Gas: 016xxx" oninput="markRulesDirty()">${escapeHtml(rules?.contacts||"")}</textarea>
+            <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx&#10;Gas: 016xxx" data-on-input="markRulesDirty()">${escapeHtml(rules?.contacts||"")}</textarea>
           </div>
         </div>
 
@@ -536,19 +538,19 @@ async function renderMessRules(el, isManager) {
           <div class="dk-card-title">
             <span>📜 House rules</span>
             <div class="an-seg" id="mr-tabs">
-              <button class="an-seg-btn on" data-tab="write" onclick="setRulesTab('write')">Write</button>
-              <button class="an-seg-btn" data-tab="preview" onclick="setRulesTab('preview')">Preview</button>
+              <button class="an-seg-btn on" data-tab="write" data-on-click="setRulesTab('write')">Write</button>
+              <button class="an-seg-btn" data-tab="preview" data-on-click="setRulesTab('preview')">Preview</button>
             </div>
           </div>
           <div id="mr-pane-write">
             <div class="mr-tools">
-              <button class="ml-chip" onclick="insertMd('**','**')" title="Bold"><b>B</b></button>
-              <button class="ml-chip" onclick="insertMd('*','*')" title="Italic"><i>I</i></button>
-              <button class="ml-chip" onclick="insertMd('## ','')" title="Heading">Heading</button>
-              <button class="ml-chip" onclick="insertMd('- ','')" title="Bullet">• List</button>
+              <button class="ml-chip" data-on-click="insertMd('**','**')" title="Bold"><b>B</b></button>
+              <button class="ml-chip" data-on-click="insertMd('*','*')" title="Italic"><i>I</i></button>
+              <button class="ml-chip" data-on-click="insertMd('## ','')" title="Heading">Heading</button>
+              <button class="ml-chip" data-on-click="insertMd('- ','')" title="Bullet">• List</button>
               <span class="mr-hint">**bold** · *italic* · ## heading · - list</span>
             </div>
-            <textarea class="input mr-mono" id="mr-rules" rows="14" placeholder="## House rules&#10;&#10;- No guests after 11pm&#10;- Clean dishes right away&#10;- **Rent by the 5th of every month**" oninput="updateRulesPreview();markRulesDirty()">${escapeHtml(rules?.rules_text||"")}</textarea>
+            <textarea class="input mr-mono" id="mr-rules" rows="14" placeholder="## House rules&#10;&#10;- No guests after 11pm&#10;- Clean dishes right away&#10;- **Rent by the 5th of every month**" data-on-input="updateRulesPreview();markRulesDirty()">${escapeHtml(rules?.rules_text||"")}</textarea>
           </div>
           <div id="mr-pane-preview" style="display:none">
             <div id="mr-preview" class="md-body">${renderMarkdown(rules?.rules_text||"") || '<span style="color:var(--text3)">Nothing written yet.</span>'}</div>
@@ -563,8 +565,8 @@ async function renderMessRules(el, isManager) {
     <div class="topbar"><div><div class="page-title">Mess Info</div><div class="page-sub">WiFi, how to pay, contacts and the house rules</div></div></div>
     <div class="content dk">${hasAny ? `
       <div class="mi-grid">
-        ${rules.wifi_pass ? info("📶", "WiFi", `<div class="mi-wifi" id="mi-wifi">${escapeHtml(rules.wifi_pass)}</div>`, `<button class="btn btn-ghost btn-sm" onclick="copyMessWifi(this)">Copy</button>`) : ""}
-        ${rules.bank_info ? info("💳", "How to pay", `<div class="mi-text">${escapeHtml(rules.bank_info)}</div>`, `<button class="btn btn-ghost btn-sm" onclick="navigate('give-payment')">Give payment</button>`) : ""}
+        ${rules.wifi_pass ? info("📶", "WiFi", `<div class="mi-wifi" id="mi-wifi">${escapeHtml(rules.wifi_pass)}</div>`, `<button class="btn btn-ghost btn-sm" data-on-click="copyMessWifi(this)">Copy</button>`) : ""}
+        ${rules.bank_info ? info("💳", "How to pay", `<div class="mi-text">${escapeHtml(rules.bank_info)}</div>`, `<button class="btn btn-ghost btn-sm" data-on-click="navigate('give-payment')">Give payment</button>`) : ""}
         ${rules.contacts ? info("📞", "Contacts", `<div class="mi-text">${escapeHtml(rules.contacts)}</div>`) : ""}
       </div>
       ${rules.rules_text ? info("📜", "House rules", `<div class="md-body">${renderMarkdown(rules.rules_text)}</div>`) : ""}
@@ -688,7 +690,7 @@ function drawAnalytics() {
   const months = _anMonths();
   _anData.months = months;
   const seg = [[6, "6 months"], [12, "12 months"], [0, "All"]]
-    .map(([n, t]) => `<button class="an-seg-btn${_anRange === n ? " on" : ""}" onclick="setAnalyticsRange(${n})">${t}</button>`).join("");
+    .map(([n, t]) => `<button class="an-seg-btn${_anRange === n ? " on" : ""}" data-on-click="setAnalyticsRange(${n})">${t}</button>`).join("");
   const head = `<div class="topbar">
       <div><div class="page-title">Analytics</div>
         <div class="page-sub">${months.length ? `${months[0].long} – ${months[months.length - 1].long} · ${members.length} members` : "No data yet"}</div></div>
@@ -970,7 +972,7 @@ async function loadMonthLockList() {
               </div>`}
             <button class="btn btn-sm ${locked ? "btn-ghost" : "btn-primary"}"
               style="width:100%;justify-content:center"
-              onclick="toggleMonthLock('${k}', ${!locked})">
+              data-on-click="toggleMonthLock('${k}', ${!locked})">
               ${locked ? "🔓 Unlock month" : "🔒 Close & lock month"}
             </button>
           </div>`;

@@ -34,7 +34,7 @@ const SCRIPT_GROUPS = {
   manager: [
     "js/manager/dashboard.js", "js/manager/meals.js", "js/manager/bazar.js",
     "js/manager/utility.js", "js/manager/collect.js", "js/manager/notifications.js",
-    "js/manager/members.js", "js/manager/fund.js", "js/manager/audit.js", "js/manager/roles.js",
+    "js/manager/members.js", "js/manager/fund.js", "js/manager/audit.js",
     "js/manager/payment-requests.js",
   ],
 };

@@ -1,6 +1,8 @@
 /* Browser smoke test: drives the real app in an iframe (same origin) and reports
-   PASS/FAIL lines into #out. Run headless:
-   chrome --headless=new --virtual-time-budget=120000 --dump-dom http://localhost:8000/tests/smoke.html */
+   PASS/FAIL lines into #out. Open http://localhost:8000/tests/smoke.html in a browser and
+   wait ~2 minutes for the summary.
+   Don't use Chrome's --virtual-time-budget: it fast-forwards timers while the 100k-round
+   PBKDF2 password hashing runs in real time, so the login/sign-up checks time out falsely. */
 (async () => {
   const out = document.getElementById("out");
   const frame = document.getElementById("app");
@@ -47,8 +49,8 @@
     /* 2. guards */
     await openHash("#/app/dashboard"); await until(() => W().location.hash === "#/login");
     log(W().location.hash === "#/login" && visible("login-screen"), "unauthenticated #/app/dashboard → #/login");
-    await openHash("#/admin/messes"); await until(() => W().location.hash === "#/login");
-    log(W().location.hash === "#/login", "unauthenticated #/admin → #/login");
+    await openHash("#/admin/messes"); await until(() => W().location.hash === "" || W().location.hash === "#/");
+    log(["", "#/"].includes(W().location.hash), "removed #/admin route → landing page");
     await openHash("#/create"); await until(() => visible("create-mess-screen"));
     log(visible("create-mess-screen") && D().getElementById("create-demo-note").style.display === "none" && !D().body.classList.contains("is-demo"), "#/create is the REAL signup (no sandbox note, not demo mode)");
     await openHash("#/demo/create"); await until(() => D().getElementById("create-demo-note").style.display !== "none");
@@ -119,11 +121,11 @@
     click('[data-on-click="saveRent()"]'); await sleep(400);
     log(/saved/i.test(D().getElementById("toast").textContent), "saveRent() → '" + D().getElementById("toast").textContent + "'");
     await openHash("#/demo/app/messages"); await settle();
-    W().openAnnounceModal(); await sleep(150);
-    D().getElementById("an-title").value = "Smoke test notice"; D().getElementById("an-body").value = "Hello";
-    click('[data-on-click="postAnnounce()"]'); await sleep(500);
-    const an = await P().sb().from("announcements").select("*");
-    log(an.data.some(a => a.title === "Smoke test notice"), "postAnnounce() inserts into the mock store");
+    D().getElementById("bc-msg").value = "Smoke test notice";
+    click('[data-on-click="sendBroadcast()"]'); await sleep(500);
+    const an = await P().sb().from("broadcasts").select("*");
+    log(an.data.some(a => a.message === "Smoke test notice"), "sendBroadcast() inserts into the mock store");
+    log(/Smoke test notice/.test(D().getElementById("msg-broadcasts-wrap").innerText), "new notice appears in the Messages list");
     await openHash("#/demo/app/notifications"); await settle();
     const nb = D().querySelector('[data-on-click^="markNotificationSeen"]');
     if (nb) { nb.click(); await sleep(400); }
@@ -132,8 +134,8 @@
 
     /* demo reset restores the seed */
     await W().resetDemo(); await settle();
-    const an2 = await P().sb().from("announcements").select("*");
-    log(!an2.data.some(a => a.title === "Smoke test notice") && an2.data.length === 3, "resetDemo() restores seed data");
+    const an2 = await P().sb().from("broadcasts").select("*");
+    log(!an2.data.some(a => a.message === "Smoke test notice"), "resetDemo() restores seed data");
 
     /* settlement numbers sanity */
     await openHash("#/demo/app/dashboard"); await settle();

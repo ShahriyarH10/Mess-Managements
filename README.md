@@ -60,14 +60,14 @@ Hash-based, so it works on any static host without rewrite rules:
 | Route | Notes |
 |---|---|
 | `#/` · `#/features` · `#/how-it-works` · `#/engineering` | Landing page (+ scroll to section) |
-| `#/login` · `#/create` · `#/app/<page>` · `#/admin/<page>` | Real world. App pages need a session, are guarded by role, remember where you were heading, and support back/forward |
+| `#/login` · `#/create` · `#/app/<page>` | Real world. App pages need a session, are guarded by role, remember where you were heading, and support back/forward |
 | `#/demo` · `#/demo/login` · `#/demo/create` · `#/demo/app/<page>` | Sandbox world (same guards, own session). `#/demo` opens the sample mess as its manager; switch to a member's view from the sidebar. A deep link like `#/demo/app/meals` auto-starts the demo |
 
 ### Security posture
 
-- **Strict CSP** (`script-src 'self'`, no `unsafe-inline`/`eval` for scripts, no third-party origins; `connect-src` allows only your Supabase project). Legacy inline `onclick="…"` attributes are moved to `data-on-*` on insertion and run by a tiny whitelist interpreter (`js/core/events.js`) — it understands a fixed grammar and dispatches to existing functions, never `eval`.
+- **Strict CSP** (`script-src 'self'`, no `unsafe-inline`/`eval` for scripts, no third-party origins; `connect-src` allows only your Supabase project). Templates write `data-on-click="…"` (never inline `onclick`) and handlers are run by a tiny whitelist interpreter (`js/core/events.js`) — it understands a fixed grammar and dispatches to existing functions, never `eval`.
 - Real response headers in `_headers` (Netlify/Cloudflare) and `vercel.json`: HSTS, `frame-ancestors 'none'`, `nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, COOP/CORP.
-- User-controlled strings are escaped before reaching `innerHTML`; PBKDF2-SHA-256 password hashing; login lockout; demo session in `sessionStorage` only; all storage access guarded for private-mode browsers.
+- User-controlled strings are escaped before reaching `innerHTML`; PBKDF2-SHA-256 password hashing verified on the server (`mm-auth`) with rate-limited sign-in; demo session in `sessionStorage` only; all storage access guarded for private-mode browsers.
 - Self-hosted fonts and a vendored Supabase SDK — no CDN dependencies.
 
 ### Performance
@@ -76,7 +76,7 @@ The landing page needs ~32 KB of gzipped JS (11 small deferred scripts) plus ~13
 
 ### Smoke test
 
-`tests/smoke.html` drives the real app in an iframe (guards, every page for both roles, interactions, CSP violations, mock-store mutations). Serve the repo and open `/tests/smoke.html`; it prints PASS/FAIL lines.
+`tests/smoke.html` drives the real app in an iframe (guards, every page for both roles, interactions, CSP violations, mock-store mutations). Serve the repo and open `/tests/smoke.html` in a normal browser; it prints PASS/FAIL lines after ~2 minutes. (Don't run it with headless Chrome's `--virtual-time-budget`: it fast-forwards timers past the real-time password hashing and the sign-in checks fail falsely.)
 
 ---
 
@@ -106,7 +106,7 @@ flowchart LR
 
   Data -->|"world = real<br/>#/app/…"| SB[("Supabase<br/>Postgres + RLS")]
   Data -->|"world = sandbox<br/>#/demo/app/…"| Mock["In-memory PostgREST-style client<br/>seeded sample mess<br/>(sessionStorage mirror)"]
-  Browser -->|"sign-in"| EF1["Edge Function<br/>sign-session-jwt"]
+  Browser -->|"sign-in"| EF1["Edge Function<br/>mm-auth"]
   SB -->|"INSERT trigger → pg_net"| EF2["Edge Function<br/>send-push"]
   EF2 --> Expo["Expo Push → mobile app"]
 ```
@@ -146,16 +146,15 @@ sequenceDiagram
   actor U as User
   participant SPA as Browser (SPA)
   participant DB as Supabase REST (anon key)
-  participant EF as Edge Function<br/>sign-session-jwt
+  participant EF as Edge Function<br/>mm-auth
 
   U->>SPA: username + password
-  SPA->>DB: SELECT member by username
-  DB-->>SPA: member row (PBKDF2 salt + hash)
-  SPA->>SPA: re-derive hash with stored salt, compare
-  SPA->>EF: POST memberId, messId, role
-  EF-->>SPA: HS256 JWT (mess_id claim, 30 days)
+  SPA->>EF: POST action=login, username, password
+  EF->>DB: SELECT member (service role — password column hidden from browsers)
+  EF->>EF: PBKDF2 verify · rate-limit failures
+  EF-->>SPA: HS256 JWT (mess_id, member_id, app_role · 30 days)
   SPA->>DB: queries with Authorization: Bearer JWT
-  Note over DB: RLS policies read mess_id from the JWT<br/>so every query is scoped to one mess
+  Note over DB: RLS policies read mess_id / app_role from the JWT<br/>so every query is scoped to one mess
 ```
 
 ### 4. Monthly settlement (domain core)
@@ -279,8 +278,8 @@ sequenceDiagram
 
 ### 9. Known limitations &amp; roadmap
 
-- **Move credential verification server-side.** Today the browser compares the password hash and then asks `sign-session-jwt` for a token; the function should verify credentials itself (service role) or the app should adopt Supabase Auth.
-- **Tighten RLS.** Apply `supabase/rls-policies.sql` everywhere and remove the permissive `allow_anon_all` policies from the bootstrap schema.
+- **Finish the security rollout** (see [Security](#-security-path-c)): server sign-in (`mm-auth`) and the database lockdown are written; deploy them after the mobile app moves to `mm-auth`.
+- **Store records by member id.** Meals, bazar, rent and utility are keyed by member name; renames move the history automatically and duplicate names are blocked, but an id key would be sturdier.
 - **Unit tests for the settlement functions** (they are pure, so they are easy to cover); the browser smoke test currently covers behaviour end to end.
 - **Optional build step** (minify + content-hashed filenames) for immutable caching of JS/CSS.
 - **Replace inline handler attributes** with `addEventListener` and drop the dispatcher.
@@ -360,7 +359,7 @@ MessManager-v6/
 │   │   ├── db.js           # dbGetAll, dbGetMonth, dbUpsertMeals, dbUpsertBazar, dbDeleteMember…
 │   │   ├── db-ext.js       # Audit log, meal attendance, broadcasts, mess rules DB functions
 │   │   ├── helpers.js      # calcMemberSettlement, fmtTk, round2, saveSession, loadSession…
-│   │   ├── auth.js         # Login, create-mess, superadmin panel, signSessionJWT, bootApp
+│   │   ├── auth.js         # Login, create-mess (via mm-auth), logout, bootApp
 │   │   └── nav.js          # Page routing, sidebar builder, mobile nav, renderPage switch
 │   │
 │   ├── manager/
@@ -377,7 +376,6 @@ MessManager-v6/
 │   │   ├── members.js      # Add, edit, remove members; password reset
 │   │   ├── features.js     # Absence calendar, broadcasts, mess rules editor, meal rate chart
 │   │   ├── audit.js        # Audit log viewer with entity filter and pagination
-│   │   └── roles.js        # Promote/demote sub-managers
 │   │
 │   └── member/
 │       ├── dashboard.js    # Personal dashboard: net payable, heatmap, broadcasts, mess snapshot
@@ -389,10 +387,13 @@ MessManager-v6/
     ├── member-payments.sql                 # member_payments table for Give Payment requests
     ├── receipts.sql                        # adds source / created_by to member_payments (manager receipts, links)
     ├── member-photos.sql                   # adds members.photo (160×160 JPEG data URL)
-    ├── rls-policies.sql                    # Row Level Security policies (optional — see Security section)
+    ├── security-lockdown.sql               # Real per-mess RLS — run after mm-auth is live (see Security)
+    ├── rls-policies.sql                    # Old, incomplete RLS draft — superseded, don't run
     └── functions/
+        ├── mm-auth/
+        │   └── index.ts                   # Edge Function: server sign-in, create mess, change password
         └── sign-session-jwt/
-            └── index.ts                   # Edge Function: signs mess-scoped JWT for RLS
+            └── index.ts                   # Retired (answers 410) — deploy or delete it
 ```
 
 ---
@@ -515,7 +516,6 @@ Route-based via `js/core/router.js` (see **Routes** above). `navigate(page)` now
 - `manager` role → sees full manager nav; blocked from member-only pages
 - `sub_manager` role → sees manager nav minus: Members, Transfer Role, Manager Roles
 - `member` role → sees member nav only; redirected away from any manager page
-- `superadmin` → live builds only; separate admin panel (all messes, metrics)
 
 The route guards are a UX layer. In live mode real enforcement is Supabase RLS (see Security below).
 
@@ -558,43 +558,56 @@ The route guards are a UX layer. In live mode real enforcement is Supabase RLS (
 
 ## 🛡️ Security (Path C)
 
-The app ships with a client-side auth system (PBKDF2 password hashing). Optional **Row Level Security** can be enabled in three steps:
+Until these steps are done, the live database uses the open bootstrap policies (`allow_anon_all`): anyone holding the publishable key — it ships in the JavaScript — can read every table, **including members' password hashes**, and change any data. Do these steps in order.
 
-### Step 1 — Deploy the Edge Function
+### Step 1 — Deploy the sign-in function
 
 ```bash
-supabase functions deploy sign-session-jwt
+supabase functions deploy mm-auth --no-verify-jwt
 ```
 
-Then in Supabase Dashboard → Edge Functions → **sign-session-jwt** → Secrets, add:
+Dashboard → Edge Functions → Secrets:
 
-```
-SESSION_JWT_SECRET = <64-char random hex>
-```
+| Secret | Value |
+|---|---|
+| `MM_JWT_SECRET` | the project's existing JWT secret — Settings → API → JWT Settings → **Legacy JWT secret**. Copy it; **don't change it** (that would invalidate the project's API keys). |
 
-Generate one with:
+Also run `supabase/auth-attempts.sql` (creates one empty table, used for rate limiting).
+
+`mm-auth` checks passwords on the server (service role), rate-limits failed sign-ins (5 per 15 min per username), creates messes and changes passwords. The web app uses it automatically as soon as it's deployed; before that it falls back to the old in-browser check.
+
+### Step 2 — Retire the old token function
+
+`sign-session-jwt` signs a token for whatever member/role it's sent, with no password check. Deploy the retired stub (it now answers 410) or delete it:
+
 ```bash
-openssl rand -hex 32
+supabase functions deploy sign-session-jwt     # or: supabase functions delete sign-session-jwt
 ```
 
-### Step 2 — Tell Supabase to trust your JWT
+### Step 3 — Move the mobile app to `mm-auth`
 
-Supabase Dashboard → **Settings → API → JWT Secret** → paste the same secret.
+`MessManager-mobile` shares this database and still reads `members.password` to sign in. Switch its `login()` / `changePassword()` (src/lib/auth.ts) to `POST /functions/v1/mm-auth` with `{ action: "login" | "change_password", … }` and ship that build first — Step 4 blocks the old way.
 
-### Step 3 — Run RLS policies
+### Step 4 — Lock the database
 
-In SQL Editor, run `supabase/rls-policies.sql`. This enables RLS on all tables and adds policies so each mess can only read its own data.
+Run `supabase/security-lockdown.sql` in the SQL Editor. It:
+
+- removes every open policy and all anonymous access;
+- scopes every table to the signed-in user's mess (`mess_id` in the token);
+- hides `members.password` from browsers;
+- enforces manager-only actions (members, rules, fund, month close, notices) in the database;
+- blocks changes to a closed month for everyone but the manager.
+
+Everyone has to sign in once more afterwards. (`supabase/rls-policies.sql` is the old, incomplete version — don't run it.)
 
 ### How it works
 
 ```
-Login → Edge Function signs JWT with { mess_id, member_id, role }
-      → JWT stored in localStorage alongside session
-      → All DB calls use getClient() which sends Authorization: Bearer <jwt>
-      → Supabase RLS reads mess_id from JWT → blocks cross-mess queries
+Sign in  → mm-auth verifies the password (service role) → signs a JWT
+           { role: "authenticated", mess_id, member_id, app_role, exp: 30 days }
+Requests → getClient() sends Authorization: Bearer <jwt>
+         → Postgres RLS reads mess_id / app_role with auth.jwt()
 ```
-
-**Without Path C:** The app works normally using the anon key. `getClient()` falls back to `sb` (the anon client) when no JWT is present — zero impact on functionality.
 
 ---
 
@@ -623,9 +636,6 @@ In `js/core/config.js`, edit the `PALETTE` array (background/foreground colour p
 ### Add a utility bill type
 1. Add the key to `UTIL_PREPAID_KEYS` or the relevant array in `helpers.js`
 2. Add its label to the label maps in `utility.js`
-
-### Change superadmin credentials
-In `js/core/config.js`, find the `SUPERADMIN` object and update `username` and `passwordHash`.
 
 > ⚠️ Always use a strong random password and never use the default in production.
 

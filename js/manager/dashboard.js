@@ -106,9 +106,9 @@ async function renderDashboard(el) {
   const hasMealsLogged  = mM.length > 0;
   const hasUtilitySet   = !!utilRec;
   const allDone         = hasMembersAdded && hasMealsLogged && hasUtilitySet;
-  const dismissed       = localStorage.getItem(`mm_onboard_done_${messId()}`);
+  const dismissed       = lsGet(`mm_onboard_done_${messId()}`);
   const showOnboarding  = !allDone && !dismissed;
-  if (allDone && !dismissed) localStorage.setItem(`mm_onboard_done_${messId()}`, '1');
+  if (allDone && !dismissed) lsSet(`mm_onboard_done_${messId()}`, '1');
 
   // ── Per-day series (1..today) for the sparklines ──
   const daysGone   = Math.min(todayDay, daysInMonth);
@@ -188,8 +188,8 @@ async function renderDashboard(el) {
       <div class="page-sub">${MONTHS[month]} ${year} · ${members.length} member${members.length === 1 ? "" : "s"} · day ${daysGone} of ${daysInMonth}</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" onclick="navigate('collect')">💵 Collect</button>
-      <button class="btn btn-primary btn-sm" onclick="navigate('meals')">+ Meal</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="navigate('collect')">💵 Collect</button>
+      <button class="btn btn-primary btn-sm" data-on-click="navigate('meals')">+ Meal</button>
     </div>
   </div>
   <div class="content dk">
@@ -208,8 +208,8 @@ async function renderDashboard(el) {
     <div class="dk-row">
       <div class="card dk-today">
         <div class="dk-card-title">
-          <span><span class="dk-live"></span>${isNextDay ? "Tomorrow" : "Today"} · ${escapeHtml(displayStr)}</span>
-          <button class="btn btn-ghost btn-sm" onclick="navigate('meals')">${todayRec ? "Edit" : "Add"}</button>
+          <span><span class="dk-live"></span>${isNextDay ? "Tomorrow" : "Today"} · ${new Date(displayStr + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
+          <button class="btn btn-ghost btn-sm" data-on-click="navigate('meals')">${todayRec ? "Edit" : "Add"}</button>
         </div>
         ${todayRec ? `
         <div class="dk-today-nums">
@@ -229,7 +229,7 @@ async function renderDashboard(el) {
         </div>` : `
         <div class="empty" style="padding:22px 10px">
           <div>No meals entered for ${isNextDay ? "tomorrow" : "today"} yet</div>
-          <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="navigate('meals')">+ Add meals</button>
+          <button class="btn btn-primary btn-sm" style="margin-top:10px" data-on-click="navigate('meals')">+ Add meals</button>
         </div>`}
       </div>
 
@@ -258,18 +258,18 @@ async function renderDashboard(el) {
         ${rentRec?.entries?.length
           ? collectRow("🏠", "Room rent", totalRentPaid, totalRentDue, rentPct,
               chip(rentPaidCount, "paid", "ok") + chip(rentPartCount, "partial", "mid") + chip(rentDueCount, "due", "bad"), "var(--accent)")
-          : `<div class="dk-coll dk-coll-empty">🏠 No rent set for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" onclick="navigate('rent')">Set rent</button></div>`}
+          : `<div class="dk-coll dk-coll-empty">🏠 No rent set for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('rent')">Set rent</button></div>`}
         ${totalUtil > 0
           ? collectRow("⚡", "Utility", totalUtilPaid, totalUtil, utilPct,
               chip(utilPaidCount, "paid", "ok") + chip(utilPartCount, "partial", "mid") + chip(utilDueCount, "due", "bad"), "var(--purple)")
-          : `<div class="dk-coll dk-coll-empty">⚡ No utility bills for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" onclick="navigate('utility')">Add bills</button></div>`}
+          : `<div class="dk-coll dk-coll-empty">⚡ No utility bills for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('utility')">Add bills</button></div>`}
       </div>
     </div>
 
     <!-- ── Members ── -->
     ${members.length ? `
     <div class="card">
-      <div class="dk-card-title"><span>Members · ${MONTHS[month]}</span><button class="btn btn-ghost btn-sm" onclick="navigate('profiles')">Profiles →</button></div>
+      <div class="dk-card-title"><span>Members · ${MONTHS[month]}</span><button class="btn btn-ghost btn-sm" data-on-click="navigate('profiles')">Profiles →</button></div>
       <div class="tbl-wrap">
         <table class="dk-members">
           <thead><tr><th>Member</th><th>Meals</th><th style="text-align:right">Bazar</th><th>Rent</th><th>Utility</th></tr></thead>

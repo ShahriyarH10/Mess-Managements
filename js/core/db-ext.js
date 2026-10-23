@@ -87,7 +87,7 @@ async function dbPostBroadcast(message, priority = "normal", expiresInHours = nu
 }
 
 async function dbDeleteBroadcast(id) {
-  const { error } = await getClient().from("broadcasts").delete().eq("id", id);
+  const { error } = await getClient().from("broadcasts").delete().eq("id", id).eq("mess_id", messId());
   if (error) throw error;
 }
 
@@ -225,7 +225,7 @@ async function dbReleaseMemberPayment(id) {
 /* ── Role check: manager OR sub_manager ──── */
 function requireManagerOrSub(fnName) {
   if (!currentUser) { toast("Not authenticated", "error"); return false; }
-  if (!["manager", "sub_manager", "superadmin"].includes(currentUser.role)) {
+  if (!["manager", "sub_manager"].includes(currentUser.role)) {
     toast("Manager access required", "error"); return false;
   }
   return true;

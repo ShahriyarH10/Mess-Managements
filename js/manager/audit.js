@@ -18,25 +18,25 @@ async function renderAuditLog(el) {
   <div class="topbar">
     <div><div class="page-title">Audit Log</div><div class="page-sub">Every change made in your mess, newest first</div></div>
     <div class="topbar-actions"><div class="an-seg" id="audit-range">
-      <button class="an-seg-btn" data-days="7" onclick="setAuditRange(7)">7 days</button>
-      <button class="an-seg-btn on" data-days="30" onclick="setAuditRange(30)">30 days</button>
-      <button class="an-seg-btn" data-days="90" onclick="setAuditRange(90)">90 days</button>
+      <button class="an-seg-btn" data-days="7" data-on-click="setAuditRange(7)">7 days</button>
+      <button class="an-seg-btn on" data-days="30" data-on-click="setAuditRange(30)">30 days</button>
+      <button class="an-seg-btn" data-days="90" data-on-click="setAuditRange(90)">90 days</button>
     </div></div>
   </div>
   <div class="content dk">
     <div class="card au-filters">
-      <div class="au-search"><span>🔎</span><input type="text" class="input" id="audit-search" placeholder="Search what changed or who did it…" oninput="loadAuditEntries(true)"/></div>
-      <select class="input" id="audit-filter" onchange="loadAuditEntries(true)">
+      <div class="au-search"><span>🔎</span><input type="text" class="input" id="audit-search" placeholder="Search what changed or who did it…" data-on-input="loadAuditEntries(true)"/></div>
+      <select class="input" id="audit-filter" data-on-change="loadAuditEntries(true)">
         <option value="">All categories</option>
         ${AUDIT_CATS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}
       </select>
-      <select class="input" id="audit-actor" onchange="loadAuditEntries(true)">
+      <select class="input" id="audit-actor" data-on-change="loadAuditEntries(true)">
         <option value="">Everyone</option>
         ${members.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join("")}
       </select>
-      <input type="date" class="input" id="audit-from" value="${monthAgo}" onchange="clearAuditRangeSeg();loadAuditEntries(true)" title="From"/>
-      <input type="date" class="input" id="audit-to" value="${today}" onchange="clearAuditRangeSeg();loadAuditEntries(true)" title="To"/>
-      <button class="btn btn-ghost btn-sm" onclick="resetAuditFilters()">Reset</button>
+      <input type="date" class="input" id="audit-from" value="${monthAgo}" data-on-change="clearAuditRangeSeg();loadAuditEntries(true)" title="From"/>
+      <input type="date" class="input" id="audit-to" value="${today}" data-on-change="clearAuditRangeSeg();loadAuditEntries(true)" title="To"/>
+      <button class="btn btn-ghost btn-sm" data-on-click="resetAuditFilters()">Reset</button>
     </div>
 
     <div id="audit-summary"></div>
@@ -123,7 +123,7 @@ async function loadAuditEntries(reset = false) {
     if (sm) sm.innerHTML = `<div class="au-sum">
       <span class="au-total"><b>${all.length}${(data || []).length >= 60 ? "+" : ""}</b> change${all.length === 1 ? "" : "s"}</span>
       ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) =>
-        `<button class="ml-chip au-cat au-c-${k}${cur === k ? " on" : ""}" onclick="filterAuditCategory('${escapeHtml(k)}')">${escapeHtml(catLabel[k] || k)} <b>${n}</b></button>`).join("")}
+        `<button class="ml-chip au-cat au-c-${k}${cur === k ? " on" : ""}" data-on-click="filterAuditCategory('${escapeHtml(k)}')">${escapeHtml(catLabel[k] || k)} <b>${n}</b></button>`).join("")}
     </div>`;
 
     // ⑤ Group by day
@@ -156,7 +156,7 @@ async function loadAuditEntries(reset = false) {
       }).join("");
       const dayId = "audit-day-" + g.key;
       return `<div class="au-day">
-        <button class="au-day-head" onclick="toggleAuditDay('${dayId}')">
+        <button class="au-day-head" data-on-click="toggleAuditDay('${dayId}')">
           <span id="${dayId}-arrow" class="au-arrow">▾</span><b>${label}</b>${g.key === todayKey || g.key === yKey ? `<span class="au-dsub">${g.d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>` : ""}
           <span class="au-count">${g.items.length}</span>
         </button>
@@ -169,7 +169,7 @@ async function loadAuditEntries(reset = false) {
 
     window._auditOffset += (data || []).length;
     if (moreWrap) moreWrap.innerHTML = (data||[]).length >= 60
-      ? '<button class="btn btn-ghost btn-sm" onclick="loadAuditEntries(false)">Load more</button>'
+      ? '<button class="btn btn-ghost btn-sm" data-on-click="loadAuditEntries(false)">Load more</button>'
       : '<div style="font-size:11px;color:var(--text3);padding:8px">— end of log —</div>';
   } catch (e) {
     toast("Error loading audit log: " + e.message, "error");

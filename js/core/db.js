@@ -74,6 +74,13 @@ async function isMonthLocked(key) {
   } catch(_) { return false; }
 }
 
+/* true = the month is open. Shows the standard message when it's closed. */
+async function ensureMonthOpen(key) {
+  if (!key || !(await isMonthLocked(String(key).slice(0, 7)))) return true;
+  toast("🔒 " + monthLabelFromKey(String(key).slice(0, 7)) + " is closed — ask the manager to unlock it in Month Close", "error");
+  return false;
+}
+
 async function dbSetMonthLocked(month, year, key, locked) {
   // Fetch current record (or blank) so we don't wipe bills/payments
   const { data: cur } = await getClient().from("utility_payments").select("*")
@@ -91,10 +98,20 @@ async function dbDelete(table, id) {
 }
 
 /* ── Members ── */
+/* Never select "*" from members: that would ship every password hash to the browser
+   (and is refused once supabase/security-lockdown.sql hides the column).
+   Optional columns are dropped if this database hasn't been migrated for them yet. */
+const MEMBER_COLS = ["id", "mess_id", "name", "username", "role", "room", "rent", "phone", "joined", "created_at"];
+let _memberOptCols = ["photo", "meal_default_day", "meal_default_night"];
 async function dbGetMembers() {
-  const { data, error } = await getClient().from("members").select("*").eq("mess_id", messId()).order("created_at");
-  if (error) throw error;
-  return sanitize(data || []);
+  for (;;) {
+    const { data, error } = await getClient().from("members").select(MEMBER_COLS.concat(_memberOptCols).join(","))
+      .eq("mess_id", messId()).order("created_at");
+    if (!error) return sanitize(data || []);
+    const missing = _memberOptCols.find(c => (error.message || "").includes(c));
+    if (!missing) throw error;
+    _memberOptCols = _memberOptCols.filter(c => c !== missing);
+  }
 }
 
 /* Columns that older databases may not have yet (added by later migrations).
@@ -118,7 +135,7 @@ async function dbSaveMember(row) {
   if (!row.id && !payload.password) throw new Error("Password is required for new members");
 
   const write = (p) => row.id
-    ? getClient().from("members").update(p).eq("id", row.id)
+    ? getClient().from("members").update(p).eq("id", row.id).eq("mess_id", messId())
     : getClient().from("members").insert(p);
 
   // Retry without any optional column the database doesn't have yet (at most once per column)
@@ -133,15 +150,55 @@ async function dbSaveMember(row) {
   }
 }
 
+/* Meals, bazar, rent and utility rows store members by NAME, so a rename must
+   move every key to the new name or the member's history disappears.
+   Returns how many rows changed. Called before the member row is saved; the
+   caller moves everything back if that save fails. */
+async function dbRenameMemberData(oldName, newName) {
+  if (!oldName || !newName || oldName === newName) return 0;
+  const c = getClient(), mid = messId();
+  const ren = (obj, keys) => {
+    if (!obj || typeof obj !== "object") return [obj, false];
+    const o = { ...obj }; let hit = false;
+    keys.forEach(([from, to]) => { if (from in o) { o[to] = o[from]; delete o[from]; hit = true; } });
+    return [o, hit];
+  };
+  const mealKeys = [[oldName, newName], [oldName + "_day", newName + "_day"], [oldName + "_night", newName + "_night"]];
+  const one = [[oldName, newName]];
+  let changed = 0;
+  const save = async (table, id, patch) => {
+    const { error } = await c.from(table).update(patch).eq("id", id).eq("mess_id", mid);
+    if (error) throw error;
+    changed++;
+  };
+  const rows = async t => { const { data, error } = await c.from(t).select("*").eq("mess_id", mid); if (error) throw error; return data || []; };
+
+  for (const r of await rows("meals")) { const [m, hit] = ren(r.meals, mealKeys); if (hit) await save("meals", r.id, { meals: m }); }
+  for (const r of await rows("bazar")) { const [b, hit] = ren(r.bazar, one); if (hit) await save("bazar", r.id, { bazar: b }); }
+  for (const r of await rows("rent")) {
+    if (!(r.entries || []).some(e => e.name === oldName)) continue;
+    await save("rent", r.id, { entries: r.entries.map(e => e.name === oldName ? { ...e, name: newName } : e) });
+  }
+  for (const r of await rows("utility_payments")) {
+    const [pay, h1] = ren(r.payments, one);
+    const bills = { ...(r.bills || {}) }; let h2 = false;
+    ["pending_change", "mess_credit", "change_credit"].forEach(k => { const [v, hit] = ren(bills[k], one); if (hit) { bills[k] = v; h2 = true; } });
+    if (h1 || h2) await save("utility_payments", r.id, { payments: pay, bills });
+  }
+  // receipts keep a display copy of the name
+  await c.from("member_payments").update({ member_name: newName }).eq("mess_id", mid).eq("member_name", oldName);
+  return changed;
+}
+
 async function dbDeleteMember(id) {
-  const { error } = await getClient().from("members").delete().eq("id", id);
+  const { error } = await getClient().from("members").delete().eq("id", id).eq("mess_id", messId());
   if (error) throw error;
 }
 
 /* ── Announcements ── */
 async function dbSaveAnnouncement(row) {
   if (row.id) {
-    const { error } = await getClient().from("announcements").update({ title: row.title, body: row.body, pinned: row.pinned }).eq("id", row.id);
+    const { error } = await getClient().from("announcements").update({ title: row.title, body: row.body, pinned: row.pinned }).eq("id", row.id).eq("mess_id", messId());
     if (error) throw error;
   } else {
     const { error } = await getClient().from("announcements").insert({
@@ -153,7 +210,7 @@ async function dbSaveAnnouncement(row) {
 }
 
 async function dbDeleteAnnouncement(id) {
-  const { error } = await getClient().from("announcements").delete().eq("id", id);
+  const { error } = await getClient().from("announcements").delete().eq("id", id).eq("mess_id", messId());
   if (error) throw error;
 }
 
@@ -166,7 +223,7 @@ async function dbGetChores() {
 
 async function dbSaveChore(row) {
   if (row.id) {
-    const { error } = await getClient().from("chores").update({ task: row.task, assignee: row.assignee, frequency: row.frequency, status: row.status }).eq("id", row.id);
+    const { error } = await getClient().from("chores").update({ task: row.task, assignee: row.assignee, frequency: row.frequency, status: row.status }).eq("id", row.id).eq("mess_id", messId());
     if (error) throw error;
   } else {
     const { error } = await getClient().from("chores").insert({
@@ -178,7 +235,7 @@ async function dbSaveChore(row) {
 }
 
 async function dbDeleteChore(id) {
-  const { error } = await getClient().from("chores").delete().eq("id", id);
+  const { error } = await getClient().from("chores").delete().eq("id", id).eq("mess_id", messId());
   if (error) throw error;
 }
 
@@ -235,11 +292,13 @@ async function getPendingCount() {
   return count || 0;
 }
 
+/* Unread notices for the member's Messages badge: active broadcasts posted since
+   they last opened Messages (renderMessages stores that time). */
 async function getUnreadAnnouncementCount() {
-  const { data: announcements } = await getClient().from("announcements")
-    .select("id, created_at").eq("mess_id", messId())
-    .order("created_at", { ascending: false });
-  if (!announcements?.length) return 0;
-  const lastRead = localStorage.getItem(`mm_announce_read_${currentUser.memberId}`) || "1970-01-01";
-  return announcements.filter(a => a.created_at > lastRead).length;
+  if (!currentUser?.memberId) return 0;
+  const lastRead = lsGet(`mm_announce_read_${currentUser.memberId}`) || "1970-01-01";
+  const { data } = await getClient().from("broadcasts")
+    .select("id, created_at, expires_at").eq("mess_id", messId()).gt("created_at", lastRead);
+  const now = Date.now();
+  return (data || []).filter(b => !b.expires_at || new Date(b.expires_at).getTime() > now).length;
 }

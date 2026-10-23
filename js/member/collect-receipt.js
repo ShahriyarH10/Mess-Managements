@@ -287,14 +287,14 @@ function showCollectReceipt(d) {
 
     <!-- ── Actions ── -->
     <div class="rcpt-btns">
-      <button class="btn btn-primary btn-sm" onclick="copyCollectReceipt(this)">📋 Copy</button>
+      <button class="btn btn-primary btn-sm" data-on-click="copyCollectReceipt(this)">📋 Copy</button>
       <a class="btn btn-sm" href="${waUrl}" target="_blank" rel="noopener"
          style="background:#25D366;border:1px solid #1fb759;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;border-radius:var(--radius-sm)">
         💬 WhatsApp
       </a>
-      ${d.link ? `<button class="btn btn-ghost btn-sm" onclick="copyReceiptLink(this)">🔗 Copy link</button>` : ""}
-      <button class="btn btn-ghost btn-sm" onclick="printCollectReceipt()">🖨 Print</button>
-      ${d.target ? "" : `<button class="btn btn-ghost btn-sm" onclick="closeModal()" style="margin-left:auto">✕ Close</button>`}
+      ${d.link ? `<button class="btn btn-ghost btn-sm" data-on-click="copyReceiptLink(this)">🔗 Copy link</button>` : ""}
+      <button class="btn btn-ghost btn-sm" data-on-click="printCollectReceipt()">🖨 Print</button>
+      ${d.target ? "" : `<button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">✕ Close</button>`}
     </div>
 
   </div>`;

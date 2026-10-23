@@ -12,8 +12,8 @@ function renderRent(el) {
   el.innerHTML=`<div class="topbar">
     <div><div class="page-title">Room Rent</div><div class="page-sub">Set each member's rent and record what they've paid</div></div>
     <div class="topbar-actions"><div class="ut-pick">
-      <select class="input" id="rent-month" onchange="loadRentMonth()">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?" selected":""}>${m}</option>`).join("")}</select>
-      <select class="input" id="rent-year" onchange="loadRentMonth()">${yearOpts}</select>
+      <select class="input" id="rent-month" data-on-change="loadRentMonth()">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?" selected":""}>${m}</option>`).join("")}</select>
+      <select class="input" id="rent-year" data-on-change="loadRentMonth()">${yearOpts}</select>
     </div></div>
   </div>
   <div class="content dk">
@@ -21,8 +21,8 @@ function renderRent(el) {
       <div id="rent-stats" class="ut-summary"></div>
       <div class="ut-rows" id="rent-rows"><div class="loading"><div class="spinner"></div>Loading…</div></div>
       <div class="ent-foot" style="padding:14px 0 0;border-top:0">
-        <button class="btn btn-ghost" onclick="markAllRentPaid()">✓ Mark all paid</button>
-        <button class="btn btn-primary" onclick="saveRent()">💾 Save rent</button>
+        <button class="btn btn-ghost" data-on-click="markAllRentPaid()">✓ Mark all paid</button>
+        <button class="btn btn-primary" data-on-click="saveRent()">💾 Save rent</button>
       </div>
     </div>
     <div class="card"><div class="dk-card-title"><span>📋 Rent history</span></div><div id="rent-history"></div></div>
@@ -46,9 +46,9 @@ async function loadRentMonth() {
     const col=avatarCol(i);
     return `<div class="ut-row rent-row" id="rr-${m.id}" data-status="${status}">
       <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}${m.room ? `<span class="dk-mini" style="margin-left:4px">· ${escapeHtml(m.room)}</span>` : ""}</div>
-      <div class="ml-amt ut-paid rent-due" data-cap="rent"><span>৳</span><input type="number" class="input input-sm" id="rd-${m.id}" value="${due}" oninput="updRentDue('${m.id}')" title="Rent for this month"/></div>
-      <div class="ml-amt ut-paid" data-cap="paid"><span>৳</span><input type="number" class="input input-sm" id="rp-${m.id}" value="${paid}" data-due="${due}" oninput="updRentAutoStatus('${m.id}')" title="Amount paid"/></div>
-      <select class="input input-sm ut-status" id="rs-${m.id}" onchange="rentStatusChanged('${m.id}')">
+      <div class="ml-amt ut-paid rent-due" data-cap="rent"><span>৳</span><input type="number" class="input input-sm" id="rd-${m.id}" value="${due}" data-on-input="updRentDue('${m.id}')" title="Rent for this month"/></div>
+      <div class="ml-amt ut-paid" data-cap="paid"><span>৳</span><input type="number" class="input input-sm" id="rp-${m.id}" value="${paid}" data-due="${due}" data-on-input="updRentAutoStatus('${m.id}')" title="Amount paid"/></div>
+      <select class="input input-sm ut-status" id="rs-${m.id}" data-on-change="rentStatusChanged('${m.id}')">
         <option value="paid"    ${status==="paid"   ?"selected":""}>✅ Paid</option>
         <option value="partial" ${status==="partial"?"selected":""}>⚠️ Partial</option>
         <option value="unpaid"  ${status==="unpaid" ?"selected":""}>⏳ Not paid</option>

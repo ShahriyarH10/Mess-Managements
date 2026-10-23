@@ -8,11 +8,11 @@ function renderMembers(el) {
     <div><div class="page-title">Members</div><div class="page-sub">Manage accounts, roles, and transfers</div></div>
     <div class="topbar-actions">
       <div class="an-seg">
-        <button id="mem-tab-members" class="an-seg-btn on" onclick="switchMembersTab('members')">👥 Members</button>
-        <button id="mem-tab-roles" class="an-seg-btn" onclick="switchMembersTab('roles')">⚡ Roles</button>
-        <button id="mem-tab-transfer" class="an-seg-btn" onclick="switchMembersTab('transfer')">👑 Transfer</button>
+        <button id="mem-tab-members" class="an-seg-btn on" data-on-click="switchMembersTab('members')">👥 Members</button>
+        <button id="mem-tab-roles" class="an-seg-btn" data-on-click="switchMembersTab('roles')">⚡ Roles</button>
+        <button id="mem-tab-transfer" class="an-seg-btn" data-on-click="switchMembersTab('transfer')">👑 Transfer</button>
       </div>
-      <button class="btn btn-primary btn-sm" id="mem-add-btn" onclick="openAddMemberModal()">+ Add member</button>
+      <button class="btn btn-primary btn-sm" id="mem-add-btn" data-on-click="openAddMemberModal()">+ Add member</button>
     </div>
   </div>
   <div class="content">
@@ -55,7 +55,7 @@ function renderMembers(el) {
         <div style="background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--red)">⚠️ Once you transfer the role, you will lose manager access immediately.</div>
         <div class="card-title">Transfer manager role to</div>
         <div id="transfer-list-inner" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
-        <button class="btn btn-danger" style="width:100%;justify-content:center" onclick="doTransferRole()">👑 Transfer manager role</button>
+        <button class="btn btn-danger" style="width:100%;justify-content:center" data-on-click="doTransferRole()">👑 Transfer manager role</button>
       </div>
     </div>
   </div>`;
@@ -82,16 +82,16 @@ function renderMembersTable() {
   <tbody>${members.map((m, i) => {
     const col = avatarCol(i); const isMgr = m.role === "manager";
     return `<tr>
-      <td><button class="avatar mm-tbl-av" style="background:${col.bg};color:${col.fg}" onclick="openEditMemberModal('${m.id}')" title="${isPhoto(m.photo) ? "Change photo" : "Add a photo"}">${avFace(m.id, m.name)}${isPhoto(m.photo) ? "" : `<span class="mm-cam">📷</span>`}</button></td>
+      <td><button class="avatar mm-tbl-av" style="background:${col.bg};color:${col.fg}" data-on-click="openEditMemberModal('${m.id}')" title="${isPhoto(m.photo) ? "Change photo" : "Add a photo"}">${avFace(m.id, m.name)}${isPhoto(m.photo) ? "" : `<span class="mm-cam">📷</span>`}</button></td>
       <td><b>${m.name}</b></td>
       <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
       <td>${isMgr ? `<span class="badge badge-amber">👑 Manager</span>` : m.role === 'sub_manager' ? `<span class="badge badge-blue">⚡ Sub</span>` : `<span class="badge">Member</span>`}</td>
       <td>${m.room || "—"}</td>
       <td style="color:var(--text2)">${m.phone || "—"}</td>
       <td><div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-sm" onclick="openEditMemberModal('${m.id}')">Edit</button>
-        <button class="btn btn-ghost btn-sm" data-mid="${m.id}" onclick="openManagerResetPasswordModal(this.dataset.mid)" title="Reset password">🔑</button>
-        ${isMgr ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:.4">Remove</button>` : `<button class="btn btn-danger btn-sm" onclick="openLeavingFlow('${m.id}')">Remove</button>`}
+        <button class="btn btn-ghost btn-sm" data-on-click="openEditMemberModal('${m.id}')">Edit</button>
+        <button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="openManagerResetPasswordModal(this.dataset.mid)" title="Reset password">🔑</button>
+        ${isMgr ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:.4">Remove</button>` : `<button class="btn btn-danger btn-sm" data-on-click="openLeavingFlow('${m.id}')">Remove</button>`}
       </div></td>
     </tr>`;
   }).join("")}</tbody></table>`;
@@ -115,9 +115,9 @@ function renderRolesList() {
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${isMgr ? `<span class="badge badge-amber">👑 Manager</span>` :
           isSubMgr ? `<span class="badge badge-blue">⚡ Sub-manager</span>
-                      <button class="btn btn-ghost btn-sm" onclick="setSubManager('${m.id}', false)">Demote</button>` :
+                      <button class="btn btn-ghost btn-sm" data-on-click="setSubManager('${m.id}', false)">Demote</button>` :
           `<span class="badge">Member</span>
-           <button class="btn btn-ghost btn-sm" onclick="setSubManager('${m.id}', true)">Promote</button>`}
+           <button class="btn btn-ghost btn-sm" data-on-click="setSubManager('${m.id}', true)">Promote</button>`}
       </div>
     </div>`;
   }).join("") : '<div class="empty">No other members yet.</div>');
@@ -135,7 +135,7 @@ async function setSubManager(memberId, promote) {
     danger: false,
     onConfirm: async () => {
       try {
-        await getClient().from("members").update({ role: promote ? "sub_manager" : "member" }).eq("id", memberId);
+        await getClient().from("members").update({ role: promote ? "sub_manager" : "member" }).eq("id", memberId).eq("mess_id", messId());
         await logAudit("update", "member", m.name, `${m.name} ${promote ? "promoted to sub-manager" : "demoted to member"}`);
         toast(promote ? `${m.name} promoted ✓` : `${m.name} demoted ✓`, "success");
         members = await dbGetMembers(); buildInitialsMap(members);
@@ -169,20 +169,25 @@ function _renderTransferList() {
 async function renderTransferRole(el) { renderMembers(el); switchMembersTab('transfer'); }
 
 async function doTransferRole() {
+  if (!requireManager("doTransferRole")) return;
   const selected = document.querySelector('input[name="transfer-target"]:checked');
   if (!selected) { toast("Select a member to transfer to"); return; }
   const target = members.find(m => m.id === selected.value); if (!target) return;
   showConfirm({
     title: 'Transfer manager role?',
-    body: `Transfer management to ${escapeHtml(target.name)}? You will lose manager access immediately.`,
+    body: `Transfer management to ${_decodeName(target.name)}? You'll lose manager access and be signed out.`,
     confirmLabel: 'Transfer role',
     danger: true,
     onConfirm: async () => {
       try {
-        const { error: e1 } = await getClient().from('members').update({ role: 'member' }).eq('id', currentUser.memberId); if (e1) throw e1;
-        const { error: e2 } = await getClient().from('members').update({ role: 'manager' }).eq('id', target.id); if (e2) throw e2;
-        toast(target.name + ' is now the manager!', 'success');
-        currentUser.role = 'member'; saveSession(currentUser, currentMess);
+        // new manager first, so a failure can't leave the mess without one
+        const { error: e2 } = await getClient().from('members').update({ role: 'manager' }).eq('id', target.id).eq("mess_id", messId()); if (e2) throw e2;
+        const { error: e1 } = await getClient().from('members').update({ role: 'member' }).eq('id', currentUser.memberId).eq("mess_id", messId()); if (e1) throw e1;
+        await logAudit("update", "member", target.name, `Manager role transferred to ${target.name}`);
+        toast(_decodeName(target.name) + ' is now the manager — please sign in again', 'success');
+        // the session token still says "manager": sign out so both get fresh tokens
+        if (MM_MODE === "live") { setTimeout(doLogout, 1200); return; }
+        currentUser.role = 'member'; saveSession(currentUser, currentMess, _getSessionToken());
         members = await dbGetMembers(); buildInitialsMap(members); buildNav(); updateSidebarUser(); navigate('my-dashboard');
       } catch(e) { toast('Transfer failed: ' + e.message, 'error'); }
     }
@@ -200,8 +205,8 @@ function memberModalHTML(m) {
     <div class="mm-photo-ctl">
       <div class="mm-photo-title">Profile photo</div>
       <div class="mm-photo-btns">
-        <label class="btn btn-ghost btn-sm mm-upload">📷 ${m && isPhoto(m.photo) ? "Change" : "Upload"} photo<input type="file" accept="image/*" id="mm-photo-file" onchange="pickMemberPhoto(this)"/></label>
-        <button class="btn btn-ghost btn-sm" id="mm-photo-rm" onclick="removeMemberPhoto()" ${m && isPhoto(m.photo) ? "" : "hidden"}>Remove</button>
+        <label class="btn btn-ghost btn-sm mm-upload">📷 ${m && isPhoto(m.photo) ? "Change" : "Upload"} photo<input type="file" accept="image/*" id="mm-photo-file" data-on-change="pickMemberPhoto(this)"/></label>
+        <button class="btn btn-ghost btn-sm" id="mm-photo-rm" data-on-click="removeMemberPhoto()" ${m && isPhoto(m.photo) ? "" : "hidden"}>Remove</button>
       </div>
       <div class="mm-photo-hint">Cropped to a square and resized — any JPG or PNG works.</div>
     </div>
@@ -220,12 +225,12 @@ function memberModalHTML(m) {
 }
 
 function openAddMemberModal() {
-  document.getElementById("modal-content").innerHTML = `<div class="modal-title">Add member</div><div class="modal-sub">Create account for a new roommate</div>${memberModalHTML(null)}<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="addMember()">Add member</button></div>`;
+  document.getElementById("modal-content").innerHTML = `<div class="modal-title">Add member</div><div class="modal-sub">Create account for a new roommate</div>${memberModalHTML(null)}<div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button><button class="btn btn-primary" data-on-click="addMember()">Add member</button></div>`;
   openModal();
 }
 function openEditMemberModal(id) {
   const m = members.find(x => x.id === id); if (!m) return;
-  document.getElementById("modal-content").innerHTML = `<div class="modal-title">Edit ${escapeHtml(m.name)}</div><div class="modal-sub">Update account details</div>${memberModalHTML(m)}<div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="updateMember('${m.id}')">Save changes</button></div>`;
+  document.getElementById("modal-content").innerHTML = `<div class="modal-title">Edit ${escapeHtml(m.name)}</div><div class="modal-sub">Update account details</div>${memberModalHTML(m)}<div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button><button class="btn btn-primary" data-on-click="updateMember('${m.id}')">Save changes</button></div>`;
   openModal();
 }
 function getMemberFormData(existingRole) {
@@ -241,6 +246,51 @@ function getMemberFormData(existingRole) {
     // undefined = unchanged (not sent); null = removed
     photo:    window._mmPhoto?.changed ? window._mmPhoto.value : undefined,
   };
+}
+
+/* Names are the key for every meal/bazar/rent/utility record, so they must be unique
+   (case- and space-insensitive) or two members would share one history. */
+const _sameName = (a, b) => String(a || "").trim().replace(/\s+/g, " ").toLowerCase() === String(b || "").trim().replace(/\s+/g, " ").toLowerCase();
+function _decodeName(s) { const t = document.createElement("textarea"); t.innerHTML = s ?? ""; return t.value; }
+
+async function addMember() {
+  if (!requireManager("addMember")) return;
+  const d = getMemberFormData("member");
+  if (!d.name) { toast("Name required", "error"); return; }
+  if (!d.username) { toast("Username required", "error"); return; }
+  if (!d.password) { toast("Password required", "error"); return; }
+  if (d.password.length < 6) { toast("Password must be at least 6 characters", "error"); return; }
+  if (members.find(m => _sameName(_decodeName(m.name), d.name))) { toast(`There's already a member called "${d.name}" — add a surname or initial`, "error"); return; }
+  if (members.find(m => _sameName(_decodeName(m.username), d.username))) { toast("Username taken", "error"); return; }
+  try {
+    d.password = await hashPassword(d.password);
+    await dbSaveMember(d); await logAudit("create", "member", d.name, `Member "${d.name}" added`);
+    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast(d.name + " added", "success"); renderMembersTable(); renderRolesList();
+  } catch(e) { toast("Error: " + e.message, "error"); }
+}
+async function updateMember(id) {
+  if (!requireManager("updateMember")) return;
+  const existing = members.find(m => m.id === id);
+  if (!existing) return;
+  const d = { ...getMemberFormData(existing.role || "member"), id };
+  const oldName = _decodeName(existing.name);
+  if (!d.name) { toast("Name required", "error"); return; }
+  if (members.find(m => m.id !== id && _sameName(_decodeName(m.name), d.name))) { toast(`There's already a member called "${d.name}"`, "error"); return; }
+  if (members.find(m => m.id !== id && _sameName(_decodeName(m.username), d.username))) { toast("Username taken", "error"); return; }
+  if (d.password && d.password.length < 6) { toast("Password must be at least 6 characters", "error"); return; }
+  const renamed = oldName !== d.name;
+  try {
+    if (d.password) { d.password = await hashPassword(d.password); } else { delete d.password; }
+    // Move the member's history to the new name first; undo if saving the member fails
+    if (renamed) await dbRenameMemberData(oldName, d.name);
+    try { await dbSaveMember(d); }
+    catch (e) { if (renamed) await dbRenameMemberData(d.name, oldName).catch(() => {}); throw e; }
+    await logAudit("update", "member", d.name, renamed ? `Member "${oldName}" renamed to "${d.name}"` : `Member "${d.name}" updated`);
+    if (renamed && id === currentUser.memberId) { currentUser.name = d.name; saveSession(currentUser, currentMess, _getSessionToken()); }
+    members = await dbGetMembers(); buildInitialsMap(members); closeModal();
+    toast(renamed ? `Renamed — ${d.name}'s history moved with them` : "Updated", "success");
+    renderMembersTable(); renderRolesList(); updateSidebarUser();
+  } catch(e) { toast("Error: " + e.message, "error"); }
 }
 
 /* ── Profile photo picker (Add / Edit member) ── */
@@ -266,30 +316,6 @@ function removeMemberPhoto() {
   const prev = document.getElementById("mm-photo-prev");
   if (prev) prev.textContent = (document.getElementById("mm-name")?.value || "?").split(" ").map(w => w[0] || "").join("").slice(0, 2).toUpperCase() || "📷";
   document.getElementById("mm-photo-rm")?.setAttribute("hidden", "");
-}
-async function addMember() {
-  if (!requireManager("addMember")) return;
-  const d = getMemberFormData("member");
-  if (!d.name) { toast("Name required"); return; }
-  if (!d.username) { toast("Username required"); return; }
-  if (!d.password) { toast("Password required"); return; }
-  if (members.find(m => m.username === d.username)) { toast("Username taken"); return; }
-  try {
-    d.password = await hashPassword(d.password);
-    await dbSaveMember(d); await logAudit("create", "member", d.name, `Member "${d.name}" added`);
-    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast(d.name + " added", "success"); renderMembersTable(); renderRolesList();
-  } catch(e) { toast("Error: " + e.message, "error"); }
-}
-async function updateMember(id) {
-  if (!requireManager("updateMember")) return;
-  const existing = members.find(m => m.id === id);
-  const d = { ...getMemberFormData(existing?.role || "member"), id };
-  if (members.find(m => m.username === d.username && m.id !== id)) { toast("Username taken"); return; }
-  try {
-    if (d.password) { d.password = await hashPassword(d.password); } else { delete d.password; }
-    await dbSaveMember(d); await logAudit("update", "member", d.name, `Member "${d.name}" updated`);
-    members = await dbGetMembers(); buildInitialsMap(members); closeModal(); toast("Updated", "success"); renderMembersTable(); renderRolesList(); updateSidebarUser();
-  } catch(e) { toast("Error: " + e.message, "error"); }
 }
 
 /* ── Member leaving flow: final settlement before delete ── */
@@ -338,8 +364,8 @@ async function openLeavingFlow(id) {
     </div>`}
 
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-danger" onclick="deleteMember('${m.id}')">Remove anyway</button>
+      <button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button>
+      <button class="btn btn-danger" data-on-click="deleteMember('${m.id}')">Remove anyway</button>
     </div>`;
   openModal();
 }
@@ -375,8 +401,8 @@ function openManagerResetPasswordModal(memberId) {
     <div class="field"><label>Confirm new password *</label><input type="password" class="input" id="mrp-confirm" placeholder="Repeat new password" autocomplete="new-password"/></div>
     <div id="mrp-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:8px"></div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="doManagerResetPassword('${memberId}', '${member.name}')">Set new password</button>
+      <button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button>
+      <button class="btn btn-primary" data-on-click="doManagerResetPassword('${memberId}', '${member.name}')">Set new password</button>
     </div>`;
   openModal();
 }
@@ -392,7 +418,7 @@ async function doManagerResetPassword(memberId, memberName) {
   if (newPw !== confirmPw) return showErr("Passwords do not match.");
   try {
     const newHash = await hashPassword(newPw);
-    const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId);
+    const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId).eq("mess_id", messId());
     if (error) throw error;
     closeModal(); toast(`Password reset for ${memberName} ✓`, "success");
   } catch(e) { showErr("Error: " + e.message); }

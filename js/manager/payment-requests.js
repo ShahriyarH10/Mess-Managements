@@ -46,8 +46,8 @@ function buildPendingPayments() {
       </div>
       <div class="pr-amt">${fmtTk(Number(p.amount))}</div>
       <div class="pr-actions">
-        <button class="btn btn-ghost btn-sm" onclick="rejectPaymentRequest('${id}')"${busy}>Reject</button>
-        <button class="btn btn-primary btn-sm" onclick="confirmPaymentRequest('${id}')"${busy}>✓ Confirm received</button>
+        <button class="btn btn-ghost btn-sm" data-on-click="rejectPaymentRequest('${id}')"${busy}>Reject</button>
+        <button class="btn btn-primary btn-sm" data-on-click="confirmPaymentRequest('${id}')"${busy}>✓ Confirm received</button>
       </div>
     </div>`;
   }).join("");

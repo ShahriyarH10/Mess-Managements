@@ -10,11 +10,11 @@ async function renderUtility(el) {
     <div class="ut-pick">
       <select class="input" id="${prefix}-month">${opts.monthOptions}</select>
       <select class="input" id="${prefix}-year">${opts.yearOptions}</select>
-      <button class="btn btn-ghost btn-sm" onclick="${onLoad}">Load</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="${onLoad}">Load</button>
     </div>`;
   const billField = (id, icon, label) => `
     <div class="field ut-field"><label>${icon} ${label}</label>
-      <div class="ml-amt"><span>৳</span><input type="number" class="input" id="${id}" min="0" placeholder="0" oninput="updUtilityPreview()"/></div></div>`;
+      <div class="ml-amt"><span>৳</span><input type="number" class="input" id="${id}" min="0" placeholder="0" data-on-input="updUtilityPreview()"/></div></div>`;
 
   el.innerHTML = `
   <div class="topbar">
@@ -37,7 +37,7 @@ async function renderUtility(el) {
         </div>
         <div class="ut-foot">
           <div class="ent-pills"><span class="ent-pill">Total <b id="ut-pre-total">৳0</b></span><span class="ent-pill ent-d">Each <b id="ut-pre-share">৳0</b></span></div>
-          <button class="btn btn-primary btn-sm" onclick="saveUtilityGroup('prepaid')">Save prepaid</button>
+          <button class="btn btn-primary btn-sm" data-on-click="saveUtilityGroup('prepaid')">Save prepaid</button>
         </div>
       </div>
 
@@ -51,7 +51,7 @@ async function renderUtility(el) {
         </div>
         <div class="ut-foot">
           <div class="ent-pills"><span class="ent-pill">Total <b id="ut-post-total">৳0</b></span><span class="ent-pill ent-n">Each <b id="ut-post-share">৳0</b></span></div>
-          <button class="btn btn-primary btn-sm" onclick="saveUtilityGroup('postpaid')">Save postpaid</button>
+          <button class="btn btn-primary btn-sm" data-on-click="saveUtilityGroup('postpaid')">Save postpaid</button>
         </div>
       </div>
     </div>
@@ -78,8 +78,8 @@ async function renderUtility(el) {
       </div>
 
       <div id="ut-payment-actions" style="display:none" class="ent-foot">
-        <button class="btn btn-ghost" onclick="markAllUtilPaid()">✓ Mark all fully paid</button>
-        <button class="btn btn-primary" onclick="saveUtilityPayments()">💾 Save payments</button>
+        <button class="btn btn-ghost" data-on-click="markAllUtilPaid()">✓ Mark all fully paid</button>
+        <button class="btn btn-primary" data-on-click="saveUtilityPayments()">💾 Save payments</button>
       </div>
     </div>
 
@@ -199,8 +199,8 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
           <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${m.name}</div>
           <div class="ut-due"><b>${fmtTk(effectiveDue)}</b>${credit > 0 ? `<div class="dk-mini" style="color:var(--blue)">↩ ${fmtTk(credit)} carried</div>` : ""}</div>
           <div class="ml-amt ut-paid"><span>৳</span><input type="number" class="input input-sm" id="up-${m.id}" value="${paid}" min="0" step="1"
-            data-due="${effectiveDue}" oninput="onUtilPaidInput('${m.id}', ${effectiveDue})"/></div>
-          <select class="input input-sm ut-status" id="ust-${m.id}" onchange="utStatusChanged(this)">
+            data-due="${effectiveDue}" data-on-input="onUtilPaidInput('${m.id}', ${effectiveDue})"/></div>
+          <select class="input input-sm ut-status" id="ust-${m.id}" data-on-change="utStatusChanged(this)">
             <option value="unpaid" ${status === "unpaid" ? "selected" : ""}>⏳ Not paid</option>
             <option value="partial" ${status === "partial" ? "selected" : ""}>⚠️ Partial</option>
             <option value="paid" ${status === "paid" ? "selected" : ""}>✅ Paid</option>

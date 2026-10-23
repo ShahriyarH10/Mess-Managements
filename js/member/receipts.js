@@ -13,7 +13,7 @@ let _rcptList = [];
 let _rcptLive = {};   // month_key → live balance (same number Give Payment shows)
 
 // in "View as member" a manager sees receipts exactly like a member (their own only)
-const _isMgrRole = () => ["manager", "sub_manager", "superadmin"].includes(currentUser?.role) && !isMemberView();
+const _isMgrRole = () => ["manager", "sub_manager"].includes(currentUser?.role) && !isMemberView();
 
 /* Money actually kept by the mess for a receipt (amount minus change handed back). */
 function _rcptKept(p) { return round2(Number(p.amount) - Number(p.split?.change || 0)); }
@@ -101,7 +101,7 @@ async function renderMyReceipts(el) {
       <div class="page-sub">Every payment you made — whether you sent it or the manager recorded it</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-primary btn-sm" onclick="navigate('give-payment')">💵 Give payment</button>
+      <button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">💵 Give payment</button>
     </div>
   </div>
 
@@ -129,7 +129,7 @@ async function renderMyReceipts(el) {
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
         <div class="card-title" style="margin:0">All receipts</div>
-        <select class="input input-sm" id="rc-filter" style="width:auto" onchange="buildMyReceiptsList()">
+        <select class="input input-sm" id="rc-filter" style="width:auto" data-on-change="buildMyReceiptsList()">
           <option value="all">All</option>
           <option value="manager">Recorded by manager</option>
           <option value="member">Sent by me</option>
@@ -200,8 +200,8 @@ function buildMyReceiptsList() {
         <div class="rc-side">
           ${_rcptAfter(p) || (p.status === "pending" ? `<span style="color:var(--accent)">Not counted yet</span>` : `<span style="color:var(--text3)">Not counted</span>`)}
           <div style="display:flex;gap:6px">
-            <button class="btn btn-ghost btn-sm" onclick="copyReceiptLinkFor('${id}')" title="Copy receipt link" aria-label="Copy receipt link">🔗 Link</button>
-            <button class="btn btn-ghost btn-sm" onclick="showPaymentReceipt('${id}')">View</button>
+            <button class="btn btn-ghost btn-sm" data-on-click="copyReceiptLinkFor('${id}')" title="Copy receipt link" aria-label="Copy receipt link">🔗 Link</button>
+            <button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${id}')">View</button>
           </div>
         </div>
       </div>`;
@@ -221,7 +221,7 @@ async function renderReceiptPage(el, id) {
       <div class="page-title">Receipt</div>
       <div class="page-sub">${sub}</div>
     </div>
-    <div class="topbar-actions"><button class="btn btn-ghost btn-sm" onclick="navigate('${back}')">${backLbl}</button></div>
+    <div class="topbar-actions"><button class="btn btn-ghost btn-sm" data-on-click="navigate('${back}')">${backLbl}</button></div>
   </div>
   <div class="content">${body}</div>`;
 

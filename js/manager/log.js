@@ -55,8 +55,8 @@ function renderLog(el) {
         <select class="input" id="log-year" style="width:95px">
           ${opts.yearOptions}
         </select>
-        <button class="btn btn-primary" onclick="loadLog()">Generate Report</button>
-        <button class="btn btn-ghost" onclick="doExportReport()">🖨️ Print PDF</button>
+        <button class="btn btn-primary" data-on-click="loadLog()">Generate Report</button>
+        <button class="btn btn-ghost" data-on-click="doExportReport()">🖨️ Print PDF</button>
       </div>
 
       <div id="log-content">
@@ -260,7 +260,7 @@ async function loadLog() {
                   <button
                     class="btn btn-ghost btn-sm"
                     style="font-size:11px;padding:3px 7px;margin-bottom:3px"
-                    onclick="showSettlementBreakdown(${payData.indexOf(p)})"
+                    data-on-click="showSettlementBreakdown(${payData.indexOf(p)})"
                   >Details</button>
                   <div>
                     <b class="${p.netWithPrevDue > 0 ? 'net-neg' : p.netWithPrevDue < 0 ? 'net-pos' : ''}" style="font-size:14px">
@@ -533,7 +533,7 @@ function showSettlementBreakdown(idx) {
     </div>
 
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <button class="btn btn-ghost" data-on-click="closeModal()">Close</button>
     </div>
   `;
 

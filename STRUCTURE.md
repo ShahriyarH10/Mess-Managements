@@ -34,7 +34,7 @@ mess-manager/
     │   ├── config.js             ← Supabase client, global state, constants (MONTHS, PALETTE)
     │   ├── helpers.js            ← Utils (fmtTk, round2, today…), theme, session, modal, toast
     │   ├── db.js                 ← All Supabase query functions (meals, bazar, rent, util, members…)
-    │   ├── auth.js               ← Login, create mess, logout, superadmin panel, bootApp
+    │   ├── auth.js               ← Login, create mess (via mm-auth), logout, bootApp
     │   └── nav.js                ← Nav icons, sidebar build, mobile drawer, page routing
     │
     ├── demo/                     ← In-memory Supabase stand-in + seed data (loaded on demand)
@@ -51,7 +51,7 @@ mess-manager/
     │   ├── utility.js            ← Utility bills: elec/wifi/gas (prepaid), khala/other (postpaid),
     │   │                            payment tracking per member
     │   ├── log.js                ← Room rent entry + Monthly settlement log (prepaid/postpaid split)
-    │   ├── announcements.js      ← Post/delete announcements, mark-read badge system
+    │   ├── announcements.js      ← Messages: post, pin, expire and delete notices (broadcasts)
     │   ├── notifications.js      ← View/approve/reject member requests (meal, bazar, bill payment)
     │   ├── payment-requests.js   ← Confirm/reject members' Give Payment requests (listed on the Collect page)
     │   └── members.js            ← Add/edit/delete members, transfer role, settings page
@@ -104,7 +104,6 @@ mess-manager/
 | `bazar`         | renderBazar           | manager/bazar.js            |
 | `utility`       | renderUtility         | manager/utility.js          |
 | `rent` / `log`  | renderRent/renderLog  | manager/log.js              |
-| `announce`      | renderAnnouncements   | manager/announcements.js    |
 | `notifications` | renderNotifications   | manager/notifications.js    |
 | `members`       | renderMembers         | manager/members.js          |
 | `transfer`      | renderTransferRole    | manager/members.js          |
@@ -116,5 +115,3 @@ mess-manager/
 | `my-payments`   | renderMyPayments      | member/pages.js             |
 | `give-payment`  | renderGivePayment     | member/give-payment.js      |
 | `mess-overview` | renderMessOverview    | member/pages.js             |
-| `my-announce`   | renderAnnouncements   | manager/announcements.js    |
-| `my-chores`     | renderChores          | manager/announcements.js    |

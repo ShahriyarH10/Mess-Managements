@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════
-   CORE — Auth: login, create mess, logout, superadmin, boot
+   CORE — Auth: login, create mess, logout, boot
    ═══════════════════════════════════════════════ */
-const screens = ["landing-page","create-mess-screen","login-screen","superadmin-screen","app-shell"];
+const screens = ["landing-page","create-mess-screen","login-screen","app-shell"];
 function showScreen(id) { screens.forEach(s => { const el = document.getElementById(s); if (el) el.style.display = s === id ? "" : "none"; }); }
 // Navigation helpers used by inline handlers — they just change the route.
 function showLanding()    { Router.go(""); }
@@ -15,25 +15,27 @@ function homePage() {
 async function bootApp() { Router.goAfterLogin(); }
 
 /* ═══════════════════════════════════════════
-   JWT SIGNING — calls Edge Function to get
-   a mess-scoped JWT for RLS
+   SERVER SIGN-IN — supabase/functions/mm-auth
+   Passwords are checked on the server, which returns a signed session token
+   (mess_id / member_id / app_role) that the database policies enforce.
+   { unavailable: true } means the function isn't deployed yet, so callers fall
+   back to the older in-browser check — that path stops working (by design) once
+   supabase/security-lockdown.sql hides members.password.
 ═══════════════════════════════════════════ */
-async function signSessionJWT(memberId, messId, role) {
-  if (MM_MODE === "demo") return null; // demo never calls the network
+async function mmAuth(action, payload, token) {
+  if (MM_MODE === "demo") return { unavailable: true };
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/functions/v1/sign-session-jwt`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId, messId, role }),
-      }
-    );
-    const data = await res.json();
-    return data.token || null;
-  } catch (e) {
-    console.error("[Auth] JWT signing failed:", e);
-    return null; // app still works, just without RLS enforcement
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/mm-auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    if (res.status === 404) return { unavailable: true };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && !data.error) return { unavailable: true };
+    return data;
+  } catch (_) {
+    return { unavailable: true };   // offline or function missing
   }
 }
 
@@ -56,14 +58,20 @@ async function doCreateMess() {
   const btn = document.getElementById("cm-btn");
   btn.disabled = true; btn.textContent = "Creating…";
   try {
+    const r = await mmAuth("create_mess", { messName, location, name: myName, username, password });
+    if (!r.unavailable) {
+      if (r.error) { showCreateError(r.error); return; }
+      toast("Mess created! Signing you in…", "success");
+      saveSession(r.user, r.mess, r.token);
+      await bootApp(); return;
+    }
     const hashedPw = await hashPassword(password);
     const { data: mess, error: messErr } = await sb.from("messes").insert({ name: messName, location: location || "" }).select().single();
     if (messErr) throw messErr;
     const { data: member, error: memErr } = await sb.from("members").insert({ mess_id: mess.id, name: myName, username, password: hashedPw, role: "manager" }).select().single();
     if (memErr) throw memErr;
     toast("Mess created! Signing you in…", "success");
-    const jwt = await signSessionJWT(member.id, mess.id, "manager");
-    saveSession({ name: myName, username, role: "manager", memberId: member.id }, mess, jwt);
+    saveSession({ name: myName, username, role: "manager", memberId: member.id }, mess, null);
     await bootApp();
   } catch (e) {
     showCreateError(e?.code === "23505" ? "That username is already taken — choose another." : "Failed to create mess: " + (e.message || "Unknown error"));
@@ -97,16 +105,15 @@ async function doLogin() {
 
   btn.disabled = true; btn.textContent = "Signing in…";
   try {
-    // Superadmin check
-    if (user === SUPERADMIN.username && MM_MODE === "live") {
-      const match = await comparePassword(pass, SUPERADMIN.passwordHash);
-      if (match) {
-        resetLoginAttempts();
-        saveSession({ name: "Super Admin", username: user, role: "superadmin", memberId: null }, null);
-        Router.goAfterLogin(); return;
-      }
+    const r = await mmAuth("login", { username: user, password: pass });
+    if (!r.unavailable) {
+      if (r.error) { showLoginError(r.error); return; }
+      resetLoginAttempts();
+      saveSession(r.user, r.mess, r.token);
+      await bootApp(); return;
     }
 
+    // ── Fallback until mm-auth is deployed (and the sandbox) ──
     // Member login — fetch by username only, then compare hash server-side avoided (client hashes)
     const { data: memberRow } = await sb.from("members").select("*, messes(*)")
       .eq("username", user).maybeSingle();
@@ -126,9 +133,7 @@ async function doLogin() {
           const { data: fetchedMess } = await sb.from("messes").select("*").eq("id", memberRow.mess_id).maybeSingle();
           messObj = fetchedMess;
         }
-        // Get a signed JWT with mess_id claim for RLS
-        const jwt = await signSessionJWT(memberRow.id, memberRow.mess_id, memberRow.role);
-        saveSession({ name: memberRow.name, username: user, role: memberRow.role, memberId: memberRow.id }, messObj, jwt);
+        saveSession({ name: memberRow.name, username: user, role: memberRow.role, memberId: memberRow.id }, messObj, null);
         await bootApp(); return;
       }
     }
@@ -170,77 +175,6 @@ function doLogout() {
   clearSession();
   Router.resetShell();
   Router.go("");
-}
-
-/* ═══════════════════════════════════════════
-   SUPERADMIN
-═══════════════════════════════════════════ */
-function bootSuperAdmin(page = "messes") {
-  showScreen("superadmin-screen");
-  document.getElementById("sa-sidebar-user").innerHTML = `<div class="su-avatar" style="background:#2a2218;color:#d4a853">SA</div><div><div class="su-name">Super Admin</div><div class="su-role">System</div></div>`;
-  document.querySelectorAll("[data-sapage]").forEach(b => b.classList.toggle("active", b.dataset.sapage === page));
-  renderSAPage(page);
-}
-function saNavigate(page) { Router.go("admin/" + page); }
-async function renderSAPage(page) {
-  const main = document.getElementById("sa-main");
-  if (page === "messes")  await renderSAMesses(main);
-  else if (page === "metrics") await renderSAMetrics(main);
-}
-async function renderSAMesses(main) {
-  const { data: messes } = await getClient().from("messes").select("*").order("created_at", { ascending: false });
-  main.innerHTML = `<div class="topbar"><div><div class="page-title">All Messes</div><div class="page-sub">${(messes||[]).length} messes registered</div></div></div>
-  <div class="content"><div class="card"><div class="tbl-wrap"><table>
-    <thead><tr><th>Mess Name</th><th>Location</th><th>Created</th><th>Members</th><th></th></tr></thead>
-    <tbody id="sa-messes-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-  </table></div></div></div>`;
-  if (!messes?.length) { document.getElementById("sa-messes-tbody").innerHTML = '<tr><td colspan="5" class="empty">No messes yet</td></tr>'; return; }
-  const { data: memCounts } = await getClient().from("members").select("mess_id");
-  const countMap = {};
-  (memCounts||[]).forEach(m => { countMap[m.mess_id] = (countMap[m.mess_id]||0)+1; });
-  document.getElementById("sa-messes-tbody").innerHTML = messes.map(m => `<tr>
-    <td><b>${escapeHtml(m.name)}</b></td>
-    <td style="color:var(--text3)">${escapeHtml(m.location||"—")}</td>
-    <td style="color:var(--text3)">${new Date(m.created_at).toLocaleDateString()}</td>
-    <td><span class="badge badge-blue">${countMap[m.id]||0} members</span></td>
-    <td><button class="btn btn-danger btn-sm" onclick="saDeleteMess('${m.id}')">Delete</button></td>
-  </tr>`).join("");
-}
-async function saDeleteMess(id) {
-  if (!currentUser || currentUser.role !== "superadmin") { toast("Superadmin access required", "error"); return; }
-  showConfirm({
-    title: "Delete this mess?",
-    body: "This will permanently delete the mess and ALL its data (members, meals, bazar, rent, utility). This cannot be undone.",
-    confirmLabel: "Delete permanently",
-    danger: true,
-    onConfirm: async () => {
-      try {
-        for (const t of ["meals","bazar","rent","utility_payments","members","announcements","chores"]) {
-          await getClient().from(t).delete().eq("mess_id", id);
-        }
-        await getClient().from("messes").delete().eq("id", id);
-        toast("Mess deleted"); renderSAPage("messes");
-      } catch (e) { toast("Delete failed: " + e.message, "error"); }
-    }
-  });
-}
-async function renderSAMetrics(main) {
-  const [{ data: messes }, { data: mems }] = await Promise.all([
-    getClient().from("messes").select("id,name,created_at"),
-    getClient().from("members").select("mess_id"),
-  ]);
-  const totalMesses = messes?.length||0, totalMembers = mems?.length||0;
-  const today30 = new Date(Date.now()-30*24*3600*1000).toISOString();
-  const newMesses = (messes||[]).filter(m => m.created_at > today30).length;
-  main.innerHTML = `<div class="topbar"><div><div class="page-title">Platform Metrics</div><div class="page-sub">System-wide overview</div></div></div>
-  <div class="content">
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Total Messes</div><div class="stat-value">${totalMesses}</div></div>
-      <div class="stat-card"><div class="stat-label">Total Members</div><div class="stat-value">${totalMembers}</div></div>
-      <div class="stat-card"><div class="stat-label">New Messes (30d)</div><div class="stat-value" style="color:var(--green)">${newMesses}</div></div>
-      <div class="stat-card"><div class="stat-label">Avg Members/Mess</div><div class="stat-value">${totalMesses?round2(totalMembers/totalMesses):0}</div></div>
-    </div>
-  </div>`;
 }
 
 /* ═══════════════════════════════════════════

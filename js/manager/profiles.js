@@ -8,7 +8,7 @@ async function renderProfiles(el) {
   <div class="topbar">
     <div><div class="page-title">Member Profiles</div><div class="page-sub">Who owes what — tap a member for the full breakdown</div></div>
     <div class="topbar-actions">
-      <select class="input" id="prof-period" onchange="refreshProfiles()" style="width:160px">
+      <select class="input" id="prof-period" data-on-change="refreshProfiles()" style="width:160px">
         <option value="1" selected>This month</option>
         <option value="last">Last month</option>
         <option value="3">Last 3 months</option>
@@ -21,9 +21,9 @@ async function renderProfiles(el) {
     <div id="prof-summary"></div>
     <div class="pc-bar">
       <div class="an-seg" id="prof-sort">
-        <button class="an-seg-btn on" data-v="due" onclick="setProfileSort('due')">Owes most</button>
-        <button class="an-seg-btn" data-v="name" onclick="setProfileSort('name')">A–Z</button>
-        <button class="an-seg-btn" data-v="meals" onclick="setProfileSort('meals')">Most meals</button>
+        <button class="an-seg-btn on" data-v="due" data-on-click="setProfileSort('due')">Owes most</button>
+        <button class="an-seg-btn" data-v="name" data-on-click="setProfileSort('name')">A–Z</button>
+        <button class="an-seg-btn" data-v="meals" data-on-click="setProfileSort('meals')">Most meals</button>
       </div>
     </div>
     <div class="pc-grid" id="profile-card-grid"><div class="loading"><div class="spinner"></div></div></div>
@@ -512,7 +512,7 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
       const st2 = status || "unpaid";
       return `<span class="pc-chip ${st2 === "paid" ? "ok" : st2 === "partial" ? "mid" : "bad"}">${label} ${st2 === "paid" ? "✓" : st2 === "partial" ? "partial" : "due"}</span>`;
     };
-    return `<button class="pc-card ${pays ? "pc-pay" : gets ? "pc-get" : "pc-ok"}" onclick="selectProfile('${m.id}')">
+    return `<button class="pc-card ${pays ? "pc-pay" : gets ? "pc-get" : "pc-ok"}" data-on-click="selectProfile('${m.id}')">
       <div class="pc-head">
         <span class="avatar pc-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
         <div class="pc-who"><div class="pc-name">${m.name}</div><div class="pc-meta">${m.room ? "Room " + m.room + " · " : ""}${m.role === "manager" ? "👑 Manager" : m.role === "sub_manager" ? "⚡ Sub-manager" : "Member"}</div></div>
@@ -641,8 +641,8 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
         <div class="mb-hero-lbl">Net payable · ${monthLabelFromKey(currentKeyForOwe)}</div>
         <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "Pays " : gets ? "Gets " : "✓ Settled"}${pays || gets ? fmtTk(Math.abs(net)) : ""}</div>
         <div class="pf-net-btns">
-          ${pays ? `<button class="btn btn-primary btn-sm" onclick="closeModal();navigate('collect')">💵 Collect</button>` : ""}
-          <button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button>
+          ${pays ? `<button class="btn btn-primary btn-sm" data-on-click="closeModal();navigate('collect')">💵 Collect</button>` : ""}
+          <button class="btn btn-ghost btn-sm" data-on-click="closeModal()">Close</button>
         </div>
       </div>
     </div>

@@ -38,7 +38,7 @@ async function renderCollect(el) {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <select class="input" id="cp-month" style="width:148px">${opts.monthOptions}</select>
         <select class="input" id="cp-year"  style="width:92px">${opts.yearOptions}</select>
-        <button class="btn btn-primary btn-sm" onclick="loadCollectMonth()" style="gap:6px">
+        <button class="btn btn-primary btn-sm" data-on-click="loadCollectMonth()" style="gap:6px">
           ↻ Load
         </button>
       </div>
@@ -360,11 +360,11 @@ function buildCollectTable() {
               min="0" step="1" placeholder="0.00"
               style="padding-left:26px!important"
               value="${prefill}"
-              oninput="onCollectAmtInput('${m.id}')"
-              onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
-              onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
+              data-on-input="onCollectAmtInput('${m.id}')"
+              data-on-focus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
+              data-on-blur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
           </div>
-          <button class="btn btn-primary cp-save-btn" onclick="saveCollectRow('${m.id}')">
+          <button class="btn btn-primary cp-save-btn" data-on-click="saveCollectRow('${m.id}')">
             Save
           </button>
         </div>
@@ -374,7 +374,7 @@ function buildCollectTable() {
   wrap.innerHTML = `
     <div class="cp-cards-grid">${cards}</div>
     <div style="margin-top:12px;display:flex;gap:8px;">
-      <button class="btn btn-ghost btn-sm" onclick="loadCollectMonth()">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="loadCollectMonth()">↻ Refresh</button>
     </div>`;
 
   // Trigger split calculation for all pre-filled inputs
@@ -568,7 +568,7 @@ function buildReturnTable() {
 
     return `
       <div class="cp-mcard cp-mcard-ret" id="retr-${m.id}">
-        ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" onclick="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">✕</button>` : ""}
+        ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" data-on-click="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">✕</button>` : ""}
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
@@ -594,12 +594,12 @@ function buildReturnTable() {
             <input type="number" class="input cp-amt-input" id="ret-amt-${m.id}"
               min="0" max="${total}" step="1" placeholder="0.00"
               style="padding-left:26px!important"
-              oninput="onReturnAmtInput('${m.id}')"
-              onfocus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
-              onblur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
+              data-on-input="onReturnAmtInput('${m.id}')"
+              data-on-focus="this.closest('.cp-mcard').classList.add('cp-mcard-active')"
+              data-on-blur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
           </div>
           <button class="btn cp-save-btn" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green)"
-            onclick="saveReturnRow('${m.id}')">Save</button>
+            data-on-click="saveReturnRow('${m.id}')">Save</button>
         </div>
       </div>`;
   }).join('');
@@ -710,6 +710,7 @@ async function saveReturnRow(memberId) {
   if (!requireManager('saveReturnRow')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
+  if (!(await ensureMonthOpen(ctx.key))) return;
   const r   = ctx.perMember[memberId];
   const m   = members.find(x => x.id === memberId);
   if (!r || !m) return;
@@ -914,13 +915,13 @@ function showChangeReceipt(d) {
     </div>
 
     <div class="chg-btns">
-      <button class="btn btn-primary btn-sm" onclick="copyChangeReceipt(this)">📋 Copy</button>
+      <button class="btn btn-primary btn-sm" data-on-click="copyChangeReceipt(this)">📋 Copy</button>
       <a class="btn btn-sm" href="${waUrl}" target="_blank" rel="noopener"
          style="background:#25D366;border:1px solid #1fb759;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;border-radius:var(--radius-sm)">
         💬 WhatsApp
       </a>
-      <button class="btn btn-ghost btn-sm" onclick="printChangeReceipt()">🖨 Print</button>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()" style="margin-left:auto">✕ Close</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="printChangeReceipt()">🖨 Print</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">✕ Close</button>
     </div>
   </div>`;
 
@@ -1045,6 +1046,7 @@ function onCollectAmtInput(memberId) {
 async function saveCollectRow(memberId) {
   if (!requireManager('saveCollectRow')) return;
   if (!_collectCtx) return;
+  if (!(await ensureMonthOpen(_collectCtx.key))) return;
   const ctx = _collectCtx;
   const r = ctx.perMember[memberId];
   const m = members.find(x => x.id === memberId);
@@ -1400,13 +1402,13 @@ function showCreditReceipt(d) {
 
     <!-- ── Actions ── -->
     <div class="crdt-btns">
-      <button class="btn btn-primary btn-sm" onclick="copyCreditReceipt(this)">📋 Copy</button>
+      <button class="btn btn-primary btn-sm" data-on-click="copyCreditReceipt(this)">📋 Copy</button>
       <a class="btn btn-sm" href="${waUrl}" target="_blank" rel="noopener"
          style="background:#25D366;border:1px solid #1fb759;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;border-radius:var(--radius-sm)">
         💬 WhatsApp
       </a>
-      <button class="btn btn-ghost btn-sm" onclick="printCreditReceipt()">🖨 Print</button>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal()" style="margin-left:auto">✕ Close</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="printCreditReceipt()">🖨 Print</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">✕ Close</button>
     </div>
 
   </div>`;

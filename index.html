@@ -14,7 +14,7 @@
 
 <!-- Security: strict CSP. No inline <script>, no eval, no third-party origins; the only network
      origin allowed is the Supabase project (real sign-in). The sandbox demo never calls it.
-     Inline onclick="…" attributes are handled by js/core/events.js.
+     Inline data-on-click="…" attributes are handled by js/core/events.js.
      frame-ancestors / HSTS etc. are sent as real headers (see _headers / vercel.json). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://lrzotklutnyzcadutgwf.supabase.co wss://lrzotklutnyzcadutgwf.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'"/>
 
@@ -72,10 +72,10 @@
       <a class="btn btn-primary btn-sm" href="#/demo">Live demo</a>
       <a class="btn btn-ghost btn-sm" href="#/create">Create Mess</a>
     </div>
-    <button class="land-nav-hamburger" onclick="openLandingDrawer()" aria-label="Open menu">
+    <button class="land-nav-hamburger" data-on-click="openLandingDrawer()" aria-label="Open menu">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
-    <button class="land-nav-theme" onclick="toggleTheme()" aria-label="Toggle theme">
+    <button class="land-nav-theme" data-on-click="toggleTheme()" aria-label="Toggle theme">
       <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
@@ -83,9 +83,9 @@
 
   <!-- MOBILE NAV DRAWER -->
   <div class="land-mobile-drawer" id="land-mobile-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu">
-    <div class="land-mobile-drawer-bg" onclick="closeLandingDrawer()"></div>
+    <div class="land-mobile-drawer-bg" data-on-click="closeLandingDrawer()"></div>
     <div class="land-mobile-drawer-panel">
-      <button class="land-drawer-close" onclick="closeLandingDrawer()" aria-label="Close menu">×</button>
+      <button class="land-drawer-close" data-on-click="closeLandingDrawer()" aria-label="Close menu">×</button>
       <a class="land-drawer-link" href="#/features">Features</a>
       <a class="land-drawer-link" href="#/how-it-works">How it works</a>
       <a class="land-drawer-link" href="#/engineering">Engineering</a>
@@ -297,7 +297,7 @@
         <div class="field"><label>Your password *</label><input type="password" class="input" id="cm-password" placeholder="min 6 chars"/></div>
       </div>
       <div class="field"><label>Mess location</label><input type="text" class="input" id="cm-location" placeholder="e.g. Mirpur-10, Dhaka"/></div>
-      <button class="btn btn-primary" style="width:100%;margin-top:4px;justify-content:center" onclick="doCreateMess()" id="cm-btn">
+      <button class="btn btn-primary" style="width:100%;margin-top:4px;justify-content:center" data-on-click="doCreateMess()" id="cm-btn">
         Create mess & continue →
       </button>
       <div class="auth-hint in-real">Already have a mess? <a href="#/login">Sign in</a></div>
@@ -319,13 +319,13 @@
       <div class="field"><label>Username</label><input type="text" class="input" id="login-user" placeholder="your username" autocomplete="username" maxlength="64" autocapitalize="none" spellcheck="false"/></div>
       <div class="field"><label>Password</label>
         <div class="pw-wrap">
-          <input type="password" class="input" id="login-pass" placeholder="••••••••" autocomplete="current-password" maxlength="128" onkeydown="if(event.key==='Enter')doLogin()"/>
-          <button class="pw-eye" onclick="togglePw()" type="button" aria-label="Toggle password visibility">
+          <input type="password" class="input" id="login-pass" placeholder="••••••••" autocomplete="current-password" maxlength="128" data-on-keydown="if(event.key==='Enter')doLogin()"/>
+          <button class="pw-eye" data-on-click="togglePw()" type="button" aria-label="Toggle password visibility">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
       </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Sign in →</button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" data-on-click="doLogin()" id="login-btn">Sign in →</button>
       <div class="auth-hint in-real">New here? <a href="#/create">Create a mess</a> &nbsp;·&nbsp; Just looking? <a href="#/demo">Try the demo</a></div>
       <div class="auth-hint in-real" style="margin-top:6px">Forgot your password? Contact your mess manager to reset it.</div>
       <div class="auth-hint in-demo">Want a blank sandbox? <a href="#/demo/create">Create a sandbox mess</a></div>
@@ -337,34 +337,10 @@
         <div class="demo-creds">Or sign in as <code>demo_manager</code> · password <code>Demo@1234</code></div>
       </div>
     </div>
-    <button class="auth-theme-btn" onclick="toggleTheme()">
+    <button class="auth-theme-btn" data-on-click="toggleTheme()">
       <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
-  </div>
-</div>
-
-<!-- ═══════════ SUPERADMIN SCREEN ═══════════ -->
-<div id="superadmin-screen" style="display:none">
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="logo"><div class="land-logo-icon">M</div><div><div class="logo-text">MessManager</div><div class="logo-sub">Super Admin</div></div></div>
-      <div class="sidebar-user" id="sa-sidebar-user"></div>
-      <nav class="nav">
-        <div class="nav-section">Management</div>
-        <button class="nav-item" onclick="saNavigate('messes')" data-sapage="messes"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="10" rx="1"/><path d="M5 3V2M11 3V2"/></svg>All Messes</button>
-        <button class="nav-item" onclick="saNavigate('metrics')" data-sapage="metrics"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>Metrics</button>
-      </nav>
-      <div class="sidebar-footer">
-        <button class="theme-toggle-btn" onclick="toggleTheme()">
-          <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/></svg>
-          <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <span class="theme-label"></span>
-        </button>
-        <button class="btn btn-ghost btn-sm logout-btn" onclick="doLogout()">Sign out</button>
-      </div>
-    </aside>
-    <main class="main" id="sa-main"></main>
   </div>
 </div>
 
@@ -376,28 +352,28 @@
       <div class="sidebar-user" id="sidebar-user"></div>
       <nav class="nav" id="sidebar-nav"></nav>
       <div class="sidebar-footer">
-        <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <button class="theme-toggle-btn" data-on-click="toggleTheme()">
           <svg class="sun-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/></svg>
           <svg class="moon-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           <span class="theme-label"></span>
         </button>
-        <button class="nav-item" id="sidebar-change-pw" onclick="openChangePasswordModal(currentUser?.memberId)" style="color:var(--text2);margin-bottom:2px">
+        <button class="nav-item" id="sidebar-change-pw" data-on-click="openChangePasswordModal(currentUser?.memberId)" style="color:var(--text2);margin-bottom:2px">
           <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 016 0v2"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
           Change Password
         </button>
         <div class="demo-only demo-tools">
           <div class="demo-tag">DEMO MODE</div>
-          <button class="nav-item" onclick="switchDemoRole()"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 3l3 3-3 3M2 6h12M5 13l-3-3 3-3M14 10H2"/></svg><span id="demo-switch-label">Switch role</span></button>
-          <button class="nav-item" onclick="resetDemo()"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 106-6M2 3v3h3"/></svg>Reset demo data</button>
+          <button class="nav-item" data-on-click="switchDemoRole()"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 3l3 3-3 3M2 6h12M5 13l-3-3 3-3M14 10H2"/></svg><span id="demo-switch-label">Switch role</span></button>
+          <button class="nav-item" data-on-click="resetDemo()"><svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 106-6M2 3v3h3"/></svg>Reset demo data</button>
         </div>
-        <button class="nav-item logout-btn" id="sidebar-logout" onclick="doLogout()" style="color:var(--red);margin-bottom:4px"></button>
+        <button class="nav-item logout-btn" id="sidebar-logout" data-on-click="doLogout()" style="color:var(--red);margin-bottom:4px"></button>
         <div class="db-status"><div class="db-dot live" id="db-dot"></div><span id="db-label">Connecting…</span></div>
       </div>
     </aside>
     <div class="mobile-topbar">
       <div class="mob-brand"><div class="land-logo-icon" style="width:26px;height:26px;font-size:13px">M</div><span id="mob-mess-name">MessManager</span><span class="demo-badge demo-only-inline" style="margin-left:6px">DEMO</span></div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="mob-theme-btn" onclick="toggleTheme()">
+        <button class="mob-theme-btn" data-on-click="toggleTheme()">
           <svg class="sun-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2"/></svg>
           <svg class="moon-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
@@ -414,7 +390,7 @@
 <div class="modal-bg" id="confirm-bg" role="dialog" aria-modal="true">
   <div class="confirm-dialog" id="confirm-content"></div>
 </div>
-<div class="modal-bg" id="modal-bg" role="dialog" aria-modal="true" onclick="if(event.target===this)closeModal()">
+<div class="modal-bg" id="modal-bg" role="dialog" aria-modal="true" data-on-click="if(event.target===this)closeModal()">
   <div class="modal" id="modal-content"></div>
 </div>
 
