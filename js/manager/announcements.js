@@ -206,28 +206,52 @@ async function renderMessages(el, isManager) {
   <div class="topbar">
     <div>
       <div class="page-title">Messages</div>
-      <div class="page-sub">${isManager ? "Post broadcasts to all members" : "Broadcasts from your manager"}</div>
+      <div class="page-sub">${isManager ? "Notices every member sees on their dashboard" : "Notices from your manager"}</div>
     </div>
-    ${isManager ? `
-    <div class="topbar-actions">
-      <button class="btn btn-primary btn-sm" onclick="openBroadcastModal()">📢 Broadcast</button>
-    </div>` : ""}
   </div>
-  <div class="content">
+  <div class="content dk">
+    ${isManager ? `
+    <div class="card bc-compose">
+      <div class="bc-top">
+        <span class="dk-av bc-me" style="${avStyle(currentUser.name)}">${avFace(currentUser.memberId, currentUser.name)}</span>
+        <textarea class="input" id="bc-msg" rows="2" maxlength="500" placeholder="Write a notice for everyone… e.g. Pay rent by Friday!" oninput="bcCount(this)"></textarea>
+      </div>
+      <input type="hidden" id="bc-priority" value="normal"/>
+      <div class="bc-opts">
+        <div class="an-seg" id="bc-pri-seg">
+          <button class="an-seg-btn on" data-v="normal" onclick="setBcPriority('normal')">📢 Normal</button>
+          <button class="an-seg-btn" data-v="urgent" onclick="setBcPriority('urgent')">🔴 Urgent</button>
+        </div>
+        <label class="ma-skip bc-pin"><input type="checkbox" id="bc-pin"/><span>📌 Pin to top</span></label>
+        <select class="input input-sm bc-exp" id="bc-expiry" title="Hide it automatically after…">
+          <option value="">Never expires</option><option value="6">Expires in 6 h</option><option value="12">Expires in 12 h</option>
+          <option value="24">Expires in 1 day</option><option value="72">Expires in 3 days</option><option value="168">Expires in 1 week</option>
+        </select>
+        <span class="bc-count" id="bc-count">0/500</span>
+        <button class="btn btn-primary btn-sm" onclick="sendBroadcast()">Send to all</button>
+      </div>
+    </div>` : ""}
     <div id="msg-broadcasts-wrap"><div class="loading"><div class="spinner"></div>Loading…</div></div>
   </div>`;
 
   if (!isManager && currentUser.memberId) {
-    localStorage.setItem(`mm_announce_read_${currentUser.memberId}`, new Date().toISOString());
+    try { localStorage.setItem(`mm_announce_read_${currentUser.memberId}`, new Date().toISOString()); } catch (_) {}
     refreshMemberAnnounceBadge?.();
   }
 
   await loadMessagesPage(isManager);
 }
 
+function bcCount(t) { const c = document.getElementById("bc-count"); if (c) c.textContent = `${t.value.length}/500`; }
+function setBcPriority(v) {
+  const h = document.getElementById("bc-priority"); if (h) h.value = v;
+  document.querySelectorAll("#bc-pri-seg .an-seg-btn").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+}
+
 async function loadMessagesPage(isManager) {
   const bWrap = document.getElementById("msg-broadcasts-wrap");
   if (!bWrap) return;
+  isManager = isManager ?? ["manager", "sub_manager"].includes(currentUser?.role);
 
   try {
     const { data: bcs } = await getClient().from("broadcasts").select("*")
@@ -241,52 +265,51 @@ async function loadMessagesPage(isManager) {
     const list   = isManager ? (bcs || []) : active;
 
     if (!list.length) {
-      bWrap.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--text3)">
-        <div style="font-size:40px;margin-bottom:12px">📢</div>
-        <div style="font-size:14px">${isManager ? "No broadcasts yet — click 📢 Broadcast to post one." : "No broadcasts from your manager yet."}</div>
-      </div>`;
+      bWrap.innerHTML = `<div class="card"><div class="empty" style="padding:32px"><div>📢</div>
+        <div>${isManager ? "No notices yet — write one above." : "No notices from your manager yet."}</div></div></div>`;
       return;
     }
 
-    bWrap.innerHTML = list.map(b => {
+    const card = b => {
       const isUrgent  = b.priority === "urgent";
-      const isPinned  = b.pinned;
       const isExpired = b.expires_at && new Date(b.expires_at) < now;
-      const dt = new Date(b.created_at).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit", hour12:true });
-      return `<div style="
-          background:${isUrgent ? "var(--red-bg)" : isPinned ? "var(--accent-bg)" : "var(--bg2)"};
-          border:1.5px solid ${isUrgent ? "rgba(224,82,82,.3)" : isPinned ? "rgba(212,168,83,.3)" : "var(--border)"};
-          border-radius:var(--radius);
-          padding:14px 16px;
-          margin-bottom:10px;
-          opacity:${isExpired ? 0.5 : 1};
-          transition:border-color .2s;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
-              <span style="font-size:16px">${isPinned ? "📌" : isUrgent ? "🔴" : "📢"}</span>
-              ${isPinned  ? '<span style="font-size:10px;background:var(--accent);color:#000;padding:2px 7px;border-radius:99px;font-weight:800">PINNED</span>'  : ""}
-              ${isUrgent  ? '<span style="font-size:10px;background:var(--red);color:#fff;padding:2px 7px;border-radius:99px;font-weight:800">URGENT</span>'   : ""}
-              ${isExpired ? '<span style="font-size:10px;color:var(--text3);border:1px solid var(--border);padding:2px 7px;border-radius:99px">EXPIRED</span>' : ""}
-            </div>
-            <div style="font-size:14px;color:var(--text);line-height:1.6">${escapeHtml(b.message)}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:6px">${escapeHtml(b.author || "")} · ${dt}</div>
+      const when = new Date(b.created_at);
+      const dt = when.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+      const exp = b.expires_at && !isExpired ? `expires ${new Date(b.expires_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}` : "";
+      return `<div class="bc-card${isUrgent ? " bc-urgent" : ""}${b.pinned ? " bc-pinned" : ""}${isExpired ? " bc-expired" : ""}">
+        <span class="dk-av bc-av" style="${avStyle(b.author)}">${avFaceByName(b.author)}</span>
+        <div class="bc-body">
+          <div class="bc-head">
+            <b>${escapeHtml(b.author || "Manager")}</b>
+            ${b.pinned ? `<span class="badge badge-amber">📌 Pinned</span>` : ""}
+            ${isUrgent ? `<span class="badge badge-red">Urgent</span>` : ""}
+            ${isExpired ? `<span class="badge">Expired</span>` : ""}
+            <span class="bc-time" title="${escapeHtml(when.toLocaleString())}">${_relativeTime(b.created_at)}</span>
           </div>
-          ${isManager ? `<div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-ghost btn-sm" onclick="toggleBroadcastPin('${b.id}',${!isPinned})" title="${isPinned ? "Unpin" : "Pin"}">${isPinned ? "📌" : "📍"}</button>
-            <button class="btn btn-ghost btn-sm" onclick="deleteBroadcastMsg('${b.id}')">✕</button>
-          </div>` : ""}
+          <div class="bc-msg">${escapeHtml(b.message)}</div>
+          <div class="bc-foot">${dt}${exp ? ` · ${exp}` : ""}</div>
         </div>
+        ${isManager ? `<div class="bc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="toggleBroadcastPin('${b.id}',${!b.pinned})">${b.pinned ? "Unpin" : "📌 Pin"}</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteBroadcastMsg('${b.id}')" title="Delete">✕</button>
+        </div>` : ""}
       </div>`;
-    }).join("");
+    };
+    const pinned = list.filter(b => b.pinned), rest = list.filter(b => !b.pinned);
+    bWrap.innerHTML =
+      (pinned.length ? `<div class="bc-sec">Pinned</div>${pinned.map(card).join("")}` : "") +
+      (rest.length ? `<div class="bc-sec">${pinned.length ? "Recent" : "All notices"}</div>${rest.map(card).join("")}` : "");
   } catch(e) {
     bWrap.innerHTML = `<div class="empty">Error: ${escapeHtml(e.message)}</div>`;
   }
 }
 
-async function deleteBroadcastMsg(id) {
-  try { await getClient().from("broadcasts").delete().eq("id", id); toast("Broadcast removed"); await loadMessagesPage(true); }
-  catch(e) { toast("Error: " + e.message, "error"); }
+function deleteBroadcastMsg(id) {
+  showConfirm({ title: "Delete this notice?", body: "It disappears from every member's dashboard.", confirmLabel: "Delete", danger: true,
+    onConfirm: async () => {
+      try { await getClient().from("broadcasts").delete().eq("id", id); toast("Notice deleted", "success"); await loadMessagesPage(true); }
+      catch(e) { toast("Error: " + e.message, "error"); }
+    } });
 }
 async function toggleBroadcastPin(id, pinned) {
   try { await getClient().from("broadcasts").update({ pinned }).eq("id", id); toast(pinned ? "📌 Pinned" : "Unpinned", "success"); await loadMessagesPage(true); }

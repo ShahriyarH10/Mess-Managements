@@ -590,6 +590,14 @@ function avFaceByName(name) {
   return m ? avFace(m.id, m.name) : initials(name || "?");
 }
 
+/* Inline background/foreground for a member's avatar circle, by name. */
+function avStyle(name) {
+  const list = typeof members !== "undefined" ? members : [];
+  const i = list.findIndex(x => x.name === name);
+  const c = avatarCol(i >= 0 ? i : 0);
+  return `background:${c.bg};color:${c.fg}`;
+}
+
 /* Read an image file → centre-cropped 160×160 JPEG data: URL (≤ ~25 KB).
    FileReader (not blob: URLs) because the CSP only allows data: images. */
 function compressMemberPhoto(file) {

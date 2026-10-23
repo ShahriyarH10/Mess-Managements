@@ -3,38 +3,58 @@
    No approve / reject system
    ═══════════════════════════════════════════════ */
 
-async function renderNotifications(el) {
-  const all = await dbGetNotifications();
-  const fresh = all.filter(n => n.status === "new" || n.status === "pending");
+let _notifAll = [], _notifFilter = "all";
+const NOTIF_GROUPS = {
+  meals:    ["meal_update", "meal_request"],
+  bazar:    ["bazar_update", "bazar_request"],
+  payments: ["utility_update", "rent_update", "payment_request", "payment_confirmed", "payment_rejected", "bill_payment"],
+};
+const _isNewNotif = n => n.status === "new" || n.status === "pending";
 
+async function renderNotifications(el) {
+  _notifAll = await dbGetNotifications();
   el.innerHTML = `
   <div class="topbar">
     <div>
       <div class="page-title">Member Updates</div>
-      <div class="page-sub">${fresh.length} new update${fresh.length === 1 ? "" : "s"}</div>
+      <div class="page-sub" id="nt-sub"></div>
     </div>
-
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" onclick="markAllNotificationsSeen()">Mark all seen</button>
-      <button class="btn btn-ghost btn-sm" onclick="navigate('notifications')">Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="markAllNotificationsSeen()">✓ Mark all seen</button>
     </div>
   </div>
-
-  <div class="content">
-    ${
-      all.length === 0
-        ? `<div class="card" style="text-align:center;padding:32px">
-            <div style="font-size:28px;margin-bottom:10px">🔔</div>
-            <div style="color:var(--text2);font-size:14px">No member updates yet</div>
-          </div>`
-        : `<div class="card">
-            <div class="card-title">Latest member activity</div>
-            <div style="display:flex;flex-direction:column;gap:10px">
-              ${all.slice(0, 80).map(n => notifCard(n)).join("")}
-            </div>
-          </div>`
-    }
+  <div class="content dk">
+    <div class="nt-bar"><div class="an-seg" id="nt-seg"></div></div>
+    <div class="card" id="nt-list"></div>
   </div>`;
+  drawNotifications();
+}
+
+function setNotifFilter(f) { _notifFilter = f; drawNotifications(); }
+
+function drawNotifications() {
+  const all = _notifAll, fresh = all.filter(_isNewNotif);
+  const sub = document.getElementById("nt-sub");
+  if (sub) sub.textContent = fresh.length ? `${fresh.length} new update${fresh.length === 1 ? "" : "s"} from members` : "You're all caught up";
+  const count = f => f === "all" ? all.length : f === "new" ? fresh.length : all.filter(n => NOTIF_GROUPS[f].includes(n.type)).length;
+  const seg = document.getElementById("nt-seg");
+  if (seg) seg.innerHTML = [["all", "All"], ["new", "New"], ["meals", "🍽️ Meals"], ["bazar", "🛒 Bazar"], ["payments", "💵 Payments"]]
+    .map(([f, t]) => `<button class="an-seg-btn${_notifFilter === f ? " on" : ""}" onclick="setNotifFilter('${f}')">${t} <span class="nt-c">${count(f)}</span></button>`).join("");
+
+  const list = document.getElementById("nt-list");
+  if (!list) return;
+  const shown = all.slice(0, 120).filter(n => _notifFilter === "all" ? true : _notifFilter === "new" ? _isNewNotif(n) : NOTIF_GROUPS[_notifFilter].includes(n.type));
+  if (!shown.length) {
+    list.innerHTML = `<div class="empty" style="padding:30px"><div>🔔</div><div>${all.length ? "Nothing here with this filter." : "No member updates yet — they appear when members change their own meals, bazar or payments."}</div></div>`;
+    return;
+  }
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const tKey = ymd(new Date()), yKey = ymd(new Date(Date.now() - 86400000));
+  const groups = [];
+  shown.forEach(n => { const d = new Date(n.created_at), k = ymd(d); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, d, items: [] }); g.items.push(n); });
+  list.innerHTML = groups.map(g => `
+    <div class="nt-day">${g.k === tKey ? "Today" : g.k === yKey ? "Yesterday" : g.d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+    ${g.items.map(notifCard).join("")}`).join("");
 }
 
 function notifCard(n) {
@@ -84,46 +104,46 @@ function notifCard(n) {
     const total = data.total ?? data[name] ?? "—";
 
     dataHtml = `
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">Day: <b>${day}</b></span>
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">Night: <b>${night}</b></span>
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">Total: <b>${total}</b></span>`;
+      <span class="nt-chip">Day: <b>${day}</b></span>
+      <span class="nt-chip">Night: <b>${night}</b></span>
+      <span class="nt-chip">Total: <b>${total}</b></span>`;
   }
 
   else if (n.type === "bazar_update" || n.type === "bazar_request") {
     const amount = data.amount ?? Object.values(data)[0] ?? 0;
 
     dataHtml = `
-      <span style="font-size:13px;font-weight:600;color:var(--green)">
+      <span class="nt-chip nt-money">
         ${fmtTk(amount)}
       </span>`;
   }
 
   else if (n.type === "utility_update") {
     dataHtml = `
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         ${billTypeLabel[data.billType] || data.billLabel || "Utility"}
       </span>
 
-      <span style="font-size:13px;font-weight:600;color:var(--green)">
+      <span class="nt-chip nt-money">
         ${fmtTk(data.amount || 0)}
       </span>
 
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         ${data.monthName || ""} ${data.year || ""}
       </span>`;
   }
 
   else if (n.type === "rent_update") {
     dataHtml = `
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         🏠 Room Rent
       </span>
 
-      <span style="font-size:13px;font-weight:600;color:var(--green)">
+      <span class="nt-chip nt-money">
         ${fmtTk(data.amount || 0)}
       </span>
 
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         ${data.monthName || ""} ${data.year || ""}
       </span>`;
   }
@@ -131,70 +151,46 @@ function notifCard(n) {
   else if (n.type === "payment_request" || n.type === "payment_confirmed" || n.type === "payment_rejected") {
     const tag = n.type === "payment_request" ? "Pending" : n.type === "payment_confirmed" ? "Confirmed" : "Rejected";
     dataHtml = `
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">💵 ${tag}</span>
+      <span class="nt-chip">💵 ${tag}</span>
 
-      <span style="font-size:13px;font-weight:600;color:var(--green)">
+      <span class="nt-chip nt-money">
         ${fmtTk(data.amount || 0)}
       </span>
 
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         ${data.monthName || ""} ${data.year || ""}
       </span>`;
   }
 
   else if (n.type === "bill_payment") {
     dataHtml = `
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         ${billTypeLabel[data.billType] || data.billType}
       </span>
 
-      <span style="font-size:13px;font-weight:600;color:var(--green)">
+      <span class="nt-chip nt-money">
         ${fmtTk(data.amount || 0)}
       </span>
 
-      <span style="font-size:12px;background:var(--bg4);padding:2px 8px;border-radius:99px">
+      <span class="nt-chip">
         ${data.monthName || ""} ${data.year || ""}
       </span>`;
   }
 
+  const forDay = n.date ? (() => { const [y, m, d] = String(n.date).split("-").map(Number); return y ? new Date(y, m - 1, d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : n.date; })() : "";
+  const time = new Date(n.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
   return `
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-          <span>${icon}</span>
-          <span style="font-weight:600;font-size:14px">${n.from_name}</span>
-          <span style="font-size:12px;color:var(--text3)">${label}</span>
-          <span class="badge ${statusCls}" style="font-size:10px">${statusLabel}</span>
-        </div>
-
-        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
-          📅 ${n.date} · ${new Date(n.created_at).toLocaleString()}
-        </div>
-
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${n.note ? "8px" : "0"}">
-          ${dataHtml}
-        </div>
-
-        ${
-          n.note
-            ? `<div style="font-size:12px;color:var(--text2);margin-top:6px">💬 "${n.note}"</div>`
-            : ""
-        }
-      </div>
-
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${
-          n.type === "payment_request"
-            ? `<button class="btn btn-primary btn-sm" onclick="navigate('collect')">Review in Collect</button>`
-            : ""
-        }
-        ${
-          isNew
-            ? `<button class="btn btn-ghost btn-sm" onclick="markNotificationSeen('${n.id}')">Mark seen</button>`
-            : ""
-        }
-      </div>
+  <div class="nt-row${isNew ? " nt-new" : ""}" id="nt-${n.id}">
+    <span class="dk-av nt-av" style="${avStyle(n.from_name)}">${avFaceByName(n.from_name)}<span class="nt-type">${icon}</span></span>
+    <div class="nt-body">
+      <div class="nt-line"><b>${n.from_name}</b> ${label}${forDay && /meal|bazar/.test(n.type) ? ` for <b class="nt-for">${forDay}</b>` : ""}</div>
+      ${dataHtml.trim() ? `<div class="nt-data">${dataHtml}</div>` : ""}
+      ${n.note ? `<div class="nt-note">“${n.note}”</div>` : ""}
+    </div>
+    <div class="nt-side">
+      <span class="nt-time">${time}</span>
+      ${n.type === "payment_request" ? `<button class="btn btn-primary btn-sm" onclick="navigate('collect')">Review</button>` : ""}
+      ${isNew ? `<button class="btn btn-ghost btn-sm nt-seen" onclick="markNotificationSeen('${n.id}')" title="Mark as seen">✓ Seen</button>` : ""}
     </div>
   </div>`;
 }
@@ -202,11 +198,10 @@ function notifCard(n) {
 async function markNotificationSeen(id) {
   try {
     await dbUpdateNotifStatus(id, "seen");
-
-    toast("Marked as seen", "success");
-
+    const n = _notifAll.find(x => x.id === id); if (n) n.status = "seen";
+    const row = document.getElementById("nt-" + id);
+    if (row) { row.classList.add("nt-fade"); setTimeout(drawNotifications, 220); } else drawNotifications();
     refreshNotifBadge();
-    navigate("notifications");
   } catch (e) {
     toast("Error: " + e.message, "error");
   }
@@ -222,9 +217,9 @@ async function markAllNotificationsSeen() {
     );
 
     toast("All updates marked as seen", "success");
-
+    _notifAll.forEach(n => { if (_isNewNotif(n)) n.status = "seen"; });
     refreshNotifBadge();
-    navigate("notifications");
+    drawNotifications();
   } catch (e) {
     toast("Error: " + e.message, "error");
   }

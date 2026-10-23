@@ -461,7 +461,7 @@ function openBroadcastModal() {
 
 async function sendBroadcast() {
   const msg = document.getElementById("bc-msg")?.value?.trim();
-  if (!msg) { toast("Message is required"); return; }
+  if (!msg) { toast("Write a message first", "error"); document.getElementById("bc-msg")?.focus(); return; }
   const priority = document.getElementById("bc-priority")?.value || "normal";
   const expHours = document.getElementById("bc-expiry")?.value || null;
   const pinned   = document.getElementById("bc-pin")?.checked || false;
@@ -473,8 +473,11 @@ async function sendBroadcast() {
     });
     if (error) throw error;
     await logAudit("create", "broadcast", "", `Broadcast${pinned?" (pinned)":""}: "${msg.slice(0,50)}${msg.length>50?"…":""}"`, { priority, pinned });
-    closeModal(); toast("Broadcast sent ✓", "success");
-    await loadBroadcastList();
+    closeModal(); toast("Notice sent to everyone ✓", "success");
+    const ta = document.getElementById("bc-msg"); if (ta) { ta.value = ""; bcCount(ta); }
+    const pin = document.getElementById("bc-pin"); if (pin) pin.checked = false;
+    if (typeof setBcPriority === "function") setBcPriority("normal");
+    await loadMessagesPage(true);
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
