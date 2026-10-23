@@ -3,7 +3,8 @@
    No approve / reject system
    ═══════════════════════════════════════════════ */
 
-let _notifAll = [], _notifFilter = "all";
+let _notifAll = [], _notifFilter = "all", _notifLimit = 50;
+const NOTIF_PAGE = 50;
 const NOTIF_GROUPS = {
   meals:    ["meal_update", "meal_request"],
   bazar:    ["bazar_update", "bazar_request"],
@@ -13,6 +14,7 @@ const _isNewNotif = n => n.status === "new" || n.status === "pending";
 
 async function renderNotifications(el) {
   _notifAll = await dbGetNotifications();
+  _notifLimit = NOTIF_PAGE;
   el.innerHTML = `
   <div class="topbar">
     <div>
@@ -30,7 +32,8 @@ async function renderNotifications(el) {
   drawNotifications();
 }
 
-function setNotifFilter(f) { _notifFilter = f; drawNotifications(); }
+function setNotifFilter(f) { _notifFilter = f; _notifLimit = NOTIF_PAGE; drawNotifications(); }
+function showMoreNotifications() { _notifLimit += NOTIF_PAGE; drawNotifications(); }
 
 function drawNotifications() {
   const all = _notifAll, fresh = all.filter(_isNewNotif);
@@ -43,7 +46,9 @@ function drawNotifications() {
 
   const list = document.getElementById("nt-list");
   if (!list) return;
-  const shown = all.slice(0, 120).filter(n => _notifFilter === "all" ? true : _notifFilter === "new" ? _isNewNotif(n) : NOTIF_GROUPS[_notifFilter].includes(n.type));
+  // filter first, then page — so the list always matches the tab's count
+  const matching = all.filter(n => _notifFilter === "all" ? true : _notifFilter === "new" ? _isNewNotif(n) : NOTIF_GROUPS[_notifFilter].includes(n.type));
+  const shown = matching.slice(0, _notifLimit);
   if (!shown.length) {
     list.innerHTML = `<div class="empty" style="padding:30px"><div>🔔</div><div>${all.length ? "Nothing here with this filter." : "No member updates yet — they appear when members change their own meals, bazar or payments."}</div></div>`;
     return;
@@ -54,7 +59,10 @@ function drawNotifications() {
   shown.forEach(n => { const d = new Date(n.created_at), k = ymd(d); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, d, items: [] }); g.items.push(n); });
   list.innerHTML = groups.map(g => `
     <div class="nt-day">${g.k === tKey ? "Today" : g.k === yKey ? "Yesterday" : g.d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
-    ${g.items.map(notifCard).join("")}`).join("");
+    ${g.items.map(notifCard).join("")}`).join("") + `
+    <div class="nt-more">${matching.length > shown.length
+      ? `<span>Showing ${shown.length} of ${matching.length}</span><button class="btn btn-ghost btn-sm" onclick="showMoreNotifications()">Show ${Math.min(NOTIF_PAGE, matching.length - shown.length)} more</button>`
+      : `<span>All ${matching.length} shown</span>`}</div>`;
 }
 
 function notifCard(n) {
