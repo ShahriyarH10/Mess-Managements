@@ -197,17 +197,25 @@ async function fillMyMealFromDate() {
 
   if (!member || !date) return;
 
-  const { data: existing } = await sb
-    .from("meals")
-    .select("*")
-    .eq("mess_id", messId())
-    .eq("date", date)
-    .maybeSingle();
+  const [{ data: existing }, { data: att }] = await Promise.all([
+    sb.from("meals").select("*").eq("mess_id", messId()).eq("date", date).maybeSingle(),
+    sb.from("meal_attendance").select("day_meal,night_meal")
+      .eq("mess_id", messId()).eq("member_id", member.id).eq("date", date).maybeSingle(),
+  ]);
 
-  const p = mealPartsFromObj(existing?.meals || {}, member.name);
+  const mObj = existing?.meals || {};
+  const saved = [member.name + "_day", member.name + "_night", member.name].some(k => mObj[k] != null);
+  let day, night;
+  if (saved) {
+    ({ day, night } = mealPartsFromObj(mObj, member.name));
+  } else {
+    // Nothing logged yet — start from defaults, zeroing only the meal marked off
+    day   = att && !att.day_meal   ? 0 : (member.meal_default_day   ?? 1);
+    night = att && !att.night_meal ? 0 : (member.meal_default_night ?? 1);
+  }
 
-  document.getElementById("my-meal-day").value = p.day || 0;
-  document.getElementById("my-meal-night").value = p.night || 0;
+  document.getElementById("my-meal-day").value = day || 0;
+  document.getElementById("my-meal-night").value = night || 0;
   if (matchMedia("(max-width: 860px)").matches) document.getElementById("my-meal-date")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 

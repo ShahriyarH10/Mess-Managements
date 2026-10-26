@@ -56,10 +56,6 @@ async function renderMeals(el) {
       <div id="absence-cal-outer"></div>
     </div>
   </div>`;
-  members.forEach(m=>{
-    mealDayVals[m.id]   = m.meal_default_day ?? 1;
-    mealNightVals[m.id] = 1;
-  });
   window._absentDay = {}; window._absentNight = {};
   await loadMealDate(); refreshMealLists();
 }
@@ -166,22 +162,21 @@ async function loadMealDate() {
   } catch(_) {}
 
   const {data:rec}=await getClient().from("meals").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
-  if(rec){
-    // Load existing values — absence badges show but values are not overridden
-    members.forEach(m=>{
-      mealDayVals[m.id]   = Number(rec.meals[m.name+"_day"]  ?? rec.meals[m.name] ?? 0);
-      mealNightVals[m.id] = Number(rec.meals[m.name+"_night"] ?? 0);
-    });
-    buildMealGrid();
-    toast("Loaded entry for "+date);
-  } else {
-    // New date — pre-fill absent members with 0
-    members.forEach(m=>{
-      mealDayVals[m.id]   = window._absentDay[m.id]   ? 0 : (mealDayVals[m.id]   ?? 0);
-      mealNightVals[m.id] = window._absentNight[m.id] ? 0 : (mealNightVals[m.id] ?? 0);
-    });
-    buildMealGrid();
-  }
+  // Members with nothing saved for this date start from their defaults, with
+  // only the meal they marked off set to 0 (day off still means night = default)
+  const mObj = rec?.meals || {};
+  members.forEach(m=>{
+    if ([m.name+"_day", m.name+"_night", m.name].some(k => mObj[k] != null)) {
+      // Load existing values — absence badges show but values are not overridden
+      mealDayVals[m.id]   = Number(mObj[m.name+"_day"]  ?? mObj[m.name] ?? 0);
+      mealNightVals[m.id] = Number(mObj[m.name+"_night"] ?? 0);
+    } else {
+      mealDayVals[m.id]   = window._absentDay[m.id]   ? 0 : (m.meal_default_day   ?? 1);
+      mealNightVals[m.id] = window._absentNight[m.id] ? 0 : (m.meal_default_night ?? 1);
+    }
+  });
+  buildMealGrid();
+  if(rec) toast("Loaded entry for "+date);
 }
 async function saveMeals() {
   if (!requireManager('saveMeals')) return;

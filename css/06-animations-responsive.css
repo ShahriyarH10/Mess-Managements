@@ -22,13 +22,13 @@
   .land-footer-links{justify-content:center;}
   .land-cta{padding:60px 20px;}
   .land-nav-links{display:none;}
-  /* Show hamburger on landing mobile */
-  .land-nav-hamburger{display:flex;}
 }
 
 /* Mobile landing nav drawer */
 .land-nav-hamburger{display:none;background:none;border:1px solid var(--border2);border-radius:var(--radius-sm);width:34px;height:34px;cursor:pointer;color:var(--text2);align-items:center;justify-content:center;transition:all .2s;margin-left:4px;}
 .land-nav-hamburger:hover{color:var(--accent);border-color:var(--accent);}
+/* Show hamburger on landing mobile (after the base rule so it wins) */
+@media(max-width:900px){ .land-nav-hamburger{display:flex;} }
 .land-mobile-drawer{display:none;position:fixed;inset:0;z-index:200;}
 .land-mobile-drawer.open{display:block;}
 .land-mobile-drawer-bg{position:absolute;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);}
@@ -135,8 +135,17 @@
   .steps{flex-direction:column;gap:20px;}
 }
 
+@media(max-width:400px){
+  .land-logo span{display:none;}
+}
+
 @media(max-width:480px){
-  .land-nav-actions .btn-ghost{display:none;}
+  /* Keep Sign in reachable on phones; Create Mess moves to the drawer */
+  .land-nav{gap:10px;padding:12px 16px;}
+  .land-nav-actions .btn-ghost:not(.land-signin){display:none;}
+  .land-nav-actions{gap:6px;}
+  .land-nav-actions .btn-sm{padding-left:10px;padding-right:10px;white-space:nowrap;}
+  .land-nav-theme{margin-left:0;}
   .hero-stats{flex-direction:column;gap:16px;}
   .hero-stat-sep{display:none;}
 
