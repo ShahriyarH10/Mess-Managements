@@ -205,13 +205,13 @@ async function fillMyMealFromDate() {
 
   const mObj = existing?.meals || {};
   const saved = [member.name + "_day", member.name + "_night", member.name].some(k => mObj[k] != null);
-  let day, night;
+  let day = 0, night = 0;
   if (saved) {
     ({ day, night } = mealPartsFromObj(mObj, member.name));
-  } else {
-    // Nothing logged yet — start from defaults, zeroing only the meal marked off
-    day   = att && !att.day_meal   ? 0 : (member.meal_default_day   ?? 1);
-    night = att && !att.night_meal ? 0 : (member.meal_default_night ?? 1);
+  } else if (att && (!att.day_meal || !att.night_meal)) {
+    // Nothing logged, but a day off is set — the meal not skipped gets the default
+    day   = att.day_meal   ? (member.meal_default_day   ?? 1) : 0;
+    night = att.night_meal ? (member.meal_default_night ?? 1) : 0;
   }
 
   document.getElementById("my-meal-day").value = day || 0;

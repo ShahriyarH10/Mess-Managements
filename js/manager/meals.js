@@ -162,17 +162,20 @@ async function loadMealDate() {
   } catch(_) {}
 
   const {data:rec}=await getClient().from("meals").select("*").eq("mess_id",messId()).eq("date",date).maybeSingle();
-  // Members with nothing saved for this date start from their defaults, with
-  // only the meal they marked off set to 0 (day off still means night = default)
+  // Members with nothing saved for this date start at 0 — unless they set a
+  // day off, then the meal they didn't skip gets their default
   const mObj = rec?.meals || {};
   members.forEach(m=>{
+    const dA = window._absentDay[m.id], nA = window._absentNight[m.id];
     if ([m.name+"_day", m.name+"_night", m.name].some(k => mObj[k] != null)) {
       // Load existing values — absence badges show but values are not overridden
       mealDayVals[m.id]   = Number(mObj[m.name+"_day"]  ?? mObj[m.name] ?? 0);
       mealNightVals[m.id] = Number(mObj[m.name+"_night"] ?? 0);
+    } else if (dA || nA) {
+      mealDayVals[m.id]   = dA ? 0 : (m.meal_default_day   ?? 1);
+      mealNightVals[m.id] = nA ? 0 : (m.meal_default_night ?? 1);
     } else {
-      mealDayVals[m.id]   = window._absentDay[m.id]   ? 0 : (m.meal_default_day   ?? 1);
-      mealNightVals[m.id] = window._absentNight[m.id] ? 0 : (m.meal_default_night ?? 1);
+      mealDayVals[m.id] = 0; mealNightVals[m.id] = 0;
     }
   });
   buildMealGrid();
