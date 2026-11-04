@@ -123,7 +123,7 @@ async function renderMyReceipts(el) {
       <div class="stat-card"><div class="stat-label">Paid this month</div><div class="stat-value" style="color:var(--green)">${fmtTk(paidMonth)}</div></div>
       <div class="stat-card"><div class="stat-label">Paid in total</div><div class="stat-value">${fmtTk(paidAll)}</div></div>
       <div class="stat-card"><div class="stat-label">Receipts</div><div class="stat-value">${list.length}</div></div>
-      <div class="stat-card"><div class="stat-label">Waiting</div><div class="stat-value" style="color:var(--accent)">${fmtTk(waiting)}</div></div>
+      <div class="stat-card"><div class="stat-label">Waiting</div><div class="stat-value" style="color:var(--warn)">${fmtTk(waiting)}</div></div>
     </div>
 
     <div class="card">
@@ -189,7 +189,7 @@ function buildMyReceiptsList() {
         <div class="rc-amt" style="color:${_rcptVoid(p.status) ? "var(--text3)" : "var(--text)"}">${fmtTk(Number(p.amount))}</div>
         <div class="rc-mid">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <span class="badge ${mgr ? "badge-blue" : "badge-purple"}">${mgr ? ic("briefcase") + " Manager" : ic("user") + " You sent"}</span>
+            <span class="badge ${mgr ? "badge-blue" : ""}">${mgr ? ic("briefcase") + " Manager" : ic("user") + " You sent"}</span>
             <span class="badge ${st.cls}">${st.label}</span>
           </div>
           <div class="rc-meta">
@@ -198,7 +198,7 @@ function buildMyReceiptsList() {
           </div>
         </div>
         <div class="rc-side">
-          ${_rcptAfter(p) || (p.status === "pending" ? `<span style="color:var(--accent)">Not counted yet</span>` : `<span style="color:var(--text3)">Not counted</span>`)}
+          ${_rcptAfter(p) || (p.status === "pending" ? `<span style="color:var(--warn)">Not counted yet</span>` : `<span style="color:var(--text3)">Not counted</span>`)}
           <div style="display:flex;gap:6px">
             <button class="btn btn-ghost btn-sm" data-on-click="copyReceiptLinkFor('${id}')" title="Copy receipt link" aria-label="Copy receipt link">${ic("link")} Link</button>
             <button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${id}')">View</button>

@@ -257,8 +257,8 @@ function buildWhatIOweHTML(
     <div class="card" style="padding:16px">
       <div class="card-title">What I Owe — ${curLabel}</div>
 
-      <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
-        ${ic("dot", "ic-red")} Postpaid — from ${prevLabel}
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
+        ${ic("clock")} Postpaid — from ${prevLabel}
       </div>
 
       <div class="my-stat-row">
@@ -305,8 +305,8 @@ function buildWhatIOweHTML(
         <span>${fmtTk(round2(mealCost + khalaShare + otherShare))}</span>
       </div>
 
-      <div style="font-size:11px;color:var(--blue);font-weight:600;margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:10px">
-        ${ic("dot", "ic-blue")} Prepaid — for ${curLabel}
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:10px">
+        ${ic("calendar")} Prepaid — for ${curLabel}
       </div>
 
       <div class="my-stat-row">
@@ -529,7 +529,7 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
         <div><b>${st.avgMeals}</b><span>per day</span></div>
         <div><b>${fmtTk(st.totalBazar)}</b><span>bazar</span></div>
       </div>
-      <div class="dk-bar pc-bar-meals" title="${st.totalMeals} meals · ${periodLabel}"><i style="width:${Math.round((st.totalMeals / maxMeals) * 100)}%;background:${col.fg}"></i></div>
+      <div class="dk-bar pc-bar-meals" title="${st.totalMeals} meals · ${periodLabel}"><i style="width:${Math.round((st.totalMeals / maxMeals) * 100)}%;background:var(--c-meal)"></i></div>
     </button>`;
   }).join("");
 }

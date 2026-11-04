@@ -114,9 +114,9 @@ function showCollectReceipt(d) {
 
   const allocItems = [];
   if (d.allocPrevDue > 0) allocItems.push({ icon:"" + ic("rewind") + "",  label:"Prev. Month Due", val:d.allocPrevDue, color:"var(--red)"    });
-  if (d.allocMeal    > 0) allocItems.push({ icon:"" + ic("meal") + "", label:"Meal Balance",     val:d.allocMeal,    color:"var(--accent)" });
-  if (d.allocUtil    > 0) allocItems.push({ icon:"" + ic("zap") + "",  label:"Utility",          val:d.allocUtil,    color:"var(--blue)"   });
-  if (d.allocRent    > 0) allocItems.push({ icon:"" + ic("home") + "",  label:"Room Rent",        val:d.allocRent,    color:"var(--blue)"   });
+  if (d.allocMeal    > 0) allocItems.push({ icon:"" + ic("meal") + "", label:"Meal Balance",     val:d.allocMeal,    color:"var(--c-meal)" });
+  if (d.allocUtil    > 0) allocItems.push({ icon:"" + ic("zap") + "",  label:"Utility",          val:d.allocUtil,    color:"var(--c-util)" });
+  if (d.allocRent    > 0) allocItems.push({ icon:"" + ic("home") + "",  label:"Room Rent",        val:d.allocRent,    color:"var(--c-rent)" });
 
   const statusItems = [
     { icon:"" + ic("meal") + "", label:"Meal Balance",      val:d.newMealRem, signed:true,

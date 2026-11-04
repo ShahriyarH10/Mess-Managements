@@ -209,10 +209,10 @@ async function renderMyDashboard(el) {
     (calc.messCredit || 0) > 0 && `${ic("undo")} Carried ${fmtTk(calc.messCredit)}`,
   ].filter(Boolean);
   const charges = [
-    [calc.mealCost,       "var(--accent)", "Meal"],
-    [calc.roomRent,       "var(--amber)",  "Rent"],
-    [calc.prepaidUtility, "var(--purple)", "Utility"],
-    [round2(calc.khalaShare + calc.otherShare), "var(--blue)", "Khala & other"],
+    [calc.mealCost,       "var(--c-meal)", "Meal"],
+    [calc.roomRent,       "var(--c-rent)", "Rent"],
+    [calc.prepaidUtility, "var(--c-util)", "Utility"],
+    [round2(calc.khalaShare + calc.otherShare), "var(--c-other)", "Khala & other"],
   ].filter(c => c[0] > 0);
   const me = myTodayParts, eating = me.day + me.night > 0;
   const lead = (new Date(year, month, 1).getDay() + 1) % 7;   // Saturday-first week
@@ -255,12 +255,12 @@ async function renderMyDashboard(el) {
 
     <!-- ── My numbers this month ── -->
     <div class="stat-grid dk-kpis">
-      ${kpi("dk-gold",  "" + ic("meal") + "", "My meals", myCurrentMeals, `${myPace}/day · mess avg ${messAvg}`, buildSparkline(sMeals, "var(--accent)"))}
-      ${kpi("dk-blue",  "" + ic("chart") + "", "Meal rate", fmtTk(curMonthMealRate), rateTrend, buildSparkline(sRate, "var(--blue)"))}
+      ${kpi("dk-meal",  ic("meal"), "My meals", myCurrentMeals, `${myPace}/day · mess avg ${messAvg}`, buildSparkline(sMeals, "var(--c-meal)"))}
+      ${kpi("dk-meal",  ic("chart"), "Meal rate", fmtTk(curMonthMealRate), rateTrend, buildSparkline(sRate, "var(--c-meal)"))}
       ${kpi(myMealBal >= 0 ? "dk-green" : "dk-red", myMealBal >= 0 ? "" + ic("heart", "ic-green") + "" : "" + ic("receipt") + "", myMealBal >= 0 ? "Meal credit" : "Meal cost due",
           fmtTk(Math.abs(myMealBal)), `bazar ${fmtTk(myCurrentBazar)} − meals ${fmtTk(myMealCost)}`,
           buildSparkline(sBal, myMealBal >= 0 ? "var(--green)" : "var(--red)"))}
-      ${kpi("dk-gray",  "" + ic("cart") + "", "My bazar", fmtTk(myCurrentBazar), `${bazarShare}% of ${fmtTk(curMonthTotalBazar)} mess bazar`, buildSparkline(sBazar, "var(--text2)"))}
+      ${kpi("dk-bazar", ic("cart"), "My bazar", fmtTk(myCurrentBazar), `${bazarShare}% of ${fmtTk(curMonthTotalBazar)} mess bazar`, buildSparkline(sBazar, "var(--c-bazar)"))}
     </div>
 
     <!-- ── Today + my calendar ── -->
@@ -316,8 +316,8 @@ async function renderMyDashboard(el) {
             const v = round2(memMeals[m.name] || 0), bz = round2(memBazar[m.name] || 0), col = avatarCol(i);
             const bal = round2(bz - v * curMonthMealRate), isMe = m.name === member.name;
             return `<tr class="${isMe ? "dk-me-row" : ""}">
-              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}${isMe ? ` <span class="badge badge-amber">You</span>` : ""}</div></td>
-              <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeal) * 100)}%;background:${isMe ? "var(--accent)" : col.fg}"></i></div><b>${v}</b></div></td>
+              <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}${isMe ? ` <span class="badge badge-gold">You</span>` : ""}</div></td>
+              <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeal) * 100)}%;background:var(--c-meal);opacity:${isMe ? 1 : .55}"></i></div><b>${v}</b></div></td>
               <td style="text-align:right;color:${bz > 0 ? "var(--green)" : "var(--text3)"};font-weight:600">${bz > 0 ? fmtTk(bz) : "—"}</td>
               <td style="text-align:right">${Math.abs(bal) < 0.01 ? `<span class="badge">Settled</span>`
                 : `<span class="badge ${bal > 0 ? "badge-green" : "badge-red"}">${bal > 0 ? "Gets" : "Owes"} ${fmtTk(Math.abs(bal))}</span>`}</td>
@@ -385,8 +385,8 @@ function showMySettlementBreakdown() {
     <div class="modal-title">My Settlement Breakdown</div>
     <div class="modal-sub" style="margin-bottom:12px">${curLabel}</div>
 
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin-bottom:6px">
-      ${ic("dot", "ic-red")} Postpaid charges — from ${prevLabel}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);margin-bottom:6px">
+      ${ic("clock")} Postpaid charges — from ${prevLabel}
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px">
@@ -415,8 +415,8 @@ function showMySettlementBreakdown() {
       <div style="font-weight:700;color:${p.utilityStatus === 'paid' ? 'var(--green)' : 'var(--red)'}">+ ${fmtTk(p.otherShare)} ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
     </div>
 
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--blue);margin:12px 0 6px">
-      ${ic("dot", "ic-blue")} Prepaid charges — for ${curLabel}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);margin:12px 0 6px">
+      ${ic("calendar")} Prepaid charges — for ${curLabel}
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px">
@@ -425,7 +425,7 @@ function showMySettlementBreakdown() {
         <div style="font-size:11px;color:var(--text3)">${curLabel}</div>
         ${p.rentStatus === "paid" ? '<div style="font-size:10px;color:var(--green)">' + ic("checkCircle", "ic-green") + ' Paid</div>' : '<div style="font-size:10px;color:var(--text3)">' + ic("hourglass") + ' Not paid yet</div>'}
       </div>
-      <div style="font-weight:700;color:${p.rentStatus === 'paid' ? 'var(--green)' : 'var(--blue)'}">+ ${fmtTk(p.roomRent)} ${p.rentStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
+      <div style="font-weight:700;color:${p.rentStatus === 'paid' ? 'var(--green)' : 'var(--red)'}">+ ${fmtTk(p.roomRent)} ${p.rentStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px">
@@ -434,7 +434,7 @@ function showMySettlementBreakdown() {
         <div style="font-size:11px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${members.length} members</div>
         ${p.utilityStatus === "paid" ? '<div style="font-size:10px;color:var(--green)">' + ic("checkCircle", "ic-green") + ' Covered by utility payment</div>' : p.utilityStatus === "partial" ? '<div style="font-size:10px;color:var(--amber)">' + ic("alert", "ic-amber") + ' Partially paid</div>' : '<div style="font-size:10px;color:var(--text3)">' + ic("hourglass") + ' Not paid yet</div>'}
       </div>
-      <div style="font-weight:700;color:${p.utilityStatus === 'paid' ? 'var(--green)' : 'var(--blue)'}">+ ${fmtTk(p.prepaidUtility)} ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
+      <div style="font-weight:700;color:${p.utilityStatus === 'paid' ? 'var(--green)' : 'var(--red)'}">+ ${fmtTk(p.prepaidUtility)} ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
     </div>
 
     <div style="display:flex;justify-content:space-between;padding:9px 12px;background:var(--bg2);border-radius:6px;margin:8px 0;font-weight:700">
@@ -611,20 +611,20 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div class="card-title" style="margin:0">${ic("clipboard")} ${MONTHS[month]} ${year} settlement</div>
         <div style="font-size:11px;color:var(--text3);display:flex;gap:10px;flex-wrap:wrap">
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--red);border-radius:2px;margin-right:3px"></span>Postpaid (${MONTHS[prev.month].slice(0,3)})</span>
-          <span><span style="display:inline-block;width:8px;height:8px;background:var(--blue);border-radius:2px;margin-right:3px"></span>Prepaid (${MONTHS[month].slice(0,3)})</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:var(--text3);border-radius:2px;margin-right:3px"></span>Postpaid (${MONTHS[prev.month].slice(0,3)})</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:var(--text2);border-radius:2px;margin-right:3px"></span>Prepaid (${MONTHS[month].slice(0,3)})</span>
           <span><span style="display:inline-block;width:8px;height:8px;background:var(--green);border-radius:2px;margin-right:3px"></span>Credits</span>
         </div>
       </div>
       <div class="tbl-wrap"><table>
         <thead><tr>
           <th>Member</th>
-          <th style="color:var(--red)">Meal</th>
-          <th style="color:var(--red)">Khala</th>
-          <th style="color:var(--red)">Other</th>
-          <th style="color:var(--blue)">Util</th>
-          <th style="color:var(--blue)">Rent</th>
-          <th style="color:var(--green)">Bazar</th>
+          <th style="color:var(--c-meal)">Meal</th>
+          <th style="color:var(--c-other)">Khala</th>
+          <th style="color:var(--c-other)">Other</th>
+          <th style="color:var(--c-util)">Util</th>
+          <th style="color:var(--c-rent)">Rent</th>
+          <th style="color:var(--c-bazar)">Bazar</th>
           <th style="color:var(--green)">Paid</th>
           <th style="color:var(--blue)">${ic("undo")} Carry fwd</th>
           <th>Net</th>
@@ -635,12 +635,12 @@ function buildMessOverviewBlock(allM, allB, allR, allU, key, opts = {}) {
             return `
               <tr>
                 <td><b>${p.memberName}</b></td>
-                <td style="color:var(--red)">${fmtTk(p.mealCost)}</td>
-                <td style="color:var(--red)">${fmtTk(p.khalaShare)}</td>
-                <td style="color:var(--red)">${fmtTk(p.otherShare)}</td>
-                <td style="color:var(--blue)">${fmtTk(p.prepaidUtility)}</td>
-                <td style="color:var(--blue)">${fmtTk(p.roomRent)}</td>
-                <td style="color:var(--green)">${fmtTk(p.memberBazar)}</td>
+                <td>${fmtTk(p.mealCost)}</td>
+                <td>${fmtTk(p.khalaShare)}</td>
+                <td>${fmtTk(p.otherShare)}</td>
+                <td>${fmtTk(p.prepaidUtility)}</td>
+                <td>${fmtTk(p.roomRent)}</td>
+                <td>${fmtTk(p.memberBazar)}</td>
                 <td style="color:${totalPaid>0?'var(--green)':'var(--text3)'}">${fmtTk(totalPaid)}</td>
                 <td style="color:${(p.messCredit||0)>0?'var(--blue)':'var(--text3)'}">${(p.messCredit||0)>0?'' + ic("undo") + ' '+fmtTk(p.messCredit):'—'}</td>
                 <td><b class="${p.netPayable>0?'net-neg':p.netPayable<0?'net-pos':''}">${p.netPayable>0?'Pay '+fmtTk(p.netPayable):p.netPayable<0?'Get '+fmtTk(Math.abs(p.netPayable)):'' + ic("check") + ''}</b></td>

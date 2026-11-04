@@ -98,7 +98,7 @@ async function loadMessagesPage(isManager) {
         <div class="bc-body">
           <div class="bc-head">
             <b>${escapeHtml(b.author || "Manager")}</b>
-            ${b.pinned ? `<span class="badge badge-amber">${ic("pin")} Pinned</span>` : ""}
+            ${b.pinned ? `<span class="badge badge-gold">${ic("pin")} Pinned</span>` : ""}
             ${isUrgent ? `<span class="badge badge-red">Urgent</span>` : ""}
             ${isExpired ? `<span class="badge">Expired</span>` : ""}
             <span class="bc-time" title="${escapeHtml(when.toLocaleString())}">${_relativeTime(b.created_at)}</span>

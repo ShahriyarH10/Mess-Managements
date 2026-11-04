@@ -89,7 +89,7 @@ function notifCard(n) {
   };
 
   const isNew = n.status === "new" || n.status === "pending";
-  const statusCls = isNew ? "badge-amber" : "badge-green";
+  const statusCls = isNew ? "badge-gold" : "";
   const statusLabel = isNew ? "New" : "Seen";
 
   const data = n.data || {};

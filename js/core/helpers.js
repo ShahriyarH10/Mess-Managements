@@ -869,7 +869,7 @@ async function openManagerMealMonth(key) {
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <div class="stat-card" style="padding:8px 10px"><div class="stat-label" style="font-size:10px">Total meals</div><div style="font-size:18px;font-weight:700;color:${p.total>0?"var(--green)":"var(--text3)"}">${p.total}</div></div>
+            <div class="stat-card" style="padding:8px 10px"><div class="stat-label" style="font-size:10px">Total meals</div><div style="font-size:18px;font-weight:700;color:${p.total>0?"var(--c-meal)":"var(--text3)"}">${p.total}</div></div>
             <div class="stat-card" style="padding:8px 10px"><div class="stat-label" style="font-size:10px">Meal days</div><div style="font-size:18px;font-weight:700">${p.active}</div></div>
           </div>
           ${p.total > 0 ? `

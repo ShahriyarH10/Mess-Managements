@@ -57,7 +57,7 @@ function buildPendingPayments() {
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
       <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:var(--accent)">${ic("bell")}</div>
       <div>
-        <div style="font-weight:700;font-size:14px;color:var(--accent)">Member payments to confirm
+        <div style="font-weight:700;font-size:14px;color:var(--warn)">Member payments to confirm
           <span class="badge badge-amber" style="margin-left:6px">${_pendingPays.length}</span></div>
         <div style="font-size:12px;color:var(--text3);margin-top:1px">Members say they've paid — confirm once you have the money. Nothing is credited until then.</div>
       </div>

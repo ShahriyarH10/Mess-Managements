@@ -127,7 +127,7 @@ function renderMembersTable() {
       <td><button class="avatar mm-tbl-av" style="background:${col.bg};color:${col.fg}" data-on-click="openEditMemberModal('${m.id}')" title="${isPhoto(m.photo) ? "Change photo" : "Add a photo"}">${avFace(m.id, m.name)}${isPhoto(m.photo) ? "" : `<span class="mm-cam">${ic("camera")}</span>`}</button></td>
       <td><b>${m.name}</b></td>
       <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
-      <td>${isMgr ? `<span class="badge badge-amber">${ic("crown")} Manager</span>` : m.role === 'sub_manager' ? `<span class="badge badge-blue">${ic("zap")} Sub</span>` : `<span class="badge">Member</span>`}</td>
+      <td>${isMgr ? `<span class="badge badge-gold">${ic("crown")} Manager</span>` : m.role === 'sub_manager' ? `<span class="badge badge-blue">${ic("zap")} Sub</span>` : `<span class="badge">Member</span>`}</td>
       <td>${m.room || "—"}</td>
       <td style="color:var(--text2)">${m.phone || "—"}</td>
       <td><div style="display:flex;gap:4px">
@@ -155,7 +155,7 @@ function renderRolesList() {
         <div style="font-size:11px;color:var(--text3)">@${escapeHtml(m.username)}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${isMgr ? `<span class="badge badge-amber">${ic("crown")} Manager</span>` :
+        ${isMgr ? `<span class="badge badge-gold">${ic("crown")} Manager</span>` :
           isSubMgr ? `<span class="badge badge-blue">${ic("zap")} Sub-manager</span>
                       <button class="btn btn-ghost btn-sm" data-on-click="setSubManager('${m.id}', false)">Demote</button>` :
           `<span class="badge">Member</span>
