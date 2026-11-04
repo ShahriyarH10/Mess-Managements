@@ -82,8 +82,8 @@ async function applyCollectPayment(m, month, year, key, row, amount) {
   let wrote = false;
   try {
     if (allocUtil > 0 || allocMeal > 0 || allocPrevDue > 0) {
-      const { data: latest } = await getClient().from("utility_payments")
-        .select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+      const latest = await mustRead(getClient().from("utility_payments")
+        .select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle());
       const bills    = latest?.bills || {};
       const payments = { ...(latest?.payments || {}) };
       const cur      = payments[m.name] || {};
@@ -101,14 +101,10 @@ async function applyCollectPayment(m, month, year, key, row, amount) {
     }
 
     if (allocRent > 0) {
-      const { data: latest } = await getClient().from("rent")
-        .select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
-      const existing = latest?.entries || [];
-      const entries = members.map(mm => {
-        const e = existing.find(x => x.name === mm.name) || {};
-        return { name: mm.name, rent: Number(e.rent || 0), paid: Number(e.paid || 0), status: e.status || "unpaid", notes: e.notes || "" };
-      });
-      const target = entries.find(x => x.name === m.name);
+      const latest = await mustRead(getClient().from("rent")
+        .select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle());
+      const entries = withRentEntries(latest?.entries, members);   // keeps former members' entries
+      const target = rentEntryFor(entries, m);
       target.paid   = round2(Number(target.paid || 0) + allocRent);
       target.status = target.paid <= 0 ? "unpaid" : target.paid >= target.rent ? "paid" : "partial";
       await dbUpsertRent(month, year, key, entries);
@@ -116,8 +112,8 @@ async function applyCollectPayment(m, month, year, key, row, amount) {
     }
 
     if (change > 0) {
-      const { data: fresh } = await getClient().from("utility_payments")
-        .select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+      const fresh = await mustRead(getClient().from("utility_payments")
+        .select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle());
       const bills   = { ...(fresh?.bills || {}) };
       const pending = { ...(bills.pending_change || {}) };
       pending[m.name] = round2(Number(pending[m.name] || 0) + change);

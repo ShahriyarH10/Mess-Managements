@@ -35,15 +35,24 @@ async function dbGetMonth(table, key) {
   return sanitize(data);
 }
 
+/* For read → change → write. A failed read must stop the save: treating it as
+   "no record yet" would overwrite the stored row with a blank one (wiping other
+   members' meals, the month's bills, payments, lock and fund log). */
+async function mustRead(query) {
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
 async function dbUpsertMeals(date, meals) {
   const { error } = await getClient().from("meals").upsert({ mess_id: messId(), date, meals }, { onConflict: "mess_id,date" });
   if (error) throw error;
 }
 
 async function dbUpsertBazar(date, bazar) {
-  const ex = await getClient().from("bazar").select("utility").eq("mess_id", messId()).eq("date", date).maybeSingle();
+  const ex = await mustRead(getClient().from("bazar").select("utility").eq("mess_id", messId()).eq("date", date).maybeSingle());
   const { error } = await getClient().from("bazar").upsert(
-    { mess_id: messId(), date, bazar, utility: ex?.data?.utility || {} },
+    { mess_id: messId(), date, bazar, utility: ex?.utility || {} },
     { onConflict: "mess_id,date" }
   );
   if (error) throw error;
@@ -83,8 +92,8 @@ async function ensureMonthOpen(key) {
 
 async function dbSetMonthLocked(month, year, key, locked) {
   // Fetch current record (or blank) so we don't wipe bills/payments
-  const { data: cur } = await getClient().from("utility_payments").select("*")
-    .eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+  const cur = await mustRead(getClient().from("utility_payments").select("*")
+    .eq("mess_id", messId()).eq("month_key", key).maybeSingle());
   const bills    = { ...(cur?.bills    || {}) };
   const payments = cur?.payments || {};
   if (locked) bills.locked = true;
@@ -297,16 +306,17 @@ async function dbSaveNotification(row) {
 }
 
 async function dbUpdateNotifStatus(id, status) {
-  const { error } = await sb
+  const { error } = await getClient()
     .from("notifications")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("mess_id", messId());
 
   if (error) throw error;
 }
 
 async function getPendingCount() {
-  const { count, error } = await sb
+  const { count, error } = await getClient()
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("mess_id", messId())

@@ -472,8 +472,8 @@ async function doReverseCollection(id, memberId) {
           change    = Number(sp.change || 0);
 
     /* utility_payments: paid / meal_paid / prev_due_paid + this month's pending change */
-    const { data: util } = await getClient().from("utility_payments")
-      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+    const util = await mustRead(getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
     const bills    = { ...(util?.bills || {}) };
     const payments = { ...(util?.payments || {}) };
     const cur      = payments[m.name] || {};
@@ -494,10 +494,10 @@ async function doReverseCollection(id, memberId) {
 
     /* rent */
     if (allocRent > 0) {
-      const { data: rent } = await getClient().from("rent")
-        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+      const rent = await mustRead(getClient().from("rent")
+        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
       const entries = (rent?.entries || []).map(e => ({ ...e }));
-      const t = entries.find(e => e.name === m.name);
+      const t = rentEntryFor(entries, m);
       if (t) {
         t.paid = round2(Number(t.paid || 0) - allocRent);
         t.status = t.paid <= 0 ? "unpaid" : t.paid >= Number(t.rent || 0) ? "paid" : "partial";
@@ -645,8 +645,8 @@ async function _applyChangePortion(ctx, r, m, giveRaw) {
   const newCarry    = round2(remaining - cashNow);
 
   const nm = ctx.nextMonth;
-  const { data: latestNext } = await getClient().from("utility_payments")
-    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
+  const latestNext = await mustRead(getClient().from("utility_payments")
+    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle());
   const nextBills    = { ...(latestNext?.bills    || {}) };
   const nextPayments = { ...(latestNext?.payments || {}) };
   const changeCredits = { ...(nextBills.change_credit || {}) };
@@ -656,8 +656,8 @@ async function _applyChangePortion(ctx, r, m, giveRaw) {
   nextBills.change_credit = changeCredits;
   await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
 
-  const { data: curUtil } = await getClient().from("utility_payments")
-    .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+  const curUtil = await mustRead(getClient().from("utility_payments")
+    .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
   const curBills    = { ...(curUtil?.bills || {}) };
   const curPayments = curUtil?.payments || {};
   const pendingMap  = { ...(curBills.pending_change || {}) };
@@ -680,8 +680,8 @@ async function _applyCreditPortion(ctx, r, m, giveRaw) {
   const newCarry      = round2(remainingCred - cashNow);
 
   if (cashNow > 0) {
-    const { data: curUtil } = await getClient().from("utility_payments")
-      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+    const curUtil = await mustRead(getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
     const curBills    = curUtil?.bills || {};
     const curPayments = { ...(curUtil?.payments || {}) };
     const curPay      = { ...(curPayments[m.name] || {}) };
@@ -691,8 +691,8 @@ async function _applyCreditPortion(ctx, r, m, giveRaw) {
   }
 
   const nm = ctx.nextMonth;
-  const { data: latestNext } = await getClient().from("utility_payments")
-    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle();
+  const latestNext = await mustRead(getClient().from("utility_payments")
+    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle());
   const nextBills    = { ...(latestNext?.bills    || {}) };
   const nextPayments = { ...(latestNext?.payments || {}) };
   const existCredit = { ...(nextBills.mess_credit || {}) };
@@ -1065,8 +1065,8 @@ async function saveCollectRow(memberId) {
   try {
     /* ── 1) Update utility_payments — utility paid + meal_paid + prev_due_paid live here ── */
     if (allocUtil > 0 || allocMeal > 0 || allocPrevDue > 0) {
-      const { data: latestUtil } = await getClient().from("utility_payments")
-        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+      const latestUtil = await mustRead(getClient().from("utility_payments")
+        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
       const bills    = latestUtil?.bills    || {};
       const payments = { ...(latestUtil?.payments || {}) };
       const cur      = payments[m.name] || {};
@@ -1077,6 +1077,7 @@ async function saveCollectRow(memberId) {
                      : newPaid >= r.utilDue   ? "paid"
                      : "partial";
       payments[m.name] = {
+        ...cur,                 // keep credit_paid and any other recorded fields
         paid:          newPaid,
         meal_paid:     newMeal,
         prev_due_paid: newPrevDuePaid,
@@ -1088,20 +1089,10 @@ async function saveCollectRow(memberId) {
 
     /* ── 2) Update rent ─────────────────────────────────────────── */
     if (allocRent > 0) {
-      const { data: latestRent } = await getClient().from("rent")
-        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
-      const existing = latestRent?.entries || [];
-      const entries = members.map(mm => {
-        const e = existing.find(x => x.name === mm.name) || {};
-        return {
-          name:   mm.name,
-          rent:   Number(e.rent   || 0),
-          paid:   Number(e.paid   || 0),
-          status: e.status        || "unpaid",
-          notes:  e.notes         || "",
-        };
-      });
-      const target = entries.find(x => x.name === m.name);
+      const latestRent = await mustRead(getClient().from("rent")
+        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
+      const entries = withRentEntries(latestRent?.entries, members);   // keeps former members' entries
+      const target = rentEntryFor(entries, m);
       target.paid = round2(Number(target.paid || 0) + allocRent);
       target.status = target.paid <= 0           ? "unpaid"
                     : target.paid >= target.rent ? "paid"
@@ -1159,8 +1150,8 @@ async function saveCollectRow(memberId) {
 
       // Persist to current month's bills.pending_change so it survives reload
       try {
-        const { data: freshUtil } = await getClient().from("utility_payments")
-          .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle();
+        const freshUtil = await mustRead(getClient().from("utility_payments")
+          .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
         const freshBills    = { ...(freshUtil?.bills    || {}) };
         const freshPayments = freshUtil?.payments || {};
         const pendingMap    = { ...(freshBills.pending_change || {}) };

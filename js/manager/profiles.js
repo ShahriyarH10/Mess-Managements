@@ -118,7 +118,7 @@ function getMemberStats(member,meals,bazar,rent,utility=[],filteredUtility=null)
     const k=r.date.slice(0,7); em(k); byM[k].meals+=v;
   });
   bazar.forEach(r=>{ const v=Number(r.bazar[member.name]||0); tb+=v; const k=r.date.slice(0,7); em(k); byM[k].bazar+=v; });
-  rent.forEach(r=>{ const e=r.entries?.find(x=>x.name===member.name); if(e){ rd+=Number(e.rent||0); rp+=Number(e.paid||0); em(r.month_key); byM[r.month_key].rentPaid+=Number(e.paid||0); } });
+  rent.forEach(r=>{ const e=rentEntryFor(r.entries, member); if(e){ rd+=Number(e.rent||0); rp+=Number(e.paid||0); em(r.month_key); byM[r.month_key].rentPaid+=Number(e.paid||0); } });
   // utility = full allU (for postpaid prev-month lookup)
   // filteredUtility = period-scoped subset (for ud/up stat totals)
   // If filteredUtility not provided, fall back to utility (all-time view)
@@ -145,7 +145,7 @@ function getMemberStats(member,meals,bazar,rent,utility=[],filteredUtility=null)
   const mr=allMealsTotal>0?allBazarTotal/allMealsTotal:0;
   const mc=round2(tm*mr);
   const latestR=[...rent].sort((a,b)=>b.month_key.localeCompare(a.month_key))[0];
-  const latestRS=latestR?.entries?.find(x=>x.name===member.name)?.status||"unpaid";
+  const latestRS=rentEntryFor(latestR?.entries, member)?.status||"unpaid";
   const latestU=[...utility].sort((a,b)=>b.month_key.localeCompare(a.month_key))[0];
   const latestUS=(latestU?.payments||{})[member.name]?.status||"unpaid";
   return { totalMeals:round2(tm), totalBazar:tb, mealRate:round2(mr), mealCost:mc, mealBalance:round2(tb-mc), rentDue:rd, rentPaid:rp, utilityDue:round2(ud), utilityPaid:round2(up), activeDays:ad, avgMeals:meals.length>0?round2(tm/meals.length):0, latestStatus:latestRS, latestUtilStatus:latestUS, byMonth:byM };

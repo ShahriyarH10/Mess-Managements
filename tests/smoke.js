@@ -282,6 +282,12 @@
       "archived member leaves the list and appears under Former members");
     const kept = (await raw().from("meals").select("*").eq("mess_id", smMess)).data || [];
     log(kept.some(r => (smId + "_day") in r.meals), "archived member's meals are kept");
+    // the manager re-saving that day (form lists current members only) must not erase them
+    await openHash("#/demo/app/meals"); await settle();
+    await W().saveMeals(); await sleep(400);
+    const resaved = (await raw().from("meals").select("*").eq("mess_id", smMess)).data || [];
+    log(resaved.some(r => (smId + "_day") in r.meals), "manager re-saving the day keeps the archived member's meals: " + JSON.stringify(resaved.map(r => r.meals)));
+    await openHash("#/demo/app/members"); await settle();
     log(((await P().sb().from("meals").select("*").eq("mess_id", smMess)).data || []).some(r => "Smoke Member_day" in r.meals),
       "…and still read under their name");
     W().openAddMemberModal(); await sleep(150);
