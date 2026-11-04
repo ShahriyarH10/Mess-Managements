@@ -408,7 +408,7 @@ async function openBazarMonth(key) {
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
     <div class="modal-title">${ic("cart")} ${monthLabelFromKey(key)} — Bazar Calendar</div>
-    <div class="modal-sub" style="margin-bottom:14px">${rows.length} active day${rows.length===1?"":"s"} · grand total <b style="color:var(--green)">${fmtTk(grand)}</b> · click any highlighted day for details</div>
+    <div class="modal-sub" style="margin-bottom:14px">${rows.length} active day${rows.length===1?"":"s"} · grand total <b style="color:var(--c-bazar)">${fmtTk(grand)}</b> · click any highlighted day for details</div>
 
     <!-- Member contribution bars -->
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px">
@@ -473,7 +473,7 @@ async function openBazarDayDetail(monthKey, dayStr) {
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
     <div class="modal-title">${ic("cart")} Bazar — ${escapeHtml(dateLabel)}</div>
-    <div class="modal-sub" style="margin-bottom:14px">Day total: <b style="color:var(--green)">${fmtTk(round2(dayTotal))}</b></div>
+    <div class="modal-sub" style="margin-bottom:14px">Day total: <b style="color:var(--c-bazar)">${fmtTk(round2(dayTotal))}</b></div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${members.map(m => {
         const v = Number(dayMap[m.name] || 0);

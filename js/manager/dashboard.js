@@ -197,11 +197,11 @@ async function renderDashboard(el) {
 
     <!-- ── KPIs ── -->
     <div class="stat-grid dk-kpis">
-      ${kpi("dk-gold",  ic("meal"), "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, buildSparkline(mealSeries, "var(--accent)"))}
-      ${kpi("dk-blue",  ic("chart"), "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             buildSparkline(rateSeries, "var(--blue)"))}
-      ${kpi("dk-green", ic("cart"), "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, buildSparkline(bazarSeries, "var(--green)"))}
+      ${kpi("dk-meal",  ic("meal"), "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, buildSparkline(mealSeries, "var(--c-meal)"))}
+      ${kpi("dk-meal",  ic("chart"), "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             buildSparkline(rateSeries, "var(--c-meal)"))}
+      ${kpi("dk-bazar", ic("cart"), "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, buildSparkline(bazarSeries, "var(--c-bazar)"))}
       ${kpi("dk-gray",  ic("calendar"), "Days logged", daysLogged, `of ${daysGone} so far · ${daysInMonth - daysGone} left`,
-        `<div class="dk-bar dk-bar-kpi"><i style="width:${logPct}%;background:${logPct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>`)}
+        `<div class="dk-bar dk-bar-kpi"><i style="width:${logPct}%;background:${logPct >= 100 ? "var(--green)" : "var(--blue)"}"></i></div>`)}
     </div>
 
     <!-- ── Today + Meal activity ── -->
@@ -213,8 +213,8 @@ async function renderDashboard(el) {
         </div>
         ${todayRec ? `
         <div class="dk-today-nums">
-          <div><span class="stat-value" style="color:var(--blue)">${todayDayTotal}</span><small>Day</small></div>
-          <div><span class="stat-value" style="color:var(--accent)">${todayNightTotal}</span><small>Night</small></div>
+          <div><span class="stat-value" style="color:var(--c-day)">${todayDayTotal}</span><small>Day</small></div>
+          <div><span class="stat-value" style="color:var(--c-night)">${todayNightTotal}</span><small>Night</small></div>
           <div><span class="stat-value">${round2(todayDayTotal + todayNightTotal)}</span><small>Total</small></div>
         </div>
         <div class="dk-eaters">
@@ -257,11 +257,11 @@ async function renderDashboard(el) {
       <div class="dk-coll-grid">
         ${rentRec?.entries?.length
           ? collectRow(ic("home"), "Room rent", totalRentPaid, totalRentDue, rentPct,
-              chip(rentPaidCount, "paid", "ok") + chip(rentPartCount, "partial", "mid") + chip(rentDueCount, "due", "bad"), "var(--accent)")
+              chip(rentPaidCount, "paid", "ok") + chip(rentPartCount, "partial", "mid") + chip(rentDueCount, "due", "bad"), "var(--c-rent)")
           : `<div class="dk-coll dk-coll-empty">${ic("home")} No rent set for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('rent')">Set rent</button></div>`}
         ${totalUtil > 0
           ? collectRow(ic("zap"), "Utility", totalUtilPaid, totalUtil, utilPct,
-              chip(utilPaidCount, "paid", "ok") + chip(utilPartCount, "partial", "mid") + chip(utilDueCount, "due", "bad"), "var(--purple)")
+              chip(utilPaidCount, "paid", "ok") + chip(utilPartCount, "partial", "mid") + chip(utilDueCount, "due", "bad"), "var(--c-util)")
           : `<div class="dk-coll dk-coll-empty">${ic("zap")} No utility bills for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('utility')">Add bills</button></div>`}
       </div>
     </div>
@@ -279,7 +279,7 @@ async function renderDashboard(el) {
             const re = rentBy[m.name], up = utilBy[m.name];
             return `<tr>
               <td><div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${escapeHtml(m.name)}</div></td>
-              <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeals) * 100)}%;background:${col.fg}"></i></div><b>${v}</b></div></td>
+              <td><div class="dk-meals"><div class="dk-bar"><i style="width:${Math.round((v / maxMemMeals) * 100)}%;background:var(--c-meal)"></i></div><b>${v}</b></div></td>
               <td style="text-align:right;color:${bz > 0 ? "var(--green)" : "var(--text3)"};font-weight:600">${bz > 0 ? fmtTk(bz) : "—"}</td>
               <td>${re ? statusBadge(re.status, `${fmtTk(Number(re.paid || 0))}/${fmtTk(Number(re.rent || 0))}`) : `<span style="color:var(--text3)">—</span>`}</td>
               <td>${totalUtil > 0 ? statusBadge(up?.status, up?.paid ? fmtTk(Number(up.paid)) : "") : `<span style="color:var(--text3)">—</span>`}</td>

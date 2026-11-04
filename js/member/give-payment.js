@@ -279,9 +279,9 @@ function onGiveAmtInput() {
   const chip = (txt, bg, fg) => `<span class="gp-chip" style="background:var(${bg});color:var(${fg})">${txt}</span>`;
   chips.innerHTML = [
     s.allocPrevDue > 0 ? chip(ic("rewind") + " Prev " + fmtTk(s.allocPrevDue), "--red-bg",    "--red")    : "",
-    s.allocRent    > 0 ? chip(ic("home") + " Rent " + fmtTk(s.allocRent),    "--accent-bg", "--accent") : "",
-    s.allocUtil    > 0 ? chip(ic("zap") + " Util " + fmtTk(s.allocUtil),    "--blue-bg",   "--blue")   : "",
-    s.allocMeal    > 0 ? chip(ic("meal") + " Meal " + fmtTk(s.allocMeal),    "--purple-bg", "--purple") : "",
+    s.allocRent    > 0 ? chip(ic("home") + " Rent " + fmtTk(s.allocRent),    "--c-rent-bg", "--c-rent") : "",
+    s.allocUtil    > 0 ? chip(ic("zap") + " Util " + fmtTk(s.allocUtil),    "--c-util-bg", "--c-util")   : "",
+    s.allocMeal    > 0 ? chip(ic("meal") + " Meal " + fmtTk(s.allocMeal),    "--c-meal-bg", "--c-meal") : "",
     s.change       > 0 ? chip(ic("send") + " Extra " + fmtTk(s.change),      "--green-bg",  "--green")  : "",
   ].join("");
 }

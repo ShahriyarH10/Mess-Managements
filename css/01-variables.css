@@ -2,10 +2,32 @@
    THEME VARIABLES
 ══════════════════════════════════════════════ */
 :root {
+  /* ── Colour system — every colour has ONE job ───────────────────────
+     Brand    --accent         buttons, active nav, logo, highlights. Never a status.
+     Status   --green  ok      paid · settled · credit · money back to you
+              --red    due     owed · unpaid · overdue · delete
+              --warn   warn    partial · pending · waiting
+              --blue   info    neutral info: notes, roles, hints
+     Category (what a number IS — never a status hue)
+              --c-meal  violet   meals (day/night are two shades of it)
+              --c-bazar teal     bazar spending
+              --c-rent  pink     room rent
+              --c-util  sky      utility bills (electricity, gas, WiFi)
+              --c-other slate    khala & other shared bills
+     ──────────────────────────────────────────────────────────────── */
   --accent:     #d4a853;
   --accent2:    #b8914a;
-  --amber:      #d4a853;
   --accent-bg:  rgba(212,168,83,0.10);
+  --warn:       #e8913a;
+  --warn-bg:    rgba(232,145,58,0.12);
+  --amber:      var(--warn);          /* legacy name: status "partial" */
+  --amber-bg:   var(--warn-bg);
+  --c-meal:     #a78bfa;  --c-meal-bg:  rgba(167,139,250,0.12);
+  --c-day:      #c4b5fd;  --c-night:    #8b7cf6;
+  --c-bazar:    #2bb3a3;  --c-bazar-bg: rgba(43,179,163,0.12);
+  --c-rent:     #e879a9;  --c-rent-bg:  rgba(232,121,169,0.12);
+  --c-util:     #38b6e8;  --c-util-bg:  rgba(56,182,232,0.12);
+  --c-other:    #8b95a5;  --c-other-bg: rgba(139,149,165,0.12);
   --green:      #4caf82;
   --green-bg:   rgba(76,175,130,0.10);
   --red:        #e05252;
@@ -50,6 +72,13 @@
   --text3:    #9a9690;
   --shadow:   rgba(0,0,0,0.12);
   --land-bg:  #faf8f5;
+  /* darker shades so status / category text stays readable on light backgrounds */
+  --warn:     #c4680f;
+  --c-meal:   #7c5ce6;  --c-day: #9a85f0;  --c-night: #6646d8;
+  --c-bazar:  #0f8a7d;
+  --c-rent:   #c43e7c;
+  --c-util:   #1785bb;
+  --c-other:  #627082;
 }
 
 /* ══════════════════════════════════════════════

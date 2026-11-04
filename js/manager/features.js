@@ -105,11 +105,11 @@ async function loadAbsenceCalendar() {
           <span style="color:var(--text2)">All meals off</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
-          <span style="width:8px;height:8px;border-radius:50%;background:var(--blue);display:inline-block"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--c-day);display:inline-block"></span>
           <span style="color:var(--text2)">${ic("sun")} Day off only</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
-          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--c-night);display:inline-block"></span>
           <span style="color:var(--text2)">${ic("moon")} Night off only</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
@@ -211,8 +211,8 @@ async function loadAbsenceCalendar() {
         if (allOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${allOff.map(e   => avatarDot(e, "var(--red)",     "#fef2f2")).join("")}</div>`);
         // Day off = blue ☀, night off = gold 🌙 — same colours as the D/N chips everywhere else
         const tag = (icon) => `<span style="font-size:9px;line-height:24px;width:12px;text-align:center;flex-shrink:0" aria-hidden="true">${icon}</span>`;
-        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Day meal off">${tag("" + ic("sun") + "")}${dayOff.map(e   => avatarDot(e, "var(--blue)", "")).join("")}</div>`);
-        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Night meal off">${tag("" + ic("moon") + "")}${nightOff.map(e => avatarDot(e, "var(--accent)", "")).join("")}</div>`);
+        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Day meal off">${tag("" + ic("sun") + "")}${dayOff.map(e   => avatarDot(e, "var(--c-day)", "")).join("")}</div>`);
+        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Night meal off">${tag("" + ic("moon") + "")}${nightOff.map(e => avatarDot(e, "var(--c-night)", "")).join("")}</div>`);
         content = `<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">${sections.join("")}</div>`;
       } else if (isPast && hasData) {
         // ✅ Only show "All ate" when we KNOW there was real meal data for this day
@@ -325,8 +325,8 @@ async function loadAbsenceCalendar() {
                   <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(m.name)}</div>
                   <div style="font-size:10px;color:var(--text3);margin-top:3px;display:flex;flex-direction:column;gap:1px">
                     ${allOffDays   > 0 ? `<span style="color:var(--red)">All off: ${allOffDays}d</span>` : ""}
-                    ${dayOffDays   > 0 ? `<span style="color:var(--blue)">${ic("sun")} Day off: ${dayOffDays}d</span>` : ""}
-                    ${nightOffDays > 0 ? `<span style="color:var(--accent)">${ic("moon")} Night off: ${nightOffDays}d</span>` : ""}
+                    ${dayOffDays   > 0 ? `<span style="color:var(--c-day)">${ic("sun")} Day off: ${dayOffDays}d</span>` : ""}
+                    ${nightOffDays > 0 ? `<span style="color:var(--c-night)">${ic("moon")} Night off: ${nightOffDays}d</span>` : ""}
                   </div>
                 </div>
               </div>`;
@@ -747,20 +747,20 @@ function drawAnalytics() {
   el.innerHTML = head + `
   <div class="content dk an">
     <div class="stat-grid dk-kpis">
-      ${kpi("dk-blue", "" + ic("chart") + "", "Meal rate · " + MONTHS[Number(cur.key.slice(5)) - 1].slice(0, 3), fmtTk(cur.rate),
-          `${tr(pct(cur.rate, avgRate), true, "avg " + fmtTk(avgRate))}`, buildSparkline(months.map(m => m.rate), "var(--blue)", { fit: true }))}
-      ${kpi("dk-green", "" + ic("cart") + "", cur.proj != null ? "Bazar · projected" : "Bazar this month", fmtTk(projBazar),
+      ${kpi("dk-meal", ic("chart"), "Meal rate · " + MONTHS[Number(cur.key.slice(5)) - 1].slice(0, 3), fmtTk(cur.rate),
+          `${tr(pct(cur.rate, avgRate), true, "avg " + fmtTk(avgRate))}`, buildSparkline(months.map(m => m.rate), "var(--c-meal)", { fit: true }))}
+      ${kpi("dk-bazar", ic("cart"), cur.proj != null ? "Bazar · projected" : "Bazar this month", fmtTk(projBazar),
           cur.proj != null ? `${fmtTk(round2(cur.bazar))} so far · ${tr(pct(projBazar, prev?.bazar), null, prev ? prev.label : "")}` : tr(pct(cur.bazar, prev?.bazar), null, prev ? prev.label : ""),
-          buildSparkline(months.map(m => m.proj ?? m.bazar), "var(--green)"))}
-      ${kpi("dk-gold", "" + ic("meal") + "", "Meals per day", cur.perDay, `${round2(cur.meals)} meals · ${tr(pct(cur.perDay, prev?.perDay), null, prev ? prev.label : "")}`,
-          buildSparkline(months.map(m => m.perDay), "var(--accent)", { fit: true }))}
+          buildSparkline(months.map(m => m.proj ?? m.bazar), "var(--c-bazar)"))}
+      ${kpi("dk-meal", ic("meal"), "Meals per day", cur.perDay, `${round2(cur.meals)} meals · ${tr(pct(cur.perDay, prev?.perDay), null, prev ? prev.label : "")}`,
+          buildSparkline(months.map(m => m.perDay), "var(--c-meal)", { fit: true }))}
       ${kpi("dk-gray", "" + ic("tag") + "", "Cheapest month", lo ? fmtTk(lo.rate) : "—",
           lo && hi ? `${lo.label} · priciest ${hi.label} ${fmtTk(hi.rate)}` : "",
           `<div class="an-range"><i style="left:${hi && lo && hi.rate > lo.rate ? Math.round(((cur.rate - lo.rate) / (hi.rate - lo.rate)) * 100) : 50}%" title="This month"></i></div>`)}
     </div>
 
     <div class="card">
-      <div class="dk-card-title"><span>Meal rate per month</span><span class="dk-legend"><i class="an-key" style="background:var(--blue)"></i> rate <i class="an-key an-key-dash"></i> average ${fmtTk(avgRate)}</span></div>
+      <div class="dk-card-title"><span>Meal rate per month</span><span class="dk-legend"><i class="an-key" style="background:var(--c-meal)"></i> rate <i class="an-key an-key-dash"></i> average ${fmtTk(avgRate)}</span></div>
       <div class="an-chart" id="an-rate"></div>
     </div>
 
@@ -779,17 +779,17 @@ function drawAnalytics() {
     </div>
 
     <div class="card">
-      <div class="dk-card-title"><span>Bazar vs meal cost · ${cur.long}</span><span class="dk-legend"><i class="an-key" style="background:var(--green)"></i> bazar given <i class="an-key" style="background:var(--accent)"></i> meal cost at ${fmtTk(cur.rate)}</span></div>
+      <div class="dk-card-title"><span>Bazar vs meal cost · ${cur.long}</span><span class="dk-legend"><i class="an-key" style="background:var(--c-bazar)"></i> bazar given <i class="an-key" style="background:var(--c-meal)"></i> meal cost at ${fmtTk(cur.rate)}</span></div>
       <div class="an-mem">
         ${memRows.map(r => {
           const col = avatarCol(r.i);
           return `<div class="an-mem-row">
             <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(r.m.id, r.m.name)}</span><span class="an-mem-name">${escapeHtml(r.m.name)}</span></div>
             <div class="an-mem-bars">
-              <div class="dk-bar"><i style="width:${Math.round((r.bz / memMax) * 100)}%;background:var(--green)"></i></div>
-              <div class="dk-bar"><i style="width:${Math.round((r.cost / memMax) * 100)}%;background:var(--accent)"></i></div>
+              <div class="dk-bar"><i style="width:${Math.round((r.bz / memMax) * 100)}%;background:var(--c-bazar)"></i></div>
+              <div class="dk-bar"><i style="width:${Math.round((r.cost / memMax) * 100)}%;background:var(--c-meal)"></i></div>
             </div>
-            <div class="an-mem-vals"><span style="color:var(--green)">${fmtTk(r.bz)}</span><span style="color:var(--accent)">${fmtTk(r.cost)}</span></div>
+            <div class="an-mem-vals"><span style="color:var(--c-bazar)">${fmtTk(r.bz)}</span><span style="color:var(--c-meal)">${fmtTk(r.cost)}</span></div>
             <span class="badge ${Math.abs(r.net) < 0.01 ? "" : r.net > 0 ? "badge-green" : "badge-red"} an-mem-net">${Math.abs(r.net) < 0.01 ? "Even" : (r.net > 0 ? "Gets " : "Owes ") + fmtTk(Math.abs(r.net))}</span>
           </div>`;
         }).join("")}
@@ -802,9 +802,9 @@ function drawAnalytics() {
         <thead><tr><th>Month</th><th>Meals</th><th>Per day</th><th>Bazar</th><th>Meal rate</th><th>vs avg</th></tr></thead>
         <tbody>${months.slice().reverse().map(m => {
           const d = round2(m.rate - avgRate);
-          return `<tr><td><b>${m.long}</b>${m.isCur ? ` <span class="badge badge-amber">so far</span>` : ""}</td><td>${round2(m.meals)}</td><td>${m.perDay}</td>
-            <td style="color:var(--green)">${fmtTk(round2(m.bazar))}${m.proj != null ? `<div class="dk-mini">→ ${fmtTk(m.proj)} projected</div>` : ""}</td>
-            <td style="color:var(--blue);font-weight:700">${m.rate ? fmtTk(m.rate) : "—"}</td>
+          return `<tr><td><b>${m.long}</b>${m.isCur ? ` <span class="badge badge-gold">so far</span>` : ""}</td><td>${round2(m.meals)}</td><td>${m.perDay}</td>
+            <td style="color:var(--c-bazar)">${fmtTk(round2(m.bazar))}${m.proj != null ? `<div class="dk-mini">→ ${fmtTk(m.proj)} projected</div>` : ""}</td>
+            <td style="color:var(--c-meal);font-weight:700">${m.rate ? fmtTk(m.rate) : "—"}</td>
             <td style="color:${!m.rate ? "var(--text3)" : d > 0 ? "var(--red)" : d < 0 ? "var(--green)" : "var(--text3)"}">${!m.rate || !d ? "—" : (d > 0 ? "+" : "−") + fmtTk(Math.abs(d))}</td></tr>`;
         }).join("")}</tbody>
       </table></div>
@@ -849,8 +849,8 @@ function _anLineChart(w, months, avg) {
   return `<svg class="an-svg" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="Meal rate per month">
     ${ticks.map(t => `<line class="an-grid" x1="${L}" x2="${w - R}" y1="${y(t)}" y2="${y(t)}"/><text class="an-ax" x="${L - 8}" y="${y(t) + 3.5}" text-anchor="end">${_anShortTk(t)}</text>`).join("")}
     ${avg ? `<line class="an-avg" x1="${L}" x2="${w - R}" y1="${y(avg)}" y2="${y(avg)}"/>` : ""}
-    <path class="an-area" d="${line} L${x(pts.length - 1)} ${T + ph} L${x(0)} ${T + ph} Z" fill="var(--blue)"/>
-    <path class="an-line" d="${line}" stroke="var(--blue)" pathLength="1"/>
+    <path class="an-area" d="${line} L${x(pts.length - 1)} ${T + ph} L${x(0)} ${T + ph} Z" fill="var(--c-meal)"/>
+    <path class="an-line" d="${line}" stroke="var(--c-meal)" pathLength="1"/>
     ${pts.map((m, i) => `<g class="an-pt" style="--d:${(0.5 + (i / pts.length) * 1.1).toFixed(2)}s">
       <circle cx="${x(i)}" cy="${y(m.rate)}" r="${m.isCur ? 5 : 4}" class="${m.isCur ? "an-dot-cur" : "an-dot"}"><title>${m.long}: ${fmtTk(m.rate)}/meal${m.isCur ? " (so far)" : ""}</title></circle>
       ${showVal(i) ? `<text class="an-val" x="${x(i)}" y="${y(m.rate) - 10}" text-anchor="${i === 0 && pts.length > 1 ? "start" : i === pts.length - 1 && pts.length > 1 ? "end" : "middle"}">${fmtTk(m.rate)}${m.isCur ? " so far" : ""}</text>` : ""}

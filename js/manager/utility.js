@@ -107,7 +107,7 @@ function updRentSum() {
       <span class="ent-pill ent-g">Collected <b>${fmtTk(paid)}</b></span>
       <span class="ent-pill">Outstanding <b style="color:${out>0?"var(--red)":"var(--green)"}">${out>0?fmtTk(out):ic("check")+" None"}</b></span>
     </div>
-    <div class="dk-bar ut-progress"><i style="width:${rate}%;background:${rate>=100?"var(--green)":"var(--accent)"}"></i></div>`;
+    <div class="dk-bar ut-progress"><i style="width:${rate}%;background:${rate>=100?"var(--green)":"var(--warn)"}"></i></div>`;
 }
 
 function markAllRentPaid() {
@@ -168,7 +168,7 @@ async function loadRentHistory() {
     const st    = done === es.length && es.length ? "ok" : paid > 0 ? "mid" : "bad";
     return `<div class="rh-row">
       <div class="rh-month"><b>${monthLabelFromKey(r.month_key)}</b><span>${done}/${es.length} paid</span></div>
-      <div class="rh-bar"><div class="dk-bar"><i style="width:${rate}%;background:${st === "ok" ? "var(--green)" : st === "mid" ? "var(--accent)" : "var(--red)"}"></i></div>
+      <div class="rh-bar"><div class="dk-bar"><i style="width:${rate}%;background:${st === "ok" ? "var(--green)" : st === "mid" ? "var(--warn)" : "var(--red)"}"></i></div>
         <span class="rh-left">${left.length ? "Pending: " + left.slice(0, 4).join(", ") + (left.length > 4 ? ` +${left.length - 4}` : "") : "All cleared"}</span></div>
       <div class="rh-amt"><b style="color:var(--green)">${fmtTk(paid)}</b><span>of ${fmtTk(due)}</span></div>
       <span class="dk-chip ${st}">${rate}%</span>

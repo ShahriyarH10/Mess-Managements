@@ -97,13 +97,10 @@ async function renderCollect(el) {
   <style>
     /* ── How-it-works pills ── */
     .cp-pill{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);flex:1;min-width:180px;}
-    .cp-pill-red{border-color:rgba(224,82,82,.25);background:var(--red-bg);}
-    .cp-pill-amber{border-color:rgba(212,168,83,.25);background:var(--accent-bg);}
-    .cp-pill-green{border-color:rgba(76,175,130,.25);background:var(--green-bg);}
+    /* how-to steps are instructions, not statuses: all neutral, brand-numbered */
+    .cp-pill-red,.cp-pill-amber,.cp-pill-green{border-color:var(--border);background:var(--bg3);}
     .cp-pill-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;margin-top:1px;}
-    .cp-pill-red .cp-pill-num{background:var(--red);color:#fff;}
-    .cp-pill-amber .cp-pill-num{background:var(--accent);color:#0f0f0f;}
-    .cp-pill-green .cp-pill-num{background:var(--green);color:#fff;}
+    .cp-pill-red .cp-pill-num,.cp-pill-amber .cp-pill-num,.cp-pill-green .cp-pill-num{background:var(--accent);color:#0f0f0f;}
     .cp-pill-title{font-size:12px;font-weight:700;color:var(--text);}
     .cp-pill-body{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.4;}
 
@@ -147,9 +144,9 @@ async function renderCollect(el) {
     .cp-split-preview{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px;min-height:26px;}
     .cp-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;}
     .cp-chip-pd{background:var(--red-bg);color:var(--red);border:1px solid rgba(224,82,82,.25);}
-    .cp-chip-rent{background:var(--accent-bg);color:var(--accent);border:1px solid rgba(212,168,83,.3);}
-    .cp-chip-util{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(91,155,213,.3);}
-    .cp-chip-meal{background:var(--purple-bg);color:var(--purple);border:1px solid rgba(167,139,250,.3);}
+    .cp-chip-rent{background:var(--c-rent-bg);color:var(--c-rent);border:1px solid color-mix(in srgb,var(--c-rent) 30%,transparent);}
+    .cp-chip-util{background:var(--c-util-bg);color:var(--c-util);border:1px solid color-mix(in srgb,var(--c-util) 30%,transparent);}
+    .cp-chip-meal{background:var(--c-meal-bg);color:var(--c-meal);border:1px solid color-mix(in srgb,var(--c-meal) 30%,transparent);}
     .cp-chip-change{background:var(--green-bg);color:var(--green);border:1px solid rgba(76,175,130,.3);}
 
     /* prev-due warning banner */
@@ -328,19 +325,19 @@ function buildCollectTable() {
           <div class="cp-brow">
             <span class="cp-brow-ico">${ic("home")}</span>
             <span class="cp-brow-lbl">Rent</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRent}%;background:var(--accent)"></div></div>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRent}%;background:var(--c-rent)"></div></div>
             <span class="cp-brow-val" id="cp-rr-${m.id}" style="color:${rentRem > 0 ? 'var(--red)' : 'var(--green)'}">${rentRem > 0 ? fmtTk(rentRem) : '' + ic("check") + ' 0'}</span>
           </div>
           <div class="cp-brow">
             <span class="cp-brow-ico">${ic("zap")}</span>
             <span class="cp-brow-lbl">Utility</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctUtil}%;background:var(--blue)"></div></div>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctUtil}%;background:var(--c-util)"></div></div>
             <span class="cp-brow-val" id="cp-ur-${m.id}" style="color:${utilRem > 0 ? 'var(--red)' : 'var(--green)'}">${utilRem > 0 ? fmtTk(utilRem) : '' + ic("check") + ' 0'}</span>
           </div>
           <div class="cp-brow">
             <span class="cp-brow-ico">${ic("meal")}</span>
             <span class="cp-brow-lbl">Meal Balance</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctMeal}%;background:var(--purple)"></div></div>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctMeal}%;background:var(--c-meal)"></div></div>
             <span class="cp-brow-val" id="cp-mr-${m.id}" style="color:${mealRem > 0 ? 'var(--red)' : mealRem < 0 ? 'var(--green)' : 'var(--text3)'}">${mealRem > 0 ? fmtTk(mealRem) : mealRem < 0 ? '+'+fmtTk(Math.abs(mealRem)) : '' + ic("check") + ' 0'}</span>
           </div>
         </div>
@@ -555,8 +552,8 @@ function buildReturnTable() {
           <div class="cp-brow">
             <span class="cp-brow-ico">${ic("send")}</span>
             <span class="cp-brow-lbl">Overpaid change</span>
-            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(changeRemaining)}%;background:var(--accent)"></div></div>
-            <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(changeRemaining)}</span>
+            <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(changeRemaining)}%;background:var(--green)"></div></div>
+            <span class="cp-brow-val" style="color:var(--green)">${fmtTk(changeRemaining)}</span>
           </div>`);
     if (owesRemaining > 0.01) breakdown.push(`
           <div class="cp-brow">

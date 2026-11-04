@@ -25,14 +25,14 @@ function renderLog(el) {
         <div style="font-weight:700;font-size:14px;margin-bottom:8px">${ic("chart")} How settlement is calculated</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
-            <div style="color:var(--red);font-weight:600;margin-bottom:4px">${ic("dot", "ic-red")} Postpaid (from PREVIOUS month)</div>
+            <div style="color:var(--text2);font-weight:600;margin-bottom:4px">${ic("clock")} Postpaid (from PREVIOUS month)</div>
             <div>• Meal cost = meals eaten × meal rate</div>
             <div>• Khala bill (cook/helper)</div>
             <div>• Other cost</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Meal rate = total bazar ÷ total meals</div>
           </div>
           <div>
-            <div style="color:var(--blue);font-weight:600;margin-bottom:4px">${ic("dot", "ic-blue")} Prepaid (from CURRENT month)</div>
+            <div style="color:var(--text2);font-weight:600;margin-bottom:4px">${ic("calendar")} Prepaid (from CURRENT month)</div>
             <div>• Room rent</div>
             <div>• Electricity + Gas + WiFi (shared equally)</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Utility = total bills ÷ number of members</div>
@@ -153,14 +153,14 @@ async function loadLog() {
           <div class="stat-label">${ic("cart")} Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div>
         </div>
-        <div class="stat-card" style="border-color:rgba(91,155,213,.3)">
-          <div class="stat-label" style="color:var(--blue)">${ic("dot", "ic-blue")} Prepaid bills (${MONTHS[month].slice(0,3)})</div>
-          <div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(prepaidTotal)}</div>
+        <div class="stat-card">
+          <div class="stat-label" style="color:var(--text2)">${ic("calendar")} Prepaid bills (${MONTHS[month].slice(0,3)})</div>
+          <div class="stat-value" style="font-size:17px;color:var(--text)">${fmtTk(prepaidTotal)}</div>
           <div class="stat-sub">Elec ${fmtTk(elecAmt)} + Gas ${fmtTk(gasAmt)} + WiFi ${fmtTk(wifiAmt)}</div>
         </div>
-        <div class="stat-card" style="border-color:rgba(231,76,60,.3)">
-          <div class="stat-label" style="color:var(--red)">${ic("dot", "ic-red")} Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
-          <div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(postpaidTotal)}</div>
+        <div class="stat-card">
+          <div class="stat-label" style="color:var(--text2)">${ic("clock")} Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-value" style="font-size:17px;color:var(--text)">${fmtTk(postpaidTotal)}</div>
           <div class="stat-sub">Khala ${fmtTk(khalaTotal)} + Other ${fmtTk(otherTotal)}</div>
         </div>
         <div class="stat-card">
@@ -176,8 +176,8 @@ async function loadLog() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div class="card-title" style="margin:0">Member Settlement — ${MONTHS[month]} ${year}</div>
         <div style="display:flex;gap:10px;font-size:12px;font-weight:600;flex-wrap:wrap">
-          <span><span style="display:inline-block;width:9px;height:9px;background:var(--red);border-radius:2px;margin-right:4px"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
-          <span><span style="display:inline-block;width:9px;height:9px;background:var(--blue);border-radius:2px;margin-right:4px"></span>Prepaid for ${MONTHS[month]} ${year}</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:var(--text3);border-radius:2px;margin-right:4px"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:var(--text2);border-radius:2px;margin-right:4px"></span>Prepaid for ${MONTHS[month]} ${year}</span>
           <span><span style="display:inline-block;width:9px;height:9px;background:var(--green);border-radius:2px;margin-right:4px"></span>Credits</span>
         </div>
       </div>
@@ -188,11 +188,11 @@ async function loadLog() {
             <tr>
               <th rowspan="2">Member</th>
               <th rowspan="2">Meals<br><span style="font-size:10px;color:var(--text3)">${MONTHS[prev.month].slice(0,3)}</span></th>
-              <th colspan="3" style="color:var(--red);background:rgba(231,76,60,.07)">
-                ${ic("dot", "ic-red")} Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
+              <th colspan="3" style="color:var(--text2);background:var(--bg3)">
+                ${ic("clock")} Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
               </th>
-              <th colspan="2" style="color:var(--blue);background:rgba(91,155,213,.07)">
-                ${ic("dot", "ic-blue")} Prepaid — ${MONTHS[month].slice(0,3)} ${year}
+              <th colspan="2" style="color:var(--text2);background:var(--bg3)">
+                ${ic("calendar")} Prepaid — ${MONTHS[month].slice(0,3)} ${year}
               </th>
               <th colspan="6" style="color:var(--green);background:rgba(39,174,96,.07)">
                 ${ic("checkCircle", "ic-green")} Credits
@@ -200,16 +200,16 @@ async function loadLog() {
               <th rowspan="2" style="background:var(--bg3)">Net</th>
             </tr>
             <tr>
-              <th style="color:var(--red)">Meal cost</th>
-              <th style="color:var(--red)">Khala</th>
-              <th style="color:var(--red)">Other</th>
-              <th style="color:var(--blue)">Util share</th>
-              <th style="color:var(--blue)">Rent</th>
+              <th style="color:var(--c-meal)">Meal cost</th>
+              <th style="color:var(--c-other)">Khala</th>
+              <th style="color:var(--c-other)">Other</th>
+              <th style="color:var(--c-util)">Util share</th>
+              <th style="color:var(--c-rent)">Rent</th>
               <th style="color:var(--green)">Bazar paid</th>
               <th style="color:var(--green)">Meal paid</th>
               <th style="color:var(--green)">Rent paid</th>
               <th style="color:var(--green)">Util paid</th>
-              <th style="color:var(--blue)">${ic("undo")} Carried fwd</th>
+              <th style="color:var(--green)">${ic("undo")} Carried fwd</th>
               <th style="color:var(--red)">Prev due</th>
             </tr>
           </thead>
@@ -232,14 +232,14 @@ async function loadLog() {
                   <b>${p.memberMeals}</b>
                   <div style="font-size:10px;color:var(--text3)">${p.memberMeals} × ${fmtTk(p.mealRate)}</div>
                 </td>
-                <td style="color:var(--red)">${fmtTk(p.mealCost)}</td>
-                <td style="color:var(--red)">${fmtTk(p.khalaShare)}</td>
-                <td style="color:var(--red)">${fmtTk(p.otherShare)}</td>
+                <td>${fmtTk(p.mealCost)}</td>
+                <td>${fmtTk(p.khalaShare)}</td>
+                <td>${fmtTk(p.otherShare)}</td>
                 <td style="color:var(--blue)">
                   ${fmtTk(p.prepaidUtility)}
                   <div style="font-size:10px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${members.length}</div>
                 </td>
-                <td style="color:var(--blue)">${fmtTk(p.roomRent)}</td>
+                <td>${fmtTk(p.roomRent)}</td>
                 <td style="color:var(--green)">${fmtTk(p.memberBazar)}</td>
                 <td style="color:${(p.mealPaid||0) > 0 ? 'var(--green)' : 'var(--text3)'}">
                   ${(p.mealPaid||0) > 0 ? fmtTk(p.mealPaid) : '৳0'}
@@ -296,7 +296,7 @@ async function loadLog() {
       </div>
 
       <div style="font-size:12px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        ${ic("lightbulb")} Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">${ic("undo")} Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month — adds to this month's net payable.
+        ${ic("lightbulb")} Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--green)">${ic("undo")} Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month — adds to this month's net payable.
       </div>
     </div>
 
@@ -405,8 +405,8 @@ function showSettlementBreakdown(idx) {
     { label: `${ic("meal")} Meal cost`, sub: `${p.memberMeals} meals × ${fmtTk(p.mealRate)} rate`, val: p.mealCost, color: "var(--red)", section: "postpaid" },
     { label: `${ic("cook")} Khala share`, sub: `${fmtTk(p.khalaTotal)} ÷ ${members.length} members`, val: p.khalaShare, color: "var(--red)", section: "postpaid" },
     { label: `${ic("box")} Other share`, sub: `${fmtTk(p.otherTotal)} ÷ ${members.length} members`, val: p.otherShare, color: "var(--red)", section: "postpaid" },
-    { label: `${ic("home")} Room rent`, sub: `${curLabel}`, val: p.roomRent, color: "var(--blue)", section: "prepaid" },
-    { label: `${ic("zap")} Utility share`, sub: `${fmtTk(p.prepaidTotal)} ÷ ${members.length} (Elec+Gas+WiFi)`, val: p.prepaidUtility, color: "var(--blue)", section: "prepaid" },
+    { label: `${ic("home")} Room rent`, sub: `${curLabel}`, val: p.roomRent, color: "var(--red)", section: "prepaid" },
+    { label: `${ic("zap")} Utility share`, sub: `${fmtTk(p.prepaidTotal)} ÷ ${members.length} (Elec+Gas+WiFi)`, val: p.prepaidUtility, color: "var(--red)", section: "prepaid" },
   ];
 
   const grossTotal = round2(rows.reduce((s, r) => s + r.val, 0));
@@ -415,8 +415,8 @@ function showSettlementBreakdown(idx) {
     <div class="modal-title">Settlement Breakdown — ${memberName}</div>
     <div class="modal-sub" style="margin-bottom:12px">${curLabel} settlement</div>
 
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin-bottom:6px">
-      ${ic("dot", "ic-red")} Postpaid charges — from ${prevLabel}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);margin-bottom:6px">
+      ${ic("clock")} Postpaid charges — from ${prevLabel}
     </div>
 
     ${rows.filter(r => r.section === "postpaid").map(r => `
@@ -429,8 +429,8 @@ function showSettlementBreakdown(idx) {
       </div>
     `).join("")}
 
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--blue);margin:12px 0 6px">
-      ${ic("dot", "ic-blue")} Prepaid charges — for ${curLabel}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);margin:12px 0 6px">
+      ${ic("calendar")} Prepaid charges — for ${curLabel}
     </div>
 
     ${rows.filter(r => r.section === "prepaid").map(r => `
@@ -633,19 +633,19 @@ async function doExportReport() {
           <b>${p.memberMeals}</b>
           <div class="sub">${p.memberMeals} &times; ${fP(p.mealRate)}</div>
         </td>
-        <td class="num red">${fP(p.mealCost)}</td>
-        <td class="num red">${fP(p.khalaShare)}</td>
-        <td class="num red">${fP(p.otherShare)}</td>
-        <td class="num blue">
+        <td class="num">${fP(p.mealCost)}</td>
+        <td class="num">${fP(p.khalaShare)}</td>
+        <td class="num">${fP(p.otherShare)}</td>
+        <td class="num">
           ${fP(p.prepaidUtility)}
           <div class="sub">${fP(p.prepaidTotal)} &divide; ${members.length}</div>
         </td>
-        <td class="num blue">${fP(p.roomRent)}</td>
+        <td class="num">${fP(p.roomRent)}</td>
         <td class="num green">${fP(p.memberBazar)}</td>
         <td class="num ${(p.mealPaid||0)>0?"green":"muted"}">${(p.mealPaid||0)>0?fP(p.mealPaid):fP(0)}</td>
         <td class="num ${p.roomRentPaid>0?"green":"muted"}">${p.roomRentPaid>0?fP(p.roomRentPaid):fP(0)}</td>
         <td class="num ${p.utilityPaid>0?"green":"muted"}">${p.utilityPaid>0?fP(p.utilityPaid):fP(0)}</td>
-        <td class="num ${(p.messCredit||0)>0?"blue":"muted"}">${(p.messCredit||0)>0?"&#8629; "+fP(p.messCredit):"&mdash;"}</td>
+        <td class="num ${(p.messCredit||0)>0?"green":"muted"}">${(p.messCredit||0)>0?"&#8629; "+fP(p.messCredit):"&mdash;"}</td>
         <td class="num ${(p.prevDue||0)>0?"red":"muted"}">${(p.prevDue||0)>0?fP(p.prevDue):"&mdash;"}</td>
         <td class="num net-cell"><b style="color:${netColor};font-size:13px">${netHtml}</b></td>
       </tr>`;
@@ -757,8 +757,8 @@ async function doExportReport() {
     /* Summary stat cards — light style */
     .stat-row{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px;}
     .stat{background:#f7f7f7;border:1px solid #eee;border-radius:7px;padding:8px 10px;}
-    .stat.blue{border-top:2px solid #5b9bd5;background:#f0f5fd;}
-    .stat.red{border-top:2px solid #e05252;background:#fdf5f5;}
+    .stat.blue{border-top:2px solid #ccc;}
+    .stat.red{border-top:2px solid #bbb;}
     .stat.plain{border-top:2px solid #ccc;}
     .stat-lbl{font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:#999;margin-bottom:4px;}
     .stat-val{font-size:13px;font-weight:700;color:#222;}
@@ -778,8 +778,8 @@ async function doExportReport() {
     .muted{color:#bbb;}
     .net-cell{min-width:80px;}
     .thead-group th{padding:4px 5px;font-size:8px;}
-    .th-postpaid{background:#fff0f0;color:#c0392b;border-bottom:2px solid #e05252;}
-    .th-prepaid{background:#f0f5fd;color:#2980b9;border-bottom:2px solid #5b9bd5;}
+    .th-postpaid{background:#f3f3f3;color:#555;border-bottom:2px solid #bbb;}
+    .th-prepaid{background:#f7f7f7;color:#555;border-bottom:2px solid #ccc;}
     .th-credits{background:#f0faf5;color:#27ae60;border-bottom:2px solid #4caf82;}
     .th-plain{background:#f7f7f7;color:#555;border-bottom:2px solid #ccc;}
     .totals-row td{background:#f7f7f7;font-weight:700;border-top:2px solid #ddd;}
@@ -858,12 +858,12 @@ async function doExportReport() {
     </div>
     <div class="stat blue">
       <div class="stat-lbl">Prepaid bills (${MONTHS[month].slice(0,3)})</div>
-      <div class="stat-val" style="color:#5b9bd5">${fP(prepaidTotal)}</div>
+      <div class="stat-val">${fP(prepaidTotal)}</div>
       <div class="stat-sub">Elec ${fP(elecAmt)} + Gas ${fP(gasAmt)} + WiFi ${fP(wifiAmt)}</div>
     </div>
     <div class="stat red">
       <div class="stat-lbl">Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
-      <div class="stat-val" style="color:#e05252">${fP(postpaidTotal)}</div>
+      <div class="stat-val">${fP(postpaidTotal)}</div>
       <div class="stat-sub">Khala ${fP(khalaTotal)} + Other ${fP(otherTotal)}</div>
     </div>
     <div class="stat plain">
@@ -876,8 +876,8 @@ async function doExportReport() {
   <div style="font-size:11px;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
     <span>MEMBER SETTLEMENT &mdash; ${MONTHS[month].toUpperCase()} ${year}</span>
     <span class="legend">
-      <span><span class="dot" style="background:#e05252"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
-      <span><span class="dot" style="background:#5b9bd5"></span>Prepaid for ${MONTHS[month]} ${year}</span>
+      <span><span class="dot" style="background:#bbb"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
+      <span><span class="dot" style="background:#ddd"></span>Prepaid for ${MONTHS[month]} ${year}</span>
       <span><span class="dot" style="background:#4caf82"></span>Credits</span>
     </span>
   </div>

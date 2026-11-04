@@ -518,7 +518,7 @@ async function renderMyPayments(el) {
       <div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
       <div class="stat-value pf-val" ${color ? `style="color:${color}"` : ""}>${value}</div>
       <div class="dk-sub">${sub}</div>
-      ${pct != null ? `<div class="dk-bar pf-share"><i style="width:${pct}%;background:${pct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>` : ""}
+      ${pct != null ? `<div class="dk-bar pf-share"><i style="width:${pct}%;background:${pct >= 100 ? "var(--green)" : "var(--warn)"}"></i></div>` : ""}
     </div>`;
   const pct = (a, b) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : null);
   const types = [["rent", "" + ic("home") + "", "Room rent"], ["elec", "" + ic("zap") + "", "Electricity"], ["gas", "" + ic("flame") + "", "Gas"], ["wifi", "" + ic("wifi") + "", "WiFi"], ["khala", "" + ic("cook") + "", "Khala"], ["other", "" + ic("box") + "", "Other"]];
@@ -903,14 +903,14 @@ async function loadMyMonthLog() {
           <div class="stat-label">${ic("cart")} Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div>
         </div>
-        <div class="stat-card" style="border-color:rgba(91,155,213,.3)">
-          <div class="stat-label" style="color:var(--blue)">${ic("dot", "ic-blue")} Prepaid bills (${MONTHS[month].slice(0,3)})</div>
-          <div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(prepaidTotal)}</div>
+        <div class="stat-card">
+          <div class="stat-label" style="color:var(--text2)">${ic("calendar")} Prepaid bills (${MONTHS[month].slice(0,3)})</div>
+          <div class="stat-value" style="font-size:17px;color:var(--text)">${fmtTk(prepaidTotal)}</div>
           <div class="stat-sub">Elec ${fmtTk(elecAmt)} + Gas ${fmtTk(gasAmt)} + WiFi ${fmtTk(wifiAmt)}</div>
         </div>
-        <div class="stat-card" style="border-color:rgba(231,76,60,.3)">
-          <div class="stat-label" style="color:var(--red)">${ic("dot", "ic-red")} Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
-          <div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(postpaidTotal)}</div>
+        <div class="stat-card">
+          <div class="stat-label" style="color:var(--text2)">${ic("clock")} Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-value" style="font-size:17px;color:var(--text)">${fmtTk(postpaidTotal)}</div>
           <div class="stat-sub">Khala ${fmtTk(khalaTotal)} + Other ${fmtTk(otherTotal)}</div>
         </div>
         <div class="stat-card">
@@ -926,8 +926,8 @@ async function loadMyMonthLog() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
         <div class="card-title" style="margin:0">Member Settlement — ${MONTHS[month]} ${year}</div>
         <div style="display:flex;gap:10px;font-size:12px;font-weight:600;flex-wrap:wrap">
-          <span><span style="display:inline-block;width:9px;height:9px;background:var(--red);border-radius:2px;margin-right:4px"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
-          <span><span style="display:inline-block;width:9px;height:9px;background:var(--blue);border-radius:2px;margin-right:4px"></span>Prepaid for ${MONTHS[month]} ${year}</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:var(--text3);border-radius:2px;margin-right:4px"></span>Postpaid from ${MONTHS[prev.month]} ${prev.year}</span>
+          <span><span style="display:inline-block;width:9px;height:9px;background:var(--text2);border-radius:2px;margin-right:4px"></span>Prepaid for ${MONTHS[month]} ${year}</span>
           <span><span style="display:inline-block;width:9px;height:9px;background:var(--green);border-radius:2px;margin-right:4px"></span>Credits</span>
         </div>
       </div>
@@ -938,11 +938,11 @@ async function loadMyMonthLog() {
             <tr>
               <th rowspan="2">Member</th>
               <th rowspan="2">Meals<br><span style="font-size:10px;color:var(--text3)">${MONTHS[prev.month].slice(0,3)}</span></th>
-              <th colspan="3" style="color:var(--red);background:rgba(231,76,60,.07)">
-                ${ic("dot", "ic-red")} Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
+              <th colspan="3" style="color:var(--text2);background:var(--bg3)">
+                ${ic("clock")} Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
               </th>
-              <th colspan="2" style="color:var(--blue);background:rgba(91,155,213,.07)">
-                ${ic("dot", "ic-blue")} Prepaid — ${MONTHS[month].slice(0,3)} ${year}
+              <th colspan="2" style="color:var(--text2);background:var(--bg3)">
+                ${ic("calendar")} Prepaid — ${MONTHS[month].slice(0,3)} ${year}
               </th>
               <th colspan="6" style="color:var(--green);background:rgba(39,174,96,.07)">
                 ${ic("checkCircle", "ic-green")} Credits
@@ -950,16 +950,16 @@ async function loadMyMonthLog() {
               <th rowspan="2" style="background:var(--bg3)">Net</th>
             </tr>
             <tr>
-              <th style="color:var(--red)">Meal cost</th>
-              <th style="color:var(--red)">Khala</th>
-              <th style="color:var(--red)">Other</th>
-              <th style="color:var(--blue)">Util share</th>
-              <th style="color:var(--blue)">Rent</th>
+              <th style="color:var(--c-meal)">Meal cost</th>
+              <th style="color:var(--c-other)">Khala</th>
+              <th style="color:var(--c-other)">Other</th>
+              <th style="color:var(--c-util)">Util share</th>
+              <th style="color:var(--c-rent)">Rent</th>
               <th style="color:var(--green)">Bazar paid</th>
               <th style="color:var(--green)">Meal paid</th>
               <th style="color:var(--green)">Rent paid</th>
               <th style="color:var(--green)">Util paid</th>
-              <th style="color:var(--blue)">${ic("undo")} Carried fwd</th>
+              <th style="color:var(--green)">${ic("undo")} Carried fwd</th>
               <th style="color:var(--red)">Prev due</th>
             </tr>
           </thead>
@@ -981,14 +981,14 @@ async function loadMyMonthLog() {
                   <b>${p.memberMeals}</b>
                   <div style="font-size:10px;color:var(--text3)">${p.memberMeals} × ${fmtTk(p.mealRate)}</div>
                 </td>
-                <td style="color:var(--red)">${fmtTk(p.mealCost)}</td>
-                <td style="color:var(--red)">${fmtTk(p.khalaShare)}</td>
-                <td style="color:var(--red)">${fmtTk(p.otherShare)}</td>
+                <td>${fmtTk(p.mealCost)}</td>
+                <td>${fmtTk(p.khalaShare)}</td>
+                <td>${fmtTk(p.otherShare)}</td>
                 <td style="color:var(--blue)">
                   ${fmtTk(p.prepaidUtility)}
                   <div style="font-size:10px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${members.length}</div>
                 </td>
-                <td style="color:var(--blue)">${fmtTk(p.roomRent)}</td>
+                <td>${fmtTk(p.roomRent)}</td>
                 <td style="color:var(--green)">${fmtTk(p.memberBazar)}</td>
                 <td style="color:${(p.mealPaid||0) > 0 ? 'var(--green)' : 'var(--text3)'}">
                   ${(p.mealPaid||0) > 0 ? fmtTk(p.mealPaid) : '৳0'}
@@ -1045,7 +1045,7 @@ async function loadMyMonthLog() {
       </div>
 
       <div style="font-size:12px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        ${ic("lightbulb")} Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">${ic("undo")} Carried fwd</b> = credit applied from last month's overpayment — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month.
+        ${ic("lightbulb")} Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--green)">${ic("undo")} Carried fwd</b> = credit applied from last month's overpayment — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month.
       </div>
     </div>
   `;

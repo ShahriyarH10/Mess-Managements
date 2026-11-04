@@ -75,7 +75,7 @@ async function loadFund() {
       ${tile(ic("wallet"), "Balance", fmtTk(balance), balance >= 0 ? "cash in the fund now" : "fund is overdrawn", balance >= 0 ? "var(--green)" : "var(--red)")}
       ${tile(ic("calendar"), "This month", (mIn - mOut >= 0 ? "+" : "−") + fmtTk(Math.abs(round2(mIn - mOut))), `in ${fmtTk(mIn)} · out ${fmtTk(mOut)}`, mIn - mOut >= 0 ? "var(--green)" : "var(--red)")}
       ${tile("↓", "Money in", fmtTk(totalIn), `${allEntries.filter(e => e.type === "deposit").length} deposits`, "var(--blue)")}
-      ${tile("↑", "Money out", fmtTk(totalOut), `${allEntries.filter(e => e.type === "withdrawal").length} withdrawals`, "var(--accent)")}
+      ${tile("↑", "Money out", fmtTk(totalOut), `${allEntries.filter(e => e.type === "withdrawal").length} withdrawals`, "var(--red)")}
     </div>`;
     const cnt = document.getElementById("fund-count"); if (cnt) cnt.textContent = `${allEntries.length} entr${allEntries.length === 1 ? "y" : "ies"}`;
 

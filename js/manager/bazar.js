@@ -27,7 +27,7 @@ async function renderUtility(el) {
 
     <div class="ut-bills">
       <div class="card ut-bill ut-pre">
-        <div class="dk-card-title"><span>${ic("dot", "ic-blue")} Prepaid · this month</span></div>
+        <div class="dk-card-title"><span>${ic("calendar")} Prepaid · this month</span></div>
         <div class="ut-help">Electricity, gas and WiFi for the <b>current</b> settlement month.</div>
         ${monthPick("ut-pre", "loadUtilityGroup('prepaid')")}
         <div class="ut-fields">
@@ -42,7 +42,7 @@ async function renderUtility(el) {
       </div>
 
       <div class="card ut-bill ut-post">
-        <div class="dk-card-title"><span>${ic("dot", "ic-red")} Postpaid · last month</span></div>
+        <div class="dk-card-title"><span>${ic("clock")} Postpaid · last month</span></div>
         <div class="ut-help">Khala and other costs for the <b>previous</b> month — charged in the next settlement.</div>
         ${monthPick("ut-post", "loadUtilityGroup('postpaid')")}
         <div class="ut-fields ut-fields-2">
@@ -419,11 +419,11 @@ async function loadUtilHistory() {
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <div style="background:var(--bg3);border-radius:6px;padding:7px 9px">
-                <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.5px">${ic("dot")} Prepaid</div>
+                <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${ic("calendar")} Prepaid</div>
                 <div style="font-size:14px;font-weight:700;margin-top:1px">${fmtTk(prepaid)}</div>
               </div>
               <div style="background:var(--bg3);border-radius:6px;padding:7px 9px">
-                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:.5px">${ic("dot")} Postpaid</div>
+                <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${ic("clock")} Postpaid</div>
                 <div style="font-size:14px;font-weight:700;margin-top:1px">${fmtTk(postpaid)}</div>
               </div>
               <div style="background:var(--bg3);border-radius:6px;padding:7px 9px">
