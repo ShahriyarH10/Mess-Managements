@@ -231,6 +231,28 @@
       const change = Number((util?.bills?.pending_change || {})["Nayeem Khan"] || 0);
       log(await count() === before + 1 && Math.abs(change - expectChange) < 0.02,
         `double-tapped Collect Save records the overpayment once (receipts +${(await count()) - before}, change ${change} of ${expectChange})`);
+      log(!/<svg|class="ic/.test(D().getElementById("toast").textContent), "Collect save toast shows plain text, not markup");
+
+      /* 6c. a duplicate saved before the guard existed: Remove duplicate fixes receipts and the doubled change */
+      const iid = P().members().find(m => m.username === "demo_imran").id;
+      const pi = P().collectCtx().perMember[iid];
+      const openI = Math.max(0, pi.mealCost - pi.memberBazar - pi.mealPaid) + Math.max(0, pi.utilDue - pi.utilPaid) + Math.max(0, pi.rentDue - pi.rentPaid) + (pi.prevDue || 0);
+      const amtI = Math.ceil(openI) + 200, changeI = Math.round((amtI - openI) * 100) / 100;
+      D().getElementById("cp-amt-" + iid).value = String(amtI);
+      await Promise.all([W()._saveCollectRow(iid), W()._saveCollectRow(iid)]);   // the old, unguarded double save
+      await sleep(300); W().closeModal(); await W().loadCollectMonth(); await sleep(200);
+      const pendI = async () => Number(((await P().sb().from("utility_payments").select("*").eq("mess_id", P().messId()).eq("month_key", P().collectCtx().key).maybeSingle()).data?.bills?.pending_change || {})["Imran Hossain"] || 0);
+      const doubled = await pendI();
+      log(/Duplicate receipts \(1\)/i.test(D().getElementById("cp-dupes").innerText) && Math.abs(doubled - 2 * changeI) < 0.02,
+        `Collect flags the old double save as a duplicate (change stored ${doubled}, should be ${changeI})`);
+      const dupBtn = D().querySelector('#cp-dupes [data-on-click^="removeDuplicateReceipt"]');
+      dupBtn.click(); await until(() => D().getElementById("confirm-ok-btn"), 4000); await sleep(200);
+      D().getElementById("confirm-ok-btn").click();
+      await until(() => !D().getElementById("cp-dupes").innerText.trim(), 6000);
+      const rowsI = ((await P().sb().from("member_payments").select("*").eq("member_id", iid)).data || []);
+      const counted = rowsI.filter(p => p.status === "confirmed").length, dupMarked = rowsI.filter(p => p.status !== "confirmed" && p.split?.duplicate_of).length;
+      log(counted === 1 && dupMarked === 1 && Math.abs((await pendI()) - changeI) < 0.02,
+        `Remove duplicate: 1 counted + 1 marked duplicate, change back to ${changeI} (now ${await pendI()})`);
     }
 
     /* 7. login form works against demo accounts, reset + logout */

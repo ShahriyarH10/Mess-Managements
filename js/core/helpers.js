@@ -266,7 +266,8 @@ const TOAST_ICON = { success: "checkCircle", error: "alert" };
 function toast(msg, type) {
   const el = document.getElementById("toast");
   // Messages are plain text (names arrive HTML-escaped from members[]): decode, then escape once
-  const text = escapeHtml(MemberKeys.unescape(stripEmoji(msg)));
+  // plain text only: markup (an icon passed by mistake) is dropped, never shown as code
+  const text = escapeHtml(MemberKeys.unescape(stripEmoji(String(msg ?? "").replace(/<\/?[a-z][^>]*>/gi, ""))));
   el.innerHTML = `${ic(TOAST_ICON[type] || "info")}<span>${text}</span>`;
   el.className = "show" + (type ? " " + type : "");
   clearTimeout(toastTimer);

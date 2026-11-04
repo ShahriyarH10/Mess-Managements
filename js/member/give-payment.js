@@ -16,6 +16,7 @@ const PAY_STATUS = {
   confirmed: { label: "Confirmed", cls: "badge-green" },
   rejected:  { label: "Rejected",  cls: "badge-red"   },
   reversed:  { label: "Reversed",  cls: "badge-red"   },
+  duplicate: { label: "Duplicate", cls: ""            },   // a copy of another receipt — not counted
 };
 
 let _giveCtx = null;
@@ -45,7 +46,7 @@ function _payDate(iso) {
   });
 }
 
-function _payStatus(p) { return PAY_STATUS[p.status] || PAY_STATUS.pending; }
+function _payStatus(p) { return p.split?.duplicate_of && p.status !== "confirmed" ? PAY_STATUS.duplicate : PAY_STATUS[p.status] || PAY_STATUS.pending; }
 
 /* Ids go inside data-on-click="fn('…')" — only ever let uuid-shaped values through. */
 function _safeId(id) { return /^[\w-]+$/.test(String(id)) ? String(id) : ""; }
@@ -115,6 +116,7 @@ function paymentReceiptData(p) {
     allocMeal: sp?.allocMeal || 0, allocUtil: sp?.allocUtil || 0, allocRent: sp?.allocRent || 0,
     allocPrevDue: sp?.allocPrevDue || 0, change: sp?.change || 0,
     hasBreakdown: !!sp,
+    duplicate: !!sp?.duplicate_of && p.status !== "confirmed",
     newNet: p.status === "confirmed" && p.still_due != null ? Number(p.still_due) : null,
     timestamp: new Date(p.created_at),
     receiptNo: paymentReceiptNo(p.receipt_no),

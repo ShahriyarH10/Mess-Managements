@@ -72,6 +72,9 @@ async function renderCollect(el) {
     <!-- Member "Give Payment" requests waiting for confirmation -->
     <div id="cp-pending-wrap"></div>
 
+    <!-- Same payment saved twice: flagged here so the manager can remove the copy -->
+    <div id="cp-dupes"></div>
+
     <!-- Member payment cards -->
     <div id="cp-table-wrap">
       <div class="empty" style="padding:32px;text-align:center">
@@ -242,6 +245,7 @@ async function loadCollectMonth() {
   buildCollectTable();
   buildReturnTable();
   await loadPendingPayments();
+  await loadDuplicateReceipts();
 }
 
 function buildCollectTable() {
@@ -515,6 +519,181 @@ async function doReverseCollection(id, memberId) {
   } finally {
     _reverseBusy.delete(id);
     try { await loadCollectMonth(); } catch (_) { /* the toast already reported the outcome */ }
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   Duplicate receipts — the same payment saved twice at once
+   (a double tap on Save before runOnce() guarded it). Both copies are
+   "confirmed", so the member's receipt totals count the money twice.
+
+   Remove duplicate:
+     • the copy is kept but stored "reversed" with split.duplicate_of set,
+       so it shows as "Duplicate — not counted" and leaves every total;
+     • each part of the money (utility / meal / rent / previous due / change)
+       is checked against that month's receipts. Only a part whose stored
+       total provably includes the copy is taken back; a part that was
+       counted once is left alone; anything that can't be proven is left
+       untouched and named in the result so the manager can check it.
+   ═════════════════════════════════════════════════════════════════ */
+const DUP_WINDOW_MS = 2 * 60 * 1000;
+const _DUP_PARTS = [
+  ["allocUtil",    "utility"],
+  ["allocMeal",    "meal"],
+  ["allocRent",    "rent"],
+  ["allocPrevDue", "previous due"],
+];
+const _splitSig = (p) => { const { duplicate_of, ...s } = p.split || {}; return JSON.stringify(s); };
+
+/* [{ original, dup }] — newest copy of each pair is the duplicate */
+function findDuplicateReceipts(list) {
+  const rows = (list || []).filter(p => p.status === "confirmed")
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const pairs = [];
+  rows.forEach((b, i) => {
+    for (let j = i - 1; j >= 0; j--) {
+      const a = rows[j];
+      if (new Date(b.created_at) - new Date(a.created_at) > DUP_WINDOW_MS) break;
+      if (a.member_id === b.member_id && a.month_key === b.month_key
+          && Number(a.amount) === Number(b.amount)
+          && (a.source || "member") === (b.source || "member")
+          && String(a.due_at_submit ?? "") === String(b.due_at_submit ?? "")
+          && _splitSig(a) === _splitSig(b)
+          && !pairs.some(d => d.dup.id === a.id || d.dup.id === b.id)) {
+        pairs.push({ original: a, dup: b });
+        break;
+      }
+    }
+  });
+  return pairs;
+}
+
+let _dupPairs = [];
+async function loadDuplicateReceipts() {
+  const wrap = document.getElementById("cp-dupes");
+  if (!wrap || !_collectCtx) return;
+  try {
+    const list = await dbGetMemberPayments({ status: "confirmed", limit: 1000 });
+    _dupPairs = findDuplicateReceipts(list.filter(p => p.month_key === _collectCtx.key));
+  } catch (_) { _dupPairs = []; }
+  if (!_dupPairs.length) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `<div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb,var(--warn) 35%,transparent)">
+    <div class="dk-card-title"><span style="color:var(--warn)">${ic("copy")} Duplicate receipts (${_dupPairs.length})</span></div>
+    <div style="font-size:12px;color:var(--text2);margin:-4px 0 12px">The same payment was saved twice. The copy is counted in the member's receipts — remove it to fix their totals. Balances are only corrected where the numbers prove it was counted twice.</div>
+    ${_dupPairs.map(({ original: a, dup: b }) => `
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border)">
+        <div style="flex:1;min-width:220px">
+          <b>${escapeHtml(paymentMemberName(b))}</b> · ${fmtTk(Number(b.amount))}
+          <div style="font-size:12px;color:var(--text3)">${paymentReceiptNo(b.receipt_no)} is a copy of ${paymentReceiptNo(a.receipt_no)} · saved ${Math.max(0, Math.round((new Date(b.created_at) - new Date(a.created_at)) / 1000))}s apart</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-on-click="removeDuplicateReceipt('${_safeId(b.id)}')">${ic("trash")} Remove duplicate</button>
+      </div>`).join("")}
+  </div>`;
+}
+
+/* What removing this copy would change — every number is checked, nothing guessed. */
+async function _duplicatePlan(pair) {
+  const { original: a, dup: b } = pair;
+  const m = members.find(x => x.id === b.member_id) || formerMembers.find(x => x.id === b.member_id);
+  if (!m) throw new Error("Member not found.");
+  const [util, rent, list] = await Promise.all([
+    mustRead(getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", b.month_key).maybeSingle()),
+    mustRead(getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", b.month_key).maybeSingle()),
+    dbGetMemberPayments({ memberId: m.id, status: "confirmed", limit: 500 }),
+  ]);
+  const mine = list.filter(p => p.month_key === b.month_key);          // includes both copies
+  const sum  = (f) => round2(mine.reduce((s, p) => s + Number((p.split || {})[f] || 0), 0));
+  const pay  = (util?.payments || {})[m.name] || {};
+  const stored = {
+    allocUtil:    round2(Number(pay.paid          || 0)),
+    allocMeal:    round2(Number(pay.meal_paid     || 0)),
+    allocPrevDue: round2(Number(pay.prev_due_paid || 0)),
+    allocRent:    round2(Number(rentEntryFor(rent?.entries, m)?.paid || 0)),
+    change:       round2(Number(((util?.bills || {}).pending_change || {})[m.name] || 0)),
+  };
+  const sp = b.split || {};
+  const takeBack = {}, unsure = [];
+  [..._DUP_PARTS, ["change", "change to return"]].forEach(([f, label]) => {
+    const v = round2(Number(sp[f] || 0));
+    if (v <= 0) return;
+    const both = sum(f), once = round2(both - v);
+    if (Math.abs(stored[f] - both) < 0.01)      takeBack[f] = v;          // stored total includes the copy
+    else if (Math.abs(stored[f] - once) < 0.01) { /* counted once — nothing to undo */ }
+    else unsure.push(`${label} (stored ${fmtTk(stored[f])}, receipts say ${fmtTk(once)} once or ${fmtTk(both)} twice)`);
+  });
+  return { m, a, b, takeBack, unsure };
+}
+
+function removeDuplicateReceipt(dupId) {
+  if (!requireManager("removeDuplicateReceipt")) return;
+  return runOnce("dup:" + dupId, `removeDuplicateReceipt('${dupId}')`, async () => {
+    const pair = _dupPairs.find(d => d.dup.id === dupId);
+    if (!pair) return;
+    let plan;
+    try { plan = await _duplicatePlan(pair); }
+    catch (e) { toast("Error: " + e.message, "error"); return; }
+    const name = _decodeEntities(plan.m.name);
+    const back = Object.entries(plan.takeBack).map(([f, v]) => `${(_DUP_PARTS.find(x => x[0] === f) || [f, "change to return"])[1]} ${fmtTk(v)}`);
+    showConfirm({
+      title: `Remove duplicate ${paymentReceiptNo(plan.b.receipt_no)}?`,
+      body: `${name}'s receipt ${paymentReceiptNo(plan.b.receipt_no)} (${fmtTk(Number(plan.b.amount))}) is a copy of ${paymentReceiptNo(plan.a.receipt_no)}. `
+        + `It stays in ${name}'s receipts marked "Duplicate" and stops counting in their totals. `
+        + (back.length ? `The stored balance counted it twice, so this also takes back: ${back.join(", ")}. ` : `The balance already counted the payment once, so no amounts change. `)
+        + (plan.unsure.length ? `Not changed — please check by hand: ${plan.unsure.join("; ")}.` : ""),
+      confirmLabel: "Remove duplicate",
+      danger: true,
+      onConfirm: () => runOnce("dup-do:" + dupId, null, () => _doRemoveDuplicate(plan)),
+    });
+  });
+}
+
+async function _doRemoveDuplicate({ m, a, b, takeBack, unsure }) {
+  let claimed = null, before = null;
+  try {
+    if (await isMonthLocked(b.month_key)) throw new Error(`${monthLabelFromKey(b.month_key)} is locked — unlock it first.`);
+    before  = await dbGetMemberPayment(b.id);
+    claimed = before && await dbClaimReversal(b.id, currentUser.name);
+    if (!claimed) throw new Error("This receipt was already removed or reversed.");
+    const { error } = await getClient().from("member_payments")
+      .update({ split: { ...(claimed.split || {}), duplicate_of: a.id } }).eq("id", b.id).eq("mess_id", messId());
+    if (error) throw error;
+
+    // take back only what the numbers proved was counted twice
+    const tb = (f) => Number(takeBack[f] || 0);
+    if (tb("allocUtil") || tb("allocMeal") || tb("allocPrevDue") || tb("change")) {
+      const util = await mustRead(getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", b.month_key).maybeSingle());
+      const bills = { ...(util?.bills || {}) }, payments = { ...(util?.payments || {}) };
+      const cur = payments[m.name] || {};
+      payments[m.name] = {
+        ...cur,
+        paid:          round2(Number(cur.paid          || 0) - tb("allocUtil")),
+        meal_paid:     round2(Number(cur.meal_paid     || 0) - tb("allocMeal")),
+        prev_due_paid: round2(Number(cur.prev_due_paid || 0) - tb("allocPrevDue")),
+      };
+      if (tb("change")) {
+        const pending = { ...(bills.pending_change || {}) };
+        const left = round2(Number(pending[m.name] || 0) - tb("change"));
+        if (left > 0.01) pending[m.name] = left; else delete pending[m.name];
+        if (Object.keys(pending).length) bills.pending_change = pending; else delete bills.pending_change;
+      }
+      await dbUpsertUtility(b.month, b.year, b.month_key, bills, payments);
+    }
+    if (tb("allocRent")) {
+      const rent = await mustRead(getClient().from("rent").select("*").eq("mess_id", messId()).eq("month_key", b.month_key).maybeSingle());
+      const entries = (rent?.entries || []).map(e => ({ ...e }));
+      const t = rentEntryFor(entries, m);
+      if (t) {
+        t.paid = round2(Number(t.paid || 0) - tb("allocRent"));
+        t.status = t.paid <= 0 ? "unpaid" : t.paid >= Number(t.rent || 0) ? "paid" : "partial";
+        await dbUpsertRent(b.month, b.year, b.month_key, entries);
+      }
+    }
+    await logAudit("delete", "collect", b.month_key, `Removed duplicate receipt ${paymentReceiptNo(b.receipt_no)} (${b.amount}) from ${m.name}`, { duplicate_of: a.id, takeBack, unsure });
+    toast(unsure.length ? `Duplicate removed — check ${_decodeEntities(m.name)}'s ${unsure.length} unconfirmed amount${unsure.length > 1 ? "s" : ""} by hand` : "Duplicate removed", unsure.length ? "error" : "success");
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  } finally {
+    try { await loadCollectMonth(); } catch (_) { /* toast already reported the outcome */ }
   }
 }
 
@@ -1172,8 +1351,8 @@ async function _saveCollectRow(memberId) {
     if (allocUtil    > 0) parts.push(`Util ${fmtTk(allocUtil)}`);
     if (allocRent    > 0) parts.push(`Rent ${fmtTk(allocRent)}`);
     const msg = change > 0
-      ? `Saved ${ic("check")}  ${parts.join(" • ") || "—"}  · Change: ${fmtTk(change)}`
-      : `Saved ${ic("check")}  ${parts.join(" • ") || "—"}`;
+      ? `Saved — ${parts.join(" • ") || "—"} · Change: ${fmtTk(change)}`
+      : `Saved — ${parts.join(" • ") || "—"}`;
     toast(msg, "success");
 
     // ── Re-fetch from DB so the table reflects exactly what was saved ──

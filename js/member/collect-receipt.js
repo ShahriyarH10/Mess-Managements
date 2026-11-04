@@ -13,7 +13,12 @@
 function _rcptStatus(d) { return d.status || (d.pending ? "pending" : "confirmed"); }
 /* rejected / reversed: shown, but not counted */
 function _rcptVoid(st) { return st === "rejected" || st === "reversed"; }
-function _rcptVoidLabel(st) { return st === "reversed" ? "" + ic("refresh") + " Reversed" : "" + ic("x") + " Rejected"; }
+/* A receipt removed as a duplicate (same payment saved twice) is stored "reversed"
+   with split.duplicate_of set — it gets its own wording so it never reads as an undo. */
+function _rcptVoidLabel(st, d) {
+  if (d && d.duplicate) return ic("copy") + " Duplicate";
+  return st === "reversed" ? "" + ic("refresh") + " Reversed" : "" + ic("x") + " Rejected";
+}
 function _rcptShape(d) {
   const st = _rcptStatus(d), ok = !_rcptVoid(st);
   return {
@@ -41,6 +46,7 @@ function _rcptBanner(d, st, color) {
   const box = txt => `<div style="background:${bg};color:${fg};border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;margin-bottom:8px">${txt}</div>`;
   if (st === "pending")  return box("" + ic("alert", "ic-amber") + " Pending — not official until the manager confirms it.");
   if (st === "rejected") return box(`${ic("x")} Rejected${d.confirmedBy ? " by " + d.confirmedBy : ""} — this payment was not counted.`);
+  if (st === "reversed" && d.duplicate) return box(`${ic("copy")} Duplicate — the same payment was saved twice, so this copy was removed${d.confirmedBy ? " by " + d.confirmedBy : ""}. It is not counted.`);
   if (st === "reversed") return box(`${ic("refresh")} Reversed${d.confirmedBy ? " by " + d.confirmedBy : ""} — this payment was undone and is not counted.`);
   return d.confirmedBy ? box(`${ic("check")} Confirmed by ${d.confirmedBy}${d.confirmedAt ? " · " + _rcptDate(d.confirmedAt) : ""}`) : "";
 }
@@ -84,6 +90,8 @@ function buildReceiptText(d) {
   if (sh.st === "pending") {
     lines.push(`Not yet confirmed by the manager.`);
     lines.push(`This is NOT proof of payment received.`);
+  } else if (sh.st === "reversed" && d.duplicate) {
+    lines.push(`Duplicate — the same payment was saved twice; this copy is not counted.`);
   } else if (sh.st === "reversed") {
     lines.push(`Reversed${d.confirmedBy ? " by " + d.confirmedBy : ""} — undone, not counted.`);
   } else if (sh.st === "rejected") {
@@ -184,7 +192,7 @@ function showCollectReceipt(d) {
       <div class="rcpt-head-name">${messName}</div>
       <div class="rcpt-head-sub">Official Payment Receipt</div>
       <span class="rcpt-badge ${st === "pending" ? 'rcpt-badge-pend' : _rcptVoid(st) ? 'rcpt-badge-due' : (!sh.showNet || isSettled) ? 'rcpt-badge-settled' : 'rcpt-badge-due'}">
-        ${st === "pending" ? "" + ic("clock") + " Pending" : _rcptVoid(st) ? _rcptVoidLabel(st) : !sh.showNet ? "" + ic("check") + " Confirmed" : isSettled ? "" + ic("check") + " Settled" : "Partially Paid"}
+        ${st === "pending" ? "" + ic("clock") + " Pending" : _rcptVoid(st) ? _rcptVoidLabel(st, d) : !sh.showNet ? "" + ic("check") + " Confirmed" : isSettled ? "" + ic("check") + " Settled" : "Partially Paid"}
       </span>
     </div>
 
@@ -470,7 +478,7 @@ function printCollectReceipt() {
     <div class="head-icon">${ic("home")}</div>
     <div class="head-name">${messName}</div>
     <div class="head-sub">Official Payment Receipt</div>
-    <span class="badge ${st === "pending" ? 'badge-pend' : _rcptVoid(st) ? 'badge-due' : (!sh.showNet || isSettled) ? 'badge-ok' : 'badge-due'}">${st === "pending" ? "" + ic("clock") + " Pending" : _rcptVoid(st) ? _rcptVoidLabel(st) : !sh.showNet ? "" + ic("check") + " Confirmed" : isSettled ? "" + ic("check") + " Settled" : "Partially Paid"}</span>
+    <span class="badge ${st === "pending" ? 'badge-pend' : _rcptVoid(st) ? 'badge-due' : (!sh.showNet || isSettled) ? 'badge-ok' : 'badge-due'}">${st === "pending" ? "" + ic("clock") + " Pending" : _rcptVoid(st) ? _rcptVoidLabel(st, d) : !sh.showNet ? "" + ic("check") + " Confirmed" : isSettled ? "" + ic("check") + " Settled" : "Partially Paid"}</span>
   </div>
 
   <div class="meta">
