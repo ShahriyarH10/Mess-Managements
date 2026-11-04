@@ -703,7 +703,10 @@ async function _applyCreditPortion(ctx, r, m, giveRaw) {
 }
 
 /* One Save button: fill overpaid change first, then the negative balance. */
-async function saveReturnRow(memberId) {
+function saveReturnRow(memberId) {
+  return runOnce("return:" + memberId, `saveReturnRow('${memberId}')`, () => _saveReturnRow(memberId));
+}
+async function _saveReturnRow(memberId) {
   if (!requireManager('saveReturnRow')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
@@ -1040,7 +1043,10 @@ function onCollectAmtInput(memberId) {
   setChip("cp-ch-"  + memberId, "" + ic("send") + " Change", change);
 }
 
-async function saveCollectRow(memberId) {
+function saveCollectRow(memberId) {
+  return runOnce("collect:" + memberId, `saveCollectRow('${memberId}')`, () => _saveCollectRow(memberId));
+}
+async function _saveCollectRow(memberId) {
   if (!requireManager('saveCollectRow')) return;
   if (!_collectCtx) return;
   if (!(await ensureMonthOpen(_collectCtx.key))) return;

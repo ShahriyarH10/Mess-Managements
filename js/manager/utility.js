@@ -120,7 +120,8 @@ function markAllRentPaid() {
   updRentSum();
 }
 
-async function saveRent() {
+function saveRent() { return runOnce("rent", "saveRent()", _saveRent); }
+async function _saveRent() {
   if (!requireManager('saveRent')) return;
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());

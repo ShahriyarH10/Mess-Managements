@@ -213,6 +213,26 @@
     const missing = [...handlerNames].filter(n => !["if", "event", "this"].includes(n) && typeof W()[n] !== "function");
     log(missing.length === 0, "all inline-handler functions exist (" + handlerNames.size + " checked)" + (missing.length ? " missing: " + missing.join(", ") : ""));
 
+    /* 6b. an overpayment saved twice at once (double tap on a slow connection) is recorded once */
+    {
+      await openHash("#/demo/manager"); await until(() => W().location.hash === "#/demo/app/dashboard", 8000);
+      await openHash("#/demo/app/collect"); await settle();
+      const sid = P().members().find(m => m.username === "demo_nayeem").id;
+      const count = async () => ((await P().sb().from("member_payments").select("*").eq("member_id", sid)).data || []).length;
+      const before = await count();
+      // pay 300 more than every open bucket adds up to, so there is change to record
+      const pr = P().collectCtx().perMember[sid];
+      const open = Math.max(0, pr.mealCost - pr.memberBazar - pr.mealPaid) + Math.max(0, pr.utilDue - pr.utilPaid) + Math.max(0, pr.rentDue - pr.rentPaid) + (pr.prevDue || 0);
+      const amt = Math.ceil(open) + 300, expectChange = Math.round((amt - open) * 100) / 100;
+      D().getElementById("cp-amt-" + sid).value = String(amt);
+      await Promise.all([W().saveCollectRow(sid), W().saveCollectRow(sid)]);
+      await sleep(300); W().closeModal();
+      const util = (await P().sb().from("utility_payments").select("*").eq("mess_id", P().messId()).eq("month_key", P().collectCtx().key).maybeSingle()).data;
+      const change = Number((util?.bills?.pending_change || {})["Nayeem Khan"] || 0);
+      log(await count() === before + 1 && Math.abs(change - expectChange) < 0.02,
+        `double-tapped Collect Save records the overpayment once (receipts +${(await count()) - before}, change ${change} of ${expectChange})`);
+    }
+
     /* 7. login form works against demo accounts, reset + logout */
     W().doLogout(); await until(() => visible("landing-page"));
     log(visible("landing-page") && !P().user(), "logout → landing, session cleared (hash=" + W().location.hash + ", user=" + JSON.stringify(P().user()) + ", landing=" + visible("landing-page") + ")");

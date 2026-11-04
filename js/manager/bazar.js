@@ -324,7 +324,8 @@ function utStatusChanged(sel) {
   if (row) row.dataset.status = sel.value;
 }
 
-async function saveUtilityPayments() {
+function saveUtilityPayments() { return runOnce("utility-payments", "saveUtilityPayments()", _saveUtilityPayments); }
+async function _saveUtilityPayments() {
   if (!requireManager('saveUtilityPayments')) return;
   const { month, year, key } = getPaymentKey();
   if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }

@@ -605,7 +605,8 @@ function fillBpDue(type, amount) {
   if (a) { a.value = amount; a.focus(); }
 }
 
-async function saveMyPaymentEntry() {
+function saveMyPaymentEntry() { return runOnce("my-payment", "saveMyPaymentEntry()", _saveMyPaymentEntry); }
+async function _saveMyPaymentEntry() {
   const month = parseInt(document.getElementById("bp-month")?.value);
   const year = parseInt(document.getElementById("bp-year")?.value);
   const billType = document.getElementById("bp-type")?.value;

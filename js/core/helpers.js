@@ -273,6 +273,24 @@ function toast(msg, type) {
   toastTimer = setTimeout(() => el.className = "", 3200);
 }
 
+/* ONE SAVE AT A TIME — money actions add to stored totals, so a second tap while a
+   save is still running (easy on a slow connection) would record the payment twice:
+   double receipts, double change, double credit. runOnce ignores repeat calls for
+   the same key until the first one finishes, and shows the button as busy. */
+const _runningSaves = new Set();
+async function runOnce(key, handlerText, fn) {
+  if (_runningSaves.has(key)) return;
+  _runningSaves.add(key);
+  const btn = handlerText ? [...document.querySelectorAll("[data-on-click]")].find(b => b.getAttribute("data-on-click") === handlerText) : null;
+  const label = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = "Saving…"; }
+  try { return await fn(); }
+  finally {
+    _runningSaves.delete(key);
+    if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = label; }   // pages that re-render drop the old button
+  }
+}
+
 /* CONFIRM DIALOG — replaces native confirm() */
 function showConfirm({ title, body, confirmLabel = "Confirm", danger = false, onConfirm }) {
   const bg = document.getElementById("confirm-bg");

@@ -110,7 +110,8 @@ async function loadFund() {
   }
 }
 
-async function saveFundEntry() {
+function saveFundEntry() { return runOnce("fund", "saveFundEntry()", _saveFundEntry); }
+async function _saveFundEntry() {
   if (!requireManager("saveFundEntry")) return;
   const type   = document.getElementById("fund-type")?.value;
   const amount = parseFloat(document.getElementById("fund-amount")?.value || 0);

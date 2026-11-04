@@ -10,4 +10,6 @@ window.__probe = {
   memberKeys: () => MemberKeys,
   members: () => members,
   formerMembers: () => formerMembers,
+  collectCtx: () => _collectCtx,
+  messId: () => messId(),
 };
