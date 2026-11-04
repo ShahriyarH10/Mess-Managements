@@ -27,13 +27,13 @@ async function renderUtility(el) {
 
     <div class="ut-bills">
       <div class="card ut-bill ut-pre">
-        <div class="dk-card-title"><span>🔵 Prepaid · this month</span></div>
+        <div class="dk-card-title"><span>${ic("dot", "ic-blue")} Prepaid · this month</span></div>
         <div class="ut-help">Electricity, gas and WiFi for the <b>current</b> settlement month.</div>
         ${monthPick("ut-pre", "loadUtilityGroup('prepaid')")}
         <div class="ut-fields">
-          ${billField("ut-elec", "⚡", "Electricity")}
-          ${billField("ut-gas", "🔥", "Gas")}
-          ${billField("ut-wifi", "📶", "WiFi")}
+          ${billField("ut-elec", ic("zap"), "Electricity")}
+          ${billField("ut-gas", ic("flame"), "Gas")}
+          ${billField("ut-wifi", ic("wifi"), "WiFi")}
         </div>
         <div class="ut-foot">
           <div class="ent-pills"><span class="ent-pill">Total <b id="ut-pre-total">৳0</b></span><span class="ent-pill ent-d">Each <b id="ut-pre-share">৳0</b></span></div>
@@ -42,12 +42,12 @@ async function renderUtility(el) {
       </div>
 
       <div class="card ut-bill ut-post">
-        <div class="dk-card-title"><span>🔴 Postpaid · last month</span></div>
+        <div class="dk-card-title"><span>${ic("dot", "ic-red")} Postpaid · last month</span></div>
         <div class="ut-help">Khala and other costs for the <b>previous</b> month — charged in the next settlement.</div>
         ${monthPick("ut-post", "loadUtilityGroup('postpaid')")}
         <div class="ut-fields ut-fields-2">
-          ${billField("ut-khala", "👩", "Khala")}
-          ${billField("ut-other", "📦", "Other")}
+          ${billField("ut-khala", ic("cook"), "Khala")}
+          ${billField("ut-other", ic("box"), "Other")}
         </div>
         <div class="ut-foot">
           <div class="ent-pills"><span class="ent-pill">Total <b id="ut-post-total">৳0</b></span><span class="ent-pill ent-n">Each <b id="ut-post-share">৳0</b></span></div>
@@ -57,7 +57,7 @@ async function renderUtility(el) {
     </div>
 
     <div class="card">
-      <div class="dk-card-title"><span>💳 Member payments</span>${monthPick("ut-pay", "loadUtilityPayments()")}</div>
+      <div class="dk-card-title"><span>${ic("card")} Member payments</span>${monthPick("ut-pay", "loadUtilityPayments()")}</div>
       <div class="ut-help">Each member owes this month's prepaid + last month's postpaid, split equally. Type what someone paid and their status updates itself.</div>
 
       <div id="ut-summary-bar" style="display:none" class="ut-summary">
@@ -72,19 +72,19 @@ async function renderUtility(el) {
 
       <div id="ut-payment-table">
         <div class="empty" style="padding:24px;text-align:center">
-          <div style="font-size:24px;margin-bottom:6px">💳</div>
+          <div style="font-size:24px;margin-bottom:6px;color:var(--text3)">${ic("card")}</div>
           Pick a month and press <b>Load</b> to manage payments
         </div>
       </div>
 
       <div id="ut-payment-actions" style="display:none" class="ent-foot">
-        <button class="btn btn-ghost" data-on-click="markAllUtilPaid()">✓ Mark all fully paid</button>
-        <button class="btn btn-primary" data-on-click="saveUtilityPayments()">💾 Save payments</button>
+        <button class="btn btn-ghost" data-on-click="markAllUtilPaid()">${ic("check")} Mark all fully paid</button>
+        <button class="btn btn-primary" data-on-click="saveUtilityPayments()">${ic("save")} Save payments</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="dk-card-title"><span>📋 Utility history</span></div>
+      <div class="dk-card-title"><span>${ic("clipboard")} Utility history</span></div>
       <div id="ut-history"><div class="loading"><div class="spinner"></div>Loading…</div></div>
     </div>
   </div>`;
@@ -140,7 +140,7 @@ async function loadUtilityGroup(type) {
 async function saveUtilityGroup(type) {
   if (!requireManager('saveUtilityGroup')) return;
   const { month, year, key } = getUtilityGroupKey(type);
-  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
+  if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   let rec;
   try { rec = await mustRead(getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle()); }
   catch (e) { toast("Error: " + e.message, "error"); return; }
@@ -199,13 +199,13 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
         return `
         <div class="ut-row" id="utr-${m.id}" data-status="${status}">
           <div class="dk-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>${m.name}</div>
-          <div class="ut-due"><b>${fmtTk(effectiveDue)}</b>${credit > 0 ? `<div class="dk-mini" style="color:var(--blue)">↩ ${fmtTk(credit)} carried</div>` : ""}</div>
+          <div class="ut-due"><b>${fmtTk(effectiveDue)}</b>${credit > 0 ? `<div class="dk-mini" style="color:var(--blue)">${ic("undo")} ${fmtTk(credit)} carried</div>` : ""}</div>
           <div class="ml-amt ut-paid"><span>৳</span><input type="number" class="input input-sm" id="up-${m.id}" value="${paid}" min="0" step="1"
             data-due="${effectiveDue}" data-on-input="onUtilPaidInput('${m.id}', ${effectiveDue})"/></div>
           <select class="input input-sm ut-status" id="ust-${m.id}" data-on-change="utStatusChanged(this)">
-            <option value="unpaid" ${status === "unpaid" ? "selected" : ""}>⏳ Not paid</option>
-            <option value="partial" ${status === "partial" ? "selected" : ""}>⚠️ Partial</option>
-            <option value="paid" ${status === "paid" ? "selected" : ""}>✅ Paid</option>
+            <option value="unpaid" ${status === "unpaid" ? "selected" : ""}>Not paid</option>
+            <option value="partial" ${status === "partial" ? "selected" : ""}>Partial</option>
+            <option value="paid" ${status === "paid" ? "selected" : ""}>Paid</option>
           </select>
           <input type="text" class="input input-sm ut-note" id="un-${m.id}" placeholder="Note" value="${p.notes || ""}"/>
         </div>`;
@@ -327,7 +327,7 @@ function utStatusChanged(sel) {
 async function saveUtilityPayments() {
   if (!requireManager('saveUtilityPayments')) return;
   const { month, year, key } = getPaymentKey();
-  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
+  if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   let rec;
   try { rec = await mustRead(getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", key).maybeSingle()); }
   catch (e) { toast("Error: " + e.message, "error"); return; }
@@ -343,7 +343,7 @@ async function saveUtilityPayments() {
   });
   try {
     await dbUpsertUtility(month, year, key, rec?.bills || {}, payments);
-    toast("Utility payments saved ✓", "success");
+    toast("Utility payments saved", "success");
     for (const m of members) {
       const added = round2(Number(payments[m.name].paid || 0) - Number(old[m.name]?.paid || 0));
       if (added > 0.01) await recordCreditedReceipt({ member: m, month, year, amount: added, source: "manager", split: { allocUtil: added } });
@@ -389,14 +389,14 @@ async function loadUtilHistory() {
             : "partial";
 
         const sCfg = {
-          complete: { cls: "badge-green", label: "✓ Complete", bar: "var(--green)", border: "rgba(39,174,96,.35)" },
-          partial:  { cls: "badge-amber", label: "⚠ Partial",  bar: "var(--amber)", border: "rgba(243,156,18,.35)" },
-          pending:  { cls: "badge-red",   label: "✗ Pending",  bar: "var(--red)",   border: "rgba(231,76,60,.35)"  },
+          complete: { cls: "badge-green", label: ic("check") + " Complete", bar: "var(--green)", border: "rgba(39,174,96,.35)" },
+          partial:  { cls: "badge-amber", label: ic("alert") + " Partial",  bar: "var(--amber)", border: "rgba(243,156,18,.35)" },
+          pending:  { cls: "badge-red",   label: ic("clock") + " Pending",  bar: "var(--red)",   border: "rgba(231,76,60,.35)"  },
         }[status];
 
         const unpaidNames = members.filter(m => (payments[m.name]?.status || "unpaid") !== "paid").map(m => m.name);
         const dueList = unpaidNames.length === 0
-          ? '<span style="color:var(--green);font-weight:600">All cleared 🎉</span>'
+          ? '<span style="color:var(--green);font-weight:600">All cleared</span>'
           : `<span style="color:var(--text2)">Pending: ${unpaidNames.slice(0,3).join(", ")}${unpaidNames.length>3?` +${unpaidNames.length-3}`:""}</span>`;
 
         return `
@@ -419,11 +419,11 @@ async function loadUtilHistory() {
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <div style="background:var(--bg3);border-radius:6px;padding:7px 9px">
-                <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.5px">🔵 Prepaid</div>
+                <div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:.5px">${ic("dot")} Prepaid</div>
                 <div style="font-size:14px;font-weight:700;margin-top:1px">${fmtTk(prepaid)}</div>
               </div>
               <div style="background:var(--bg3);border-radius:6px;padding:7px 9px">
-                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:.5px">🔴 Postpaid</div>
+                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:.5px">${ic("dot")} Postpaid</div>
                 <div style="font-size:14px;font-weight:700;margin-top:1px">${fmtTk(postpaid)}</div>
               </div>
               <div style="background:var(--bg3);border-radius:6px;padding:7px 9px">

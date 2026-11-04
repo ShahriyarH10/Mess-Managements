@@ -25,7 +25,7 @@ async function renderAuditLog(el) {
   </div>
   <div class="content dk">
     <div class="card au-filters">
-      <div class="au-search"><span>🔎</span><input type="text" class="input" id="audit-search" placeholder="Search what changed or who did it…" data-on-input="loadAuditEntries(true)"/></div>
+      <div class="au-search"><span>${ic("search")}</span><input type="text" class="input" id="audit-search" placeholder="Search what changed or who did it…" data-on-input="loadAuditEntries(true)"/></div>
       <select class="input" id="audit-filter" data-on-change="loadAuditEntries(true)">
         <option value="">All categories</option>
         ${AUDIT_CATS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}
@@ -107,7 +107,7 @@ async function loadAuditEntries(reset = false) {
 
     if (!entries.length) {
       if (reset) {
-        wrap.innerHTML = '<div class="empty" style="padding:28px"><div>🗂️</div><div>No changes match these filters.</div></div>';
+        wrap.innerHTML = '<div class="empty" style="padding:28px"><div>' + ic("folder", "ic-lg ic-muted") + '</div><div>No changes match these filters.</div></div>';
         const sm = document.getElementById("audit-summary"); if (sm) sm.innerHTML = "";
       }
       if (moreWrap) moreWrap.innerHTML = "";

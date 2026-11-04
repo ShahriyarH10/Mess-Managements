@@ -33,7 +33,7 @@ async function renderMessFund(el) {
           <label>What for?</label>
           <input type="text" class="input" id="fund-note" placeholder="e.g. Monthly contribution, cleaning supplies…" data-on-keydown="if(event.key==='Enter') saveFundEntry()"/>
         </div>
-        <button class="btn btn-primary ml-save" id="fund-save" data-on-click="saveFundEntry()">✓ Save money in</button>
+        <button class="btn btn-primary ml-save" id="fund-save" data-on-click="saveFundEntry()">${ic("check")} Save money in</button>
       </div>
       <div class="card">
         <div class="dk-card-title"><span>History</span><span class="dk-legend" id="fund-count"></span></div>
@@ -48,7 +48,7 @@ function setFundType(v) {
   const t = document.getElementById("fund-type"); if (t) t.value = v;
   document.querySelectorAll("#fund-type-seg .an-seg-btn").forEach(b => b.classList.toggle("on", b.dataset.v === v));
   const btn = document.getElementById("fund-save");
-  if (btn) btn.textContent = v === "deposit" ? "✓ Save money in" : "✓ Save money out";
+  if (btn) btn.innerHTML = ic("check") + (v === "deposit" ? " Save money in" : " Save money out");
 }
 
 async function loadFund() {
@@ -72,15 +72,15 @@ async function loadFund() {
     const tile = (icon, label, value, sub, color) => `<div class="pf-tile"><div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
       <div class="stat-value pf-val" ${color ? `style="color:${color}"` : ""}>${value}</div><div class="dk-sub">${sub}</div></div>`;
     if (tiles) tiles.innerHTML = `<div class="pf-tiles">
-      ${tile("💰", "Balance", fmtTk(balance), balance >= 0 ? "cash in the fund now" : "fund is overdrawn", balance >= 0 ? "var(--green)" : "var(--red)")}
-      ${tile("🗓️", "This month", (mIn - mOut >= 0 ? "+" : "−") + fmtTk(Math.abs(round2(mIn - mOut))), `in ${fmtTk(mIn)} · out ${fmtTk(mOut)}`, mIn - mOut >= 0 ? "var(--green)" : "var(--red)")}
+      ${tile(ic("wallet"), "Balance", fmtTk(balance), balance >= 0 ? "cash in the fund now" : "fund is overdrawn", balance >= 0 ? "var(--green)" : "var(--red)")}
+      ${tile(ic("calendar"), "This month", (mIn - mOut >= 0 ? "+" : "−") + fmtTk(Math.abs(round2(mIn - mOut))), `in ${fmtTk(mIn)} · out ${fmtTk(mOut)}`, mIn - mOut >= 0 ? "var(--green)" : "var(--red)")}
       ${tile("↓", "Money in", fmtTk(totalIn), `${allEntries.filter(e => e.type === "deposit").length} deposits`, "var(--blue)")}
       ${tile("↑", "Money out", fmtTk(totalOut), `${allEntries.filter(e => e.type === "withdrawal").length} withdrawals`, "var(--accent)")}
     </div>`;
     const cnt = document.getElementById("fund-count"); if (cnt) cnt.textContent = `${allEntries.length} entr${allEntries.length === 1 ? "y" : "ies"}`;
 
     if (!allEntries.length) {
-      wrap.innerHTML = `<div class="empty" style="padding:28px"><div>💰</div><div>No fund entries yet — add the first one on the left.</div></div>`;
+      wrap.innerHTML = `<div class="empty" style="padding:28px"><div>${ic("wallet", "ic-lg ic-muted")}</div><div>No fund entries yet — add the first one on the left.</div></div>`;
       return;
     }
 
@@ -101,7 +101,7 @@ async function loadFund() {
           <div class="fd-body"><div class="fd-note">${escapeHtml(e.note || (dep ? "Deposit" : "Withdrawal"))}</div>
             <div class="fd-meta">${nice(e.date)} · by ${escapeHtml(e.actor || "—")}</div></div>
           <div class="fd-amt"><b style="color:${dep ? "var(--green)" : "var(--red)"}">${dep ? "+" : "−"}${fmtTk(e.amount)}</b><span>bal ${fmtTk(e.after)}</span></div>
-          <button class="btn btn-ghost btn-sm btn-icon" data-on-click="deleteFundEntry('${e.month_key}','${e.id}')" title="Delete entry">✕</button>
+          <button class="btn btn-ghost btn-sm btn-icon" data-on-click="deleteFundEntry('${e.month_key}','${e.id}')" title="Delete entry" aria-label="Delete entry">${ic("x")}</button>
         </div>`;
       }).join("")}`;
     }).join("");
@@ -137,7 +137,7 @@ async function saveFundEntry() {
     });
     await dbUpsertUtility(month, year_from_key(key), key, bills, cur?.payments || {});
     await logAudit("create", "fund", date, `Fund ${type}: ${fmtTk(amount)}${note ? " — " + note : ""}`);
-    toast(`Fund ${type} saved ✓`, "success");
+    toast(`Fund ${type} saved`, "success");
     ["fund-amount", "fund-note"].forEach(id => { const i = document.getElementById(id); if (i) i.value = ""; });
     await loadFund();
   } catch(e) { toast("Error: " + e.message, "error"); }

@@ -22,24 +22,24 @@ function renderLog(el) {
         background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
         padding:16px 18px;margin-bottom:16px;font-size:13px;line-height:1.7
       ">
-        <div style="font-weight:700;font-size:14px;margin-bottom:8px">📊 How settlement is calculated</div>
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px">${ic("chart")} How settlement is calculated</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
-            <div style="color:var(--red);font-weight:600;margin-bottom:4px">🔴 Postpaid (from PREVIOUS month)</div>
+            <div style="color:var(--red);font-weight:600;margin-bottom:4px">${ic("dot", "ic-red")} Postpaid (from PREVIOUS month)</div>
             <div>• Meal cost = meals eaten × meal rate</div>
             <div>• Khala bill (cook/helper)</div>
             <div>• Other cost</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Meal rate = total bazar ÷ total meals</div>
           </div>
           <div>
-            <div style="color:var(--blue);font-weight:600;margin-bottom:4px">🔵 Prepaid (from CURRENT month)</div>
+            <div style="color:var(--blue);font-weight:600;margin-bottom:4px">${ic("dot", "ic-blue")} Prepaid (from CURRENT month)</div>
             <div>• Room rent</div>
             <div>• Electricity + Gas + WiFi (shared equally)</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Utility = total bills ÷ number of members</div>
           </div>
         </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);color:var(--green);font-weight:600">
-          ✅ Credits (deducted): Bazar spent + Meal cash + Rent paid + Utility paid + ↩ Carry-forward credit
+          ${ic("checkCircle", "ic-green")} Credits (deducted): Bazar spent + Meal cash + Rent paid + Utility paid + ${ic("undo")} Carry-forward credit
         </div>
         <div style="margin-top:6px;background:var(--accent-bg);border-radius:6px;padding:8px 12px;font-weight:600;color:var(--accent)">
           Net = Meal cost + Khala + Other + Rent + Elec/Gas/WiFi − Bazar − Meal paid − Rent paid − Util paid − Carried fwd + Prev due
@@ -56,12 +56,12 @@ function renderLog(el) {
           ${opts.yearOptions}
         </select>
         <button class="btn btn-primary" data-on-click="loadLog()">Generate Report</button>
-        <button class="btn btn-ghost" data-on-click="doExportReport()">🖨️ Print PDF</button>
+        <button class="btn btn-ghost" data-on-click="doExportReport()">${ic("print")} Print PDF</button>
       </div>
 
       <div id="log-content">
         <div class="empty" style="padding:32px;text-align:center">
-          <div style="font-size:32px;margin-bottom:8px">📋</div>
+          <div style="font-size:32px;margin-bottom:8px">${ic("clipboard")}</div>
           <div>Select a month and click <b>Generate Report</b></div>
         </div>
       </div>
@@ -141,30 +141,30 @@ async function loadLog() {
 
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-label">🍽 Total meals (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-label">${ic("meal")} Total meals (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value">${totalMeals}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">📊 Meal rate</div>
+          <div class="stat-label">${ic("chart")} Meal rate</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div>
           <div class="stat-sub">${fmtTk(totalBazar)} ÷ ${totalMeals} meals</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">🛒 Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-label">${ic("cart")} Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div>
         </div>
         <div class="stat-card" style="border-color:rgba(91,155,213,.3)">
-          <div class="stat-label" style="color:var(--blue)">🔵 Prepaid bills (${MONTHS[month].slice(0,3)})</div>
+          <div class="stat-label" style="color:var(--blue)">${ic("dot", "ic-blue")} Prepaid bills (${MONTHS[month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(prepaidTotal)}</div>
           <div class="stat-sub">Elec ${fmtTk(elecAmt)} + Gas ${fmtTk(gasAmt)} + WiFi ${fmtTk(wifiAmt)}</div>
         </div>
         <div class="stat-card" style="border-color:rgba(231,76,60,.3)">
-          <div class="stat-label" style="color:var(--red)">🔴 Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-label" style="color:var(--red)">${ic("dot", "ic-red")} Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(postpaidTotal)}</div>
           <div class="stat-sub">Khala ${fmtTk(khalaTotal)} + Other ${fmtTk(otherTotal)}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">⚡ Prepaid per member</div>
+          <div class="stat-label">${ic("zap")} Prepaid per member</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(prepaidShare)}</div>
           <div class="stat-sub">${prepaidTotal} ÷ ${members.length} members</div>
         </div>
@@ -189,13 +189,13 @@ async function loadLog() {
               <th rowspan="2">Member</th>
               <th rowspan="2">Meals<br><span style="font-size:10px;color:var(--text3)">${MONTHS[prev.month].slice(0,3)}</span></th>
               <th colspan="3" style="color:var(--red);background:rgba(231,76,60,.07)">
-                🔴 Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
+                ${ic("dot", "ic-red")} Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
               </th>
               <th colspan="2" style="color:var(--blue);background:rgba(91,155,213,.07)">
-                🔵 Prepaid — ${MONTHS[month].slice(0,3)} ${year}
+                ${ic("dot", "ic-blue")} Prepaid — ${MONTHS[month].slice(0,3)} ${year}
               </th>
               <th colspan="6" style="color:var(--green);background:rgba(39,174,96,.07)">
-                ✅ Credits
+                ${ic("checkCircle", "ic-green")} Credits
               </th>
               <th rowspan="2" style="background:var(--bg3)">Net</th>
             </tr>
@@ -209,7 +209,7 @@ async function loadLog() {
               <th style="color:var(--green)">Meal paid</th>
               <th style="color:var(--green)">Rent paid</th>
               <th style="color:var(--green)">Util paid</th>
-              <th style="color:var(--blue)">↩ Carried fwd</th>
+              <th style="color:var(--blue)">${ic("undo")} Carried fwd</th>
               <th style="color:var(--red)">Prev due</th>
             </tr>
           </thead>
@@ -221,10 +221,10 @@ async function loadLog() {
                   <b>${p.memberName}</b>
                   <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">
                     <span class="badge ${p.rentStatus === 'paid' ? 'badge-green' : p.rentStatus === 'partial' ? 'badge-amber' : 'badge-red'}" style="font-size:9px">
-                      rent ${p.rentStatus === 'paid' ? '✓' : p.rentStatus === 'partial' ? '~' : '✗'}
+                      rent ${p.rentStatus === 'paid' ? '' + ic("check") + '' : p.rentStatus === 'partial' ? '~' : '' + ic("x") + ''}
                     </span>
                     <span class="badge ${p.utilityStatus === 'paid' ? 'badge-green' : p.utilityStatus === 'partial' ? 'badge-amber' : 'badge-red'}" style="font-size:9px">
-                      util ${p.utilityStatus === 'paid' ? '✓' : p.utilityStatus === 'partial' ? '~' : '✗'}
+                      util ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : p.utilityStatus === 'partial' ? '~' : '' + ic("x") + ''}
                     </span>
                   </div>
                 </td>
@@ -251,7 +251,7 @@ async function loadLog() {
                   ${p.utilityPaid > 0 ? fmtTk(p.utilityPaid) : '৳0'}
                 </td>
                 <td style="color:${(p.messCredit||0) > 0 ? 'var(--blue)' : 'var(--text3)'}">
-                  ${(p.messCredit||0) > 0 ? `↩ ${fmtTk(p.messCredit)}` : '—'}
+                  ${(p.messCredit||0) > 0 ? `${ic("undo")} ${fmtTk(p.messCredit)}` : '—'}
                 </td>
                 <td style="color:${(p.prevDue||0) > 0 ? 'var(--red)' : 'var(--text3)'}">
                   ${(p.prevDue||0) > 0 ? fmtTk(p.prevDue) : '—'}
@@ -264,7 +264,7 @@ async function loadLog() {
                   >Details</button>
                   <div>
                     <b class="${p.netWithPrevDue > 0 ? 'net-neg' : p.netWithPrevDue < 0 ? 'net-pos' : ''}" style="font-size:14px">
-                      ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '✓ Settled'}
+                      ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '' + ic("check") + ' Settled'}
                     </b>
                   </div>
                 </td>
@@ -288,7 +288,7 @@ async function loadLog() {
               <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p) => s + (p.messCredit||0), 0)))}</td>
               <td style="color:var(--red)">${fmtTk(round2(payData.reduce((s,p) => s + (p.prevDue||0), 0)))}</td>
               <td><b class="${grandNetPayable > 0 ? 'net-neg' : grandNetPayable < 0 ? 'net-pos' : ''}">
-                ${grandNetPayable > 0 ? 'Pay ' + fmtTk(grandNetPayable) : grandNetPayable < 0 ? 'Get ' + fmtTk(Math.abs(grandNetPayable)) : '✓ Balanced'}
+                ${grandNetPayable > 0 ? 'Pay ' + fmtTk(grandNetPayable) : grandNetPayable < 0 ? 'Get ' + fmtTk(Math.abs(grandNetPayable)) : '' + ic("check") + ' Balanced'}
               </b></td>
             </tr>
           </tfoot>
@@ -296,13 +296,13 @@ async function loadLog() {
       </div>
 
       <div style="font-size:12px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        💡 Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">↩ Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month — adds to this month's net payable.
+        ${ic("lightbulb")} Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">${ic("undo")} Carried fwd</b> = credit applied from last month's overpayment or Mess Owes balance — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month — adds to this month's net payable.
       </div>
     </div>
 
     <!-- ── Meal & Bazar detail logs ── -->
     <div style="font-size:13px;color:var(--text2);margin:0 0 8px;font-weight:600">
-      📋 Raw data used for this settlement — from ${MONTHS[prev.month]} ${prev.year}
+      ${ic("clipboard")} Raw data used for this settlement — from ${MONTHS[prev.month]} ${prev.year}
     </div>
 
     <div class="grid-2" style="gap:12px">
@@ -402,11 +402,11 @@ function showSettlementBreakdown(idx) {
   const curLabel  = monthLabelFromKey(p.settlementKey);
 
   const rows = [
-    { label: `🍽️ Meal cost`, sub: `${p.memberMeals} meals × ${fmtTk(p.mealRate)} rate`, val: p.mealCost, color: "var(--red)", section: "postpaid" },
-    { label: `👩 Khala share`, sub: `${fmtTk(p.khalaTotal)} ÷ ${members.length} members`, val: p.khalaShare, color: "var(--red)", section: "postpaid" },
-    { label: `📦 Other share`, sub: `${fmtTk(p.otherTotal)} ÷ ${members.length} members`, val: p.otherShare, color: "var(--red)", section: "postpaid" },
-    { label: `🏠 Room rent`, sub: `${curLabel}`, val: p.roomRent, color: "var(--blue)", section: "prepaid" },
-    { label: `⚡ Utility share`, sub: `${fmtTk(p.prepaidTotal)} ÷ ${members.length} (Elec+Gas+WiFi)`, val: p.prepaidUtility, color: "var(--blue)", section: "prepaid" },
+    { label: `${ic("meal")} Meal cost`, sub: `${p.memberMeals} meals × ${fmtTk(p.mealRate)} rate`, val: p.mealCost, color: "var(--red)", section: "postpaid" },
+    { label: `${ic("cook")} Khala share`, sub: `${fmtTk(p.khalaTotal)} ÷ ${members.length} members`, val: p.khalaShare, color: "var(--red)", section: "postpaid" },
+    { label: `${ic("box")} Other share`, sub: `${fmtTk(p.otherTotal)} ÷ ${members.length} members`, val: p.otherShare, color: "var(--red)", section: "postpaid" },
+    { label: `${ic("home")} Room rent`, sub: `${curLabel}`, val: p.roomRent, color: "var(--blue)", section: "prepaid" },
+    { label: `${ic("zap")} Utility share`, sub: `${fmtTk(p.prepaidTotal)} ÷ ${members.length} (Elec+Gas+WiFi)`, val: p.prepaidUtility, color: "var(--blue)", section: "prepaid" },
   ];
 
   const grossTotal = round2(rows.reduce((s, r) => s + r.val, 0));
@@ -416,7 +416,7 @@ function showSettlementBreakdown(idx) {
     <div class="modal-sub" style="margin-bottom:12px">${curLabel} settlement</div>
 
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin-bottom:6px">
-      🔴 Postpaid charges — from ${prevLabel}
+      ${ic("dot", "ic-red")} Postpaid charges — from ${prevLabel}
     </div>
 
     ${rows.filter(r => r.section === "postpaid").map(r => `
@@ -430,7 +430,7 @@ function showSettlementBreakdown(idx) {
     `).join("")}
 
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--blue);margin:12px 0 6px">
-      🔵 Prepaid charges — for ${curLabel}
+      ${ic("dot", "ic-blue")} Prepaid charges — for ${curLabel}
     </div>
 
     ${rows.filter(r => r.section === "prepaid").map(r => `
@@ -449,12 +449,12 @@ function showSettlementBreakdown(idx) {
     </div>
 
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--green);margin-bottom:6px">
-      ✅ Credits (deducted)
+      ${ic("checkCircle", "ic-green")} Credits (deducted)
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:6px;margin-bottom:6px">
       <div>
-        <div style="font-weight:600;color:var(--green)">🛒 Bazar credit</div>
+        <div style="font-weight:600;color:var(--green)">${ic("cart")} Bazar credit</div>
         <div style="font-size:11px;color:var(--text3)">Groceries bought by ${memberName} in ${prevLabel}</div>
       </div>
       <div style="font-weight:700;color:var(--green);font-size:15px">− ${fmtTk(p.memberBazar)}</div>
@@ -463,7 +463,7 @@ function showSettlementBreakdown(idx) {
     ${(p.mealPaid || 0) > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:6px;margin-bottom:6px">
         <div>
-          <div style="font-weight:600;color:var(--green)">🍽️ Meal paid (cash)</div>
+          <div style="font-weight:600;color:var(--green)">${ic("meal")} Meal paid (cash)</div>
           <div style="font-size:11px;color:var(--text3)">Cash collected against meal portion in ${curLabel}</div>
         </div>
         <div style="font-weight:700;color:var(--green);font-size:15px">− ${fmtTk(p.mealPaid)}</div>
@@ -473,35 +473,35 @@ function showSettlementBreakdown(idx) {
     ${p.roomRentPaid > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:6px;margin-bottom:6px">
         <div>
-          <div style="font-weight:600;color:var(--green)">🏠 Rent paid</div>
+          <div style="font-weight:600;color:var(--green)">${ic("home")} Rent paid</div>
           <div style="font-size:11px;color:var(--text3)">${curLabel} — rent already paid</div>
         </div>
         <div style="font-weight:700;color:var(--green);font-size:15px">− ${fmtTk(p.roomRentPaid)}</div>
       </div>
     ` : `
       <div style="padding:8px 12px;background:var(--bg3);border-radius:6px;margin-bottom:6px;font-size:12px;color:var(--text3)">
-        🏠 Rent not paid yet
+        ${ic("home")} Rent not paid yet
       </div>
     `}
 
     ${p.utilityPaid > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:6px;margin-bottom:6px">
         <div>
-          <div style="font-weight:600;color:var(--green)">💳 Utility paid</div>
+          <div style="font-weight:600;color:var(--green)">${ic("card")} Utility paid</div>
           <div style="font-size:11px;color:var(--text3)">Covers Elec+Gas+WiFi+Khala+Other in ${curLabel}</div>
         </div>
         <div style="font-weight:700;color:var(--green);font-size:15px">− ${fmtTk(p.utilityPaid)}</div>
       </div>
     ` : `
       <div style="padding:8px 12px;background:var(--bg3);border-radius:6px;margin-bottom:6px;font-size:12px;color:var(--text3)">
-        💳 Utility not paid yet
+        ${ic("card")} Utility not paid yet
       </div>
     `}
 
     ${(p.messCredit||0) > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(52,152,219,.08);border:1px solid rgba(52,152,219,.3);border-radius:6px;margin-bottom:6px">
         <div>
-          <div style="font-weight:600;color:var(--blue)">↩ Carry-forward credit</div>
+          <div style="font-weight:600;color:var(--blue)">${ic("undo")} Carry-forward credit</div>
           <div style="font-size:11px;color:var(--text3)">Credit from last month's overpayment or Mess Owes balance</div>
         </div>
         <div style="font-weight:700;color:var(--blue);font-size:15px">− ${fmtTk(p.messCredit)}</div>
@@ -510,11 +510,11 @@ function showSettlementBreakdown(idx) {
 
     ${(p.prevDue||0) > 0 ? `
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin:12px 0 6px">
-        🔴 Previous due
+        ${ic("dot", "ic-red")} Previous due
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(231,76,60,.08);border:1px solid rgba(231,76,60,.3);border-radius:6px;margin-bottom:6px">
         <div>
-          <div style="font-weight:600;color:var(--red)">⏮ Previous due</div>
+          <div style="font-weight:600;color:var(--red)">${ic("skipBack")} Previous due</div>
           <div style="font-size:11px;color:var(--text3)">Unpaid balance carried forward from ${prevLabel}</div>
         </div>
         <div style="font-weight:700;color:var(--red);font-size:15px">+ ${fmtTk(p.prevDue)}</div>
@@ -524,7 +524,7 @@ function showSettlementBreakdown(idx) {
     <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:8px;margin-top:10px;font-size:16px;font-weight:800">
       <span>Net Payable</span>
       <span style="color:${p.netWithPrevDue > 0 ? 'var(--red)' : p.netWithPrevDue < 0 ? 'var(--green)' : 'var(--text)'}">
-        ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '✓ Settled'}
+        ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '' + ic("check") + ' Settled'}
       </span>
     </div>
 
@@ -829,7 +829,7 @@ async function doExportReport() {
 <div class="page1">
 
   <div class="head">
-    <div class="head-icon">🏠</div>
+    <div class="head-icon">${ic("home")}</div>
     <div class="head-name">${eh(messName)}</div>
     <div class="head-sub">Monthly Settlement Statement</div>
     <div class="head-period">${MONTHS[month]} ${year} &nbsp;&mdash;&nbsp; Meal &amp; Bazar data from ${MONTHS[prev.month]} ${prev.year}</div>
@@ -976,6 +976,6 @@ async function doExportReport() {
     console.error("Print error:", e);
     toast("Print failed: " + e.message, "error");
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "🖨️ Print PDF"; }
+    if (btn) { btn.disabled = false; btn.innerHTML = ic("print") + " Print PDF"; }
   }
 }

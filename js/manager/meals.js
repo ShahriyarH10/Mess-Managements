@@ -12,8 +12,8 @@ async function renderMeals(el) {
     <div><div class="page-title">Meal Entry</div><div class="page-sub">Log everyone's meals for a day, or check attendance</div></div>
     <div class="topbar-actions">
       <div class="an-seg">
-        <button id="meal-tab-entry" class="an-seg-btn on" data-on-click="switchMealTab('entry')">📝 Entry</button>
-        <button id="meal-tab-calendar" class="an-seg-btn" data-on-click="switchMealTab('calendar')">📅 Attendance</button>
+        <button id="meal-tab-entry" class="an-seg-btn on" data-on-click="switchMealTab('entry')">${ic("edit")} Entry</button>
+        <button id="meal-tab-calendar" class="an-seg-btn" data-on-click="switchMealTab('calendar')">${ic("calendar")} Attendance</button>
       </div>
     </div>
   </div>
@@ -28,8 +28,8 @@ async function renderMeals(el) {
           </div>
           <div class="ent-pills">
             <span class="ent-pill">Total <b id="mt-total">0</b></span>
-            <span class="ent-pill ent-d">☀ Day <b id="mt-day">0</b></span>
-            <span class="ent-pill ent-n">🌙 Night <b id="mt-night">0</b></span>
+            <span class="ent-pill ent-d">${ic("sun")} Day <b id="mt-day">0</b></span>
+            <span class="ent-pill ent-n">${ic("moon")} Night <b id="mt-night">0</b></span>
             <span class="ent-pill">Eating <b id="mt-eating">0</b>/${members.length}</span>
           </div>
         </div>
@@ -43,7 +43,7 @@ async function renderMeals(el) {
         <div class="ent-grid" id="meal-grid"></div>
         <div class="ent-foot">
           <span class="ml-hint" style="margin:0">Absent members are flagged from the attendance board.</span>
-          <button class="btn btn-primary" data-on-click="saveMeals()">✓ Save meals</button>
+          <button class="btn btn-primary" data-on-click="saveMeals()">${ic("check")} Save meals</button>
         </div>
       </div>
       <div class="ent-split">
@@ -109,8 +109,8 @@ function buildMealGrid() {
     <div class="ent-cell${dA && nA ? " ent-off" : ""}">
       <div class="ent-who"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
         <span class="ent-name">${escapeHtml(m.name)}</span>${dA || nA ? `<span class="badge badge-red">${dA && nA ? "absent" : dA ? "day off" : "night off"}</span>` : ""}</div>
-      ${step("md-"+m.id, mealDayVals[m.id]??0, dA, "☀ Day")}
-      ${step("mn-"+m.id, mealNightVals[m.id]??0, nA, "🌙 Night")}
+      ${step("md-"+m.id, mealDayVals[m.id]??0, dA, ic("sun") + " Day")}
+      ${step("mn-"+m.id, mealNightVals[m.id]??0, nA, ic("moon") + " Night")}
     </div>`;
   }).join("");
   updMealSum();
@@ -185,7 +185,7 @@ async function saveMeals() {
   if (!requireManager('saveMeals')) return;
   const date=document.getElementById("meal-date")?.value; if(!date){ toast("Select a date"); return; }
   const key = date.slice(0,7);
-  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
+  if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   try {
     // start from what's stored so former members' meals for this day are kept
     const stored = await mustRead(getClient().from("meals").select("meals").eq("mess_id",messId()).eq("date",date).maybeSingle());
@@ -203,7 +203,7 @@ function loadMealsRecent(all) {
   const recent=[...all].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
   if(!recent.length){ wrap.innerHTML='<div class="empty">No meal entries yet</div>'; return; }
   wrap.innerHTML=`<table class="ent-tbl"><thead><tr><th>Date</th>${members.map(m=>`<th title="${escapeHtml(m.name)}" style="text-align:center">${memberInitials(m.id, m.name)}</th>`).join("")}<th style="text-align:right">Total</th><th></th></tr></thead>
-  <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealMemberTotal(r.meals||{},m.name); t+=v; return`<td style="text-align:center" class="${v?"":"ent-zero"}">${v||"·"}</td>`; }).join(""); return`<tr><td class="ent-dt">${entNiceDate(r.date)}</td>${cells}<td style="text-align:right"><b>${round2(t)}</b></td><td style="text-align:right"><button class="btn btn-ghost btn-sm btn-icon" data-on-click="delMeal('${r.id}')" title="Delete this day">✕</button></td></tr>`; }).join("")}</tbody></table>`;
+  <tbody>${recent.map(r=>{ let t=0; const cells=members.map(m=>{ const v=mealMemberTotal(r.meals||{},m.name); t+=v; return`<td style="text-align:center" class="${v?"":"ent-zero"}">${v||"·"}</td>`; }).join(""); return`<tr><td class="ent-dt">${entNiceDate(r.date)}</td>${cells}<td style="text-align:right"><b>${round2(t)}</b></td><td style="text-align:right"><button class="btn btn-ghost btn-sm btn-icon" data-on-click="delMeal('${r.id}')" title="Delete this day" aria-label="Delete this day">${ic("x")}</button></td></tr>`; }).join("")}</tbody></table>`;
 }
 function loadManagerMealMonths(all) {
   const wrap=document.getElementById("manager-meal-months"); if(!wrap) return;
@@ -233,7 +233,7 @@ function renderBazar(el) {
       <div class="ent-grid ent-grid-bz" id="bazar-grid"></div>
       <div class="ent-foot">
         <button class="btn btn-ghost" data-on-click="clearBazar()">Clear</button>
-        <button class="btn btn-primary" data-on-click="saveBazar()">✓ Save bazar</button>
+        <button class="btn btn-primary" data-on-click="saveBazar()">${ic("check")} Save bazar</button>
       </div>
     </div>
     <div class="ent-split">
@@ -261,7 +261,7 @@ async function saveBazar() {
   if (!requireManager('saveBazar')) return;
   const date=document.getElementById("bazar-date")?.value; if(!date){ toast("Select a date"); return; }
   const key = date.slice(0,7);
-  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
+  if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   try{
     // start from what's stored so a former member's bazar spend for this day is kept
     const stored = await mustRead(getClient().from("bazar").select("bazar").eq("mess_id",messId()).eq("date",date).maybeSingle());
@@ -284,7 +284,7 @@ function loadBazarRecent(all) {
       <span class="ent-dt">${entNiceDate(r.date)}</span>
       <span class="ent-buyers">${buyers.length ? buyers.map(x=>{ const col=avatarCol(x.i); return `<span class="ent-buyer"><span class="dk-av" style="background:${col.bg};color:${col.fg}">${avFace(x.m.id, x.m.name)}</span>${escapeHtml(x.m.name.split(" ")[0])} <b>${fmtTk(x.v)}</b></span>`; }).join("") : `<span class="ent-zero">nobody</span>`}</span>
       <b class="ent-bz-total">${fmtTk(round2(bt))}</b>
-      <button class="btn btn-ghost btn-sm btn-icon" data-on-click="delBazar('${r.id}')" title="Delete this day">✕</button>
+      <button class="btn btn-ghost btn-sm btn-icon" data-on-click="delBazar('${r.id}')" title="Delete this day" aria-label="Delete this day">${ic("x")}</button>
     </div>`;
   }).join("");
 }
@@ -407,7 +407,7 @@ async function openBazarMonth(key) {
 
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
-    <div class="modal-title">🛒 ${monthLabelFromKey(key)} — Bazar Calendar</div>
+    <div class="modal-title">${ic("cart")} ${monthLabelFromKey(key)} — Bazar Calendar</div>
     <div class="modal-sub" style="margin-bottom:14px">${rows.length} active day${rows.length===1?"":"s"} · grand total <b style="color:var(--green)">${fmtTk(grand)}</b> · click any highlighted day for details</div>
 
     <!-- Member contribution bars -->
@@ -472,7 +472,7 @@ async function openBazarDayDetail(monthKey, dayStr) {
 
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `
-    <div class="modal-title">🛒 Bazar — ${escapeHtml(dateLabel)}</div>
+    <div class="modal-title">${ic("cart")} Bazar — ${escapeHtml(dateLabel)}</div>
     <div class="modal-sub" style="margin-bottom:14px">Day total: <b style="color:var(--green)">${fmtTk(round2(dayTotal))}</b></div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${members.map(m => {

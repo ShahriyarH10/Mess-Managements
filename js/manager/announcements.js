@@ -36,10 +36,10 @@ async function renderMessages(el, isManager) {
       <input type="hidden" id="bc-priority" value="normal"/>
       <div class="bc-opts">
         <div class="an-seg" id="bc-pri-seg">
-          <button class="an-seg-btn on" data-v="normal" data-on-click="setBcPriority('normal')">📢 Normal</button>
-          <button class="an-seg-btn" data-v="urgent" data-on-click="setBcPriority('urgent')">🔴 Urgent</button>
+          <button class="an-seg-btn on" data-v="normal" data-on-click="setBcPriority('normal')">${ic("megaphone")} Normal</button>
+          <button class="an-seg-btn" data-v="urgent" data-on-click="setBcPriority('urgent')">${ic("alert", "ic-red")} Urgent</button>
         </div>
-        <label class="ma-skip bc-pin"><input type="checkbox" id="bc-pin"/><span>📌 Pin to top</span></label>
+        <label class="ma-skip bc-pin"><input type="checkbox" id="bc-pin"/><span>${ic("pin")} Pin to top</span></label>
         <select class="input input-sm bc-exp" id="bc-expiry" title="Hide it automatically after…">
           <option value="">Never expires</option><option value="6">Expires in 6 h</option><option value="12">Expires in 12 h</option>
           <option value="24">Expires in 1 day</option><option value="72">Expires in 3 days</option><option value="168">Expires in 1 week</option>
@@ -82,7 +82,7 @@ async function loadMessagesPage(isManager) {
     const list   = isManager ? (bcs || []) : active;
 
     if (!list.length) {
-      bWrap.innerHTML = `<div class="card"><div class="empty" style="padding:32px"><div>📢</div>
+      bWrap.innerHTML = `<div class="card"><div class="empty" style="padding:32px"><div>${ic("megaphone", "ic-lg ic-muted")}</div>
         <div>${isManager ? "No notices yet — write one above." : "No notices from your manager yet."}</div></div></div>`;
       return;
     }
@@ -98,7 +98,7 @@ async function loadMessagesPage(isManager) {
         <div class="bc-body">
           <div class="bc-head">
             <b>${escapeHtml(b.author || "Manager")}</b>
-            ${b.pinned ? `<span class="badge badge-amber">📌 Pinned</span>` : ""}
+            ${b.pinned ? `<span class="badge badge-amber">${ic("pin")} Pinned</span>` : ""}
             ${isUrgent ? `<span class="badge badge-red">Urgent</span>` : ""}
             ${isExpired ? `<span class="badge">Expired</span>` : ""}
             <span class="bc-time" title="${escapeHtml(when.toLocaleString())}">${_relativeTime(b.created_at)}</span>
@@ -107,8 +107,8 @@ async function loadMessagesPage(isManager) {
           <div class="bc-foot">${dt}${exp ? ` · ${exp}` : ""}</div>
         </div>
         ${isManager ? `<div class="bc-actions">
-          <button class="btn btn-ghost btn-sm" data-on-click="toggleBroadcastPin('${b.id}',${!b.pinned})">${b.pinned ? "Unpin" : "📌 Pin"}</button>
-          <button class="btn btn-ghost btn-sm btn-icon" data-on-click="deleteBroadcastMsg('${b.id}')" title="Delete">✕</button>
+          <button class="btn btn-ghost btn-sm" data-on-click="toggleBroadcastPin('${b.id}',${!b.pinned})">${b.pinned ? "Unpin" : ic("pin") + " Pin"}</button>
+          <button class="btn btn-ghost btn-sm btn-icon" data-on-click="deleteBroadcastMsg('${b.id}')" title="Delete" aria-label="Delete">${ic("x")}</button>
         </div>` : ""}
       </div>`;
     };
@@ -131,6 +131,6 @@ function deleteBroadcastMsg(id) {
 }
 async function toggleBroadcastPin(id, pinned) {
   if (!requireManager("toggleBroadcastPin")) return;
-  try { await getClient().from("broadcasts").update({ pinned }).eq("id", id).eq("mess_id", messId()); toast(pinned ? "📌 Pinned" : "Unpinned", "success"); await loadMessagesPage(true); }
+  try { await getClient().from("broadcasts").update({ pinned }).eq("id", id).eq("mess_id", messId()); toast(pinned ? "Pinned" : "Unpinned", "success"); await loadMessagesPage(true); }
   catch(e) { toast("Error: " + e.message, "error"); }
 }

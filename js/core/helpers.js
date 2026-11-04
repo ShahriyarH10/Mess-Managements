@@ -262,9 +262,12 @@ function closeModal() {
 
 /* TOAST */
 let toastTimer;
+const TOAST_ICON = { success: "checkCircle", error: "alert" };
 function toast(msg, type) {
   const el = document.getElementById("toast");
-  el.textContent = msg;
+  // Messages are plain text (names arrive HTML-escaped from members[]): decode, then escape once
+  const text = escapeHtml(MemberKeys.unescape(stripEmoji(msg)));
+  el.innerHTML = `${ic(TOAST_ICON[type] || "info")}<span>${text}</span>`;
   el.className = "show" + (type ? " " + type : "");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.className = "", 3200);
@@ -275,11 +278,11 @@ function showConfirm({ title, body, confirmLabel = "Confirm", danger = false, on
   const bg = document.getElementById("confirm-bg");
   const content = document.getElementById("confirm-content");
   content.innerHTML = `
-    <div class="confirm-title">${escapeHtml(title)}</div>
-    <div class="confirm-body">${escapeHtml(body)}</div>
+    <div class="confirm-title">${escapeHtml(stripEmoji(title))}</div>
+    <div class="confirm-body">${escapeHtml(stripEmoji(body))}</div>
     <div class="confirm-actions">
       <button class="btn btn-ghost" data-on-click="closeConfirm()">Cancel</button>
-      <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirm-ok-btn">${escapeHtml(confirmLabel)}</button>
+      <button class="btn ${danger ? "btn-danger" : "btn-primary"}" id="confirm-ok-btn">${escapeHtml(stripEmoji(confirmLabel))}</button>
     </div>`;
   document.getElementById("confirm-ok-btn").onclick = () => { closeConfirm(); onConfirm(); };
   cancelClose(bg);
@@ -773,7 +776,7 @@ function buildMonthHistory(months, opts) {
       <div class="mh-foot">${
         memberName
           ? (share != null ? `${share}% of ${fmtV(m.total)} mess ${money ? "total" : "meals"}` : "No mess data yet")
-          : top && top[1] > 0 ? `${money ? "🥇 " : "Top: "}<b>${escapeHtml(_unescapeName(top[0]))}</b> · ${fmtV(top[1])}` : "No entries yet"
+          : top && top[1] > 0 ? `${money ? ic("award", "ic-amber") + " " : "Top: "}<b>${escapeHtml(_unescapeName(top[0]))}</b> · ${fmtV(top[1])}` : "No entries yet"
       }</div>
     </button>`;
   }).join("");
@@ -875,8 +878,8 @@ async function openManagerMealMonth(key) {
               <div class="dn-n" style="width:${nPct}%"></div>
             </div>
             <div class="dn-split-row">
-              <span>☀ Day&nbsp;<b class="d-val">${p.dayTotal}</b> <span style="opacity:.6">(${dPct}%)</span></span>
-              <span>🌙 Night&nbsp;<b class="n-val">${p.nightTotal}</b> <span style="opacity:.6">(${nPct}%)</span></span>
+              <span>${ic("sun")} Day&nbsp;<b class="d-val">${p.dayTotal}</b> <span style="opacity:.6">(${dPct}%)</span></span>
+              <span>${ic("moon")} Night&nbsp;<b class="n-val">${p.nightTotal}</b> <span style="opacity:.6">(${nPct}%)</span></span>
             </div>` : ""}
           ${p.html}
         </div>`;
@@ -891,13 +894,13 @@ async function openManagerMealMonth(key) {
 function buildOnboardingChecklist(hasMembersAdded, hasMealsLogged, hasUtilitySet) {
   const step = (done, text, action) => `
     <div class="onboard-step">
-      <span style="font-size:16px">${done ? "✅" : "⬜"}</span>
+      <span style="font-size:16px">${done ? ic("checkCircle", "ic-green") : ic("square", "ic-muted")}</span>
       <span style="${done ? "color:var(--text3);text-decoration:line-through" : ""}">${text}</span>
       ${!done && action ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto" data-on-click="${action}">Go →</button>` : ""}
     </div>`;
   return `
     <div class="onboard-wrap">
-      <div class="onboard-title">👋 Welcome to your new mess!</div>
+      <div class="onboard-title">Welcome to your new mess!</div>
       <div class="onboard-sub">Complete these steps to get started.</div>
       ${step(hasMembersAdded, "Add your first member", "navigate('members')")}
       ${step(hasMealsLogged, "Log today's meals", "navigate('meals')")}

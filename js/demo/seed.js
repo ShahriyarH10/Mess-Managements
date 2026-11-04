@@ -155,7 +155,7 @@
       { id: "demo-ch-4", mess_id: MESS, task: "Refill drinking water jars", assignee: "Mahfuz Alam",   frequency: "weekly", status: "done",    created_at: daysAgo(30) },
     ];
     const broadcasts = [
-      { id: "demo-bc-1", mess_id: MESS, message: "⚠️ Gas supply is low — avoid heavy cooking tonight.", priority: "urgent", author: "Tanvir Ahmed", expires_at: null, pinned: true,  created_at: hoursAgo(5) },
+      { id: "demo-bc-1", mess_id: MESS, message: "Gas supply is low — avoid heavy cooking tonight.", priority: "urgent", author: "Tanvir Ahmed", expires_at: null, pinned: true,  created_at: hoursAgo(5) },
       { id: "demo-bc-2", mess_id: MESS, message: "Biriyani on Friday night! Please mark your meal on/off by Thursday.", priority: "normal", author: "Rakib Hasan", expires_at: null, pinned: false, created_at: hoursAgo(26) },
     ];
     const mess_rules = [{
