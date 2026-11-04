@@ -102,12 +102,24 @@ async function dbDelete(table, id) {
    (and is refused once supabase/security-lockdown.sql hides the column).
    Optional columns are dropped if this database hasn't been migrated for them yet. */
 const MEMBER_COLS = ["id", "mess_id", "name", "username", "role", "room", "rent", "phone", "joined", "created_at"];
-let _memberOptCols = ["photo", "meal_default_day", "meal_default_night"];
+let _memberOptCols = ["photo", "meal_default_day", "meal_default_night", "left_at"];
+
+/* Former members: archived (left_at set) instead of deleted, so their records keep
+   a name and their receipts survive. Filled by dbGetMembers. */
+let formerMembers = [];
+
+/* Current members only. Also refreshes the id ↔ name directory (current AND former
+   members) that MemberKeys uses to store records by member id. */
 async function dbGetMembers() {
   for (;;) {
     const { data, error } = await getClient().from("members").select(MEMBER_COLS.concat(_memberOptCols).join(","))
       .eq("mess_id", messId()).order("created_at");
-    if (!error) return sanitize(data || []);
+    if (!error) {
+      const all = sanitize(data || []);
+      MemberKeys.setDirectory(messId(), all);
+      formerMembers = all.filter(m => m.left_at);
+      return all.filter(m => !m.left_at);
+    }
     const missing = _memberOptCols.find(c => (error.message || "").includes(c));
     if (!missing) throw error;
     _memberOptCols = _memberOptCols.filter(c => c !== missing);
@@ -150,13 +162,15 @@ async function dbSaveMember(row) {
   }
 }
 
-/* Meals, bazar, rent and utility rows store members by NAME, so a rename must
-   move every key to the new name or the member's history disappears.
+/* Records are stored by member id (js/core/member-keys.js), so a rename needs no
+   data changes. This only moves LEGACY name keys — records written before
+   supabase/member-id-keys.sql ran — so they keep matching the member.
+   It works on the raw client: it must see (and write) exactly what is stored.
    Returns how many rows changed. Called before the member row is saved; the
    caller moves everything back if that save fails. */
 async function dbRenameMemberData(oldName, newName) {
   if (!oldName || !newName || oldName === newName) return 0;
-  const c = getClient(), mid = messId();
+  const c = MemberKeys.raw(getClient()), mid = messId();
   const ren = (obj, keys) => {
     if (!obj || typeof obj !== "object") return [obj, false];
     const o = { ...obj }; let hit = false;
@@ -190,10 +204,21 @@ async function dbRenameMemberData(oldName, newName) {
   return changed;
 }
 
-async function dbDeleteMember(id) {
-  const { error } = await getClient().from("members").delete().eq("id", id).eq("mess_id", messId());
-  if (error) throw error;
+/* Members are never deleted: deleting would cascade away their receipts and meal
+   on/off history, and leave their id-keyed records with no name. Archiving keeps
+   everything and blocks sign-in (mm-auth refuses archived accounts). */
+async function _setMemberLeft(id, leftAt) {
+  if (!_memberOptCols.includes("left_at")) {
+    throw new Error("Archiving members needs a database update — run supabase/member-id-keys.sql");
+  }
+  const { error } = await getClient().from("members").update({ left_at: leftAt }).eq("id", id).eq("mess_id", messId());
+  if (error) {
+    if ((error.message || "").includes("left_at")) throw new Error("Archiving members needs a database update — run supabase/member-id-keys.sql");
+    throw error;
+  }
 }
+const dbArchiveMember = (id) => _setMemberLeft(id, today());
+const dbRestoreMember = (id) => _setMemberLeft(id, null);
 
 /* ── Announcements ── */
 async function dbSaveAnnouncement(row) {

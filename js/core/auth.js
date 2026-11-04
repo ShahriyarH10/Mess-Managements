@@ -120,6 +120,7 @@ async function doLogin() {
 
     if (memberRow) {
       const match = await comparePassword(pass, memberRow.password);
+      if (match && memberRow.left_at) { showLoginError("This account was removed from the mess. Ask the manager to restore it."); return; }
       if (match) {
         // Upgrade legacy SHA-256 hash to PBKDF2 transparently
         if (memberRow.password && !memberRow.password.startsWith("pbkdf2:")) {

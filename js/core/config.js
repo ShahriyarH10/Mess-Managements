@@ -21,20 +21,22 @@ async function useBackend(mode) {
   if (mode === "demo") {
     await loadScripts(SCRIPT_GROUPS.demo);
     if (!_demoDb) _demoDb = MMDemo.load() || MMDemo.buildSeed(); // refresh keeps your sandbox; new tab starts clean
-    sb = MMDemo.createClient(_demoDb);
+    sb = MemberKeys.wrap(MMDemo.createClient(_demoDb));
   } else {
     await loadScripts(SCRIPT_GROUPS.live);
     // The app manages its own session (mm_session); Supabase Auth isn't used, so neither
     // client may persist or refresh one — and they need separate storage keys.
     // one anon client for the page's lifetime (re-creating it warns "Multiple GoTrueClient instances")
-    sb = _anonClient = _anonClient || supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    sb = _anonClient = _anonClient || MemberKeys.wrap(supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "mm-anon" },
-    });
+    }));
   }
 }
 
 function resetDemoData() { _demoDb = null; if (window.MMDemo) MMDemo.clear(); }
 
+// Every client is wrapped by MemberKeys (js/core/member-keys.js): member records are
+// stored by member id and handed to the pages by name.
 // Returns the mess-scoped client. Live: authenticated with the signed session JWT
 // (cached per token — it used to be re-created on every query). Demo: the mock.
 function getClient() {
@@ -43,10 +45,10 @@ function getClient() {
   if (!token) return sb;
   if (_authedToken !== token) {
     _authedToken = token;
-    _authedClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    _authedClient = MemberKeys.wrap(supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "mm-authed" },
-    });
+    }));
   }
   return _authedClient;
 }

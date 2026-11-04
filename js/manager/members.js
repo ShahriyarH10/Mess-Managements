@@ -20,6 +20,7 @@ function renderMembers(el) {
     <div id="mem-pane-members">
       <div class="info-banner"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Members sign in with their username & password. 👑 = current manager.</div>
       <div class="card"><div class="card-title">Members (${members.length})</div><div class="tbl-wrap" id="mem-table"></div></div>
+      <div id="mem-former"></div>
     </div>
     <!-- Roles tab -->
     <div id="mem-pane-roles" style="display:none">
@@ -75,7 +76,48 @@ function switchMembersTab(tab) {
   if (addBtn) addBtn.style.display = tab === 'members' ? '' : 'none';
 }
 
+/* Archived members: can't sign in, hidden from every list, all records kept.
+   Restoring brings them back with their full history. */
+function renderFormerMembers() {
+  const wrap = document.getElementById("mem-former"); if (!wrap) return;
+  if (!formerMembers.length) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `<div class="card" style="margin-top:14px">
+    <div class="card-title">Former members (${formerMembers.length})</div>
+    <div style="font-size:12px;color:var(--text3);margin:-4px 0 10px">Archived members can't sign in. Their meals, bazar, payments and receipts are kept — restore someone who rejoins to get their full history back.</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Room</th><th>Left on</th><th></th></tr></thead>
+    <tbody>${formerMembers.map(m => `<tr>
+      <td><b>${m.name}</b></td>
+      <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
+      <td>${m.room || "—"}</td>
+      <td style="color:var(--text2)">${m.left_at || "—"}</td>
+      <td><button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="restoreMember(this.dataset.mid)">↩ Restore</button></td>
+    </tr>`).join("")}</tbody></table></div>
+  </div>`;
+}
+
+async function restoreMember(id) {
+  if (!requireManager("restoreMember")) return;
+  const m = formerMembers.find(x => x.id === id); if (!m) return;
+  const name = _decodeName(m.name);            // showConfirm escapes its text itself
+  showConfirm({
+    title: `Restore ${name}?`,
+    body: `${name} will be able to sign in again with their old username and password, and shows up in meals, bazar and settlements from now on. Their earlier records come back with them.`,
+    confirmLabel: "Restore member",
+    danger: false,
+    onConfirm: async () => {
+      try {
+        await dbRestoreMember(id);
+        await logAudit("update", "member", m.name, `Member "${m.name}" restored`);
+        members = await dbGetMembers(); buildInitialsMap(members);
+        toast(name + " restored", "success");
+        renderMembersTable(); renderRolesList(); _renderTransferList();
+      } catch (e) { toast("Error: " + e.message, "error"); }
+    },
+  });
+}
+
 function renderMembersTable() {
+  renderFormerMembers();
   const wrap = document.getElementById("mem-table"); if (!wrap) return;
   if (!members.length) { wrap.innerHTML = '<div class="empty">No members yet. Click + Add member.</div>'; return; }
   wrap.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th>Room</th><th>Phone</th><th></th></tr></thead>
@@ -262,6 +304,9 @@ async function addMember() {
   if (d.password.length < 6) { toast("Password must be at least 6 characters", "error"); return; }
   if (members.find(m => _sameName(_decodeName(m.name), d.name))) { toast(`There's already a member called "${d.name}" — add a surname or initial`, "error"); return; }
   if (members.find(m => _sameName(_decodeName(m.username), d.username))) { toast("Username taken", "error"); return; }
+  // Former members keep their name and username, so a rejoining member is restored, not re-added
+  const former = formerMembers.find(m => _sameName(_decodeName(m.name), d.name) || _sameName(_decodeName(m.username), d.username));
+  if (former) { toast(`"${_decodeName(former.name)}" (@${_decodeName(former.username)}) is a former member — restore them under Former members, or use a different name and username`, "error"); return; }
   try {
     d.password = await hashPassword(d.password);
     await dbSaveMember(d); await logAudit("create", "member", d.name, `Member "${d.name}" added`);
@@ -277,6 +322,8 @@ async function updateMember(id) {
   if (!d.name) { toast("Name required", "error"); return; }
   if (members.find(m => m.id !== id && _sameName(_decodeName(m.name), d.name))) { toast(`There's already a member called "${d.name}"`, "error"); return; }
   if (members.find(m => m.id !== id && _sameName(_decodeName(m.username), d.username))) { toast("Username taken", "error"); return; }
+  if (formerMembers.find(m => _sameName(_decodeName(m.name), d.name))) { toast(`A former member is called "${d.name}" — use a different name`, "error"); return; }
+  if (formerMembers.find(m => _sameName(_decodeName(m.username), d.username))) { toast("Username belongs to a former member", "error"); return; }
   if (d.password && d.password.length < 6) { toast("Password must be at least 6 characters", "error"); return; }
   const renamed = oldName !== d.name;
   try {
@@ -318,7 +365,7 @@ function removeMemberPhoto() {
   document.getElementById("mm-photo-rm")?.setAttribute("hidden", "");
 }
 
-/* ── Member leaving flow: final settlement before delete ── */
+/* ── Member leaving flow: final settlement, then archive (never delete) ── */
 async function openLeavingFlow(id) {
   if (!requireManager("openLeavingFlow")) return;
   const m = members.find(x => x.id === id); if (!m) return;
@@ -339,7 +386,7 @@ async function openLeavingFlow(id) {
 
   document.getElementById("modal-content").innerHTML = `
     <div class="modal-title">Remove ${escapeHtml(m.name)}</div>
-    <div class="modal-sub">Final settlement check before removal</div>
+    <div class="modal-sub">Final settlement check — they'll be archived, and all their records kept</div>
 
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Current settlement — ${MONTHS[month]} ${year}</div>
@@ -357,7 +404,7 @@ async function openLeavingFlow(id) {
 
     ${net !== 0 ? `
     <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--accent)">
-      ⚠️ This member has an outstanding balance. Settle it before removing, or proceed anyway.
+      ⚠️ This member has an outstanding balance. Settle it before removing, or proceed anyway — the balance stays on record if they're restored later.
     </div>` : `
     <div style="background:var(--green-bg);border:1px solid rgba(76,175,130,.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--green)">
       ✓ Balance is clear — safe to remove.
@@ -365,25 +412,27 @@ async function openLeavingFlow(id) {
 
     <div class="modal-footer">
       <button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button>
-      <button class="btn btn-danger" data-on-click="deleteMember('${m.id}')">Remove anyway</button>
+      <button class="btn btn-danger" data-on-click="archiveMember('${m.id}')">${net !== 0 ? "Remove anyway" : "Remove member"}</button>
     </div>`;
   openModal();
 }
 
-async function deleteMember(id) {
-  if (!requireManager("deleteMember")) return;
+async function archiveMember(id) {
+  if (!requireManager("archiveMember")) return;
   const m = members.find(x => x.id === id); if (!m) return;
+  if (m.role === "manager") { toast("Transfer the manager role before removing this member", "error"); return; }
   closeModal();
+  const name = _decodeName(m.name);            // showConfirm escapes its text itself
   showConfirm({
     title: 'Confirm removal',
-    body: `Permanently remove ${escapeHtml(m.name)}? Their historical meal and bazar data will remain but they will no longer be able to sign in.`,
+    body: `Remove ${name} from the mess? They won't be able to sign in and won't appear in meals, bazar or settlements any more. Nothing is deleted — their meals, bazar, payments and receipts are kept, and you can restore them under Former members.`,
     confirmLabel: 'Remove member',
     danger: true,
     onConfirm: async () => {
       try {
-        await dbDeleteMember(id);
-        await logAudit("delete", "member", m.name, `Member "${m.name}" removed`);
-        members = await dbGetMembers(); buildInitialsMap(members); toast(m.name + ' removed'); renderMembersTable();
+        await dbArchiveMember(id);
+        await logAudit("update", "member", m.name, `Member "${m.name}" removed (archived — records kept)`);
+        members = await dbGetMembers(); buildInitialsMap(members); toast(name + ' removed — records kept'); renderMembersTable(); renderRolesList(); _renderTransferList();
       } catch(e) { toast('Error: ' + e.message, 'error'); }
     }
   });

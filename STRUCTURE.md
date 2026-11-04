@@ -32,6 +32,7 @@ mess-manager/
     │   ├── router.js             ← hash router, guards, demo controls
     │   ├── boot.js               ← Router.start()
     │   ├── config.js             ← Supabase client, global state, constants (MONTHS, PALETTE)
+    │   ├── member-keys.js        ← stores member records by member id; pages keep using names
     │   ├── helpers.js            ← Utils (fmtTk, round2, today…), theme, session, modal, toast
     │   ├── db.js                 ← All Supabase query functions (meals, bazar, rent, util, members…)
     │   ├── auth.js               ← Login, create mess (via mm-auth), logout, bootApp

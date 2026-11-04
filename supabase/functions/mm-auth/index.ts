@@ -120,14 +120,21 @@ async function login(body: any) {
   // Usernames are unique per mess; try every match so two messes can't lock each other out.
   const { data: rows, error } = await db.from("members").select("*, messes(*)").ilike("username", username);
   if (error) return json({ error: "Sign-in is unavailable right now." }, 500);
+  let archived = false;
   for (const m of rows || []) {
     if (!(await verifyPassword(password, m.password))) continue;
+    // Removed members are archived (left_at set), never deleted — they can't sign in
+    if (m.left_at) { archived = true; continue; }
     if (!String(m.password).startsWith("pbkdf2:")) {
       await db.from("members").update({ password: await hashPassword(password) }).eq("id", m.id);
     }
     await recordAttempt(key, true);
     const { password: _drop, messes, ...member } = m;
     return json(await sessionFor(member, messes));
+  }
+  if (archived) {
+    await recordAttempt(key, true);   // right password: don't count it towards the lockout
+    return json({ error: "This account was removed from the mess. Ask the manager to restore it." }, 403);
   }
   await recordAttempt(key, false);
   return json({ error: "Invalid username or password." }, 401);

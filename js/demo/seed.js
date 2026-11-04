@@ -80,9 +80,10 @@
         const day   = r() < (p.dn[0] ? 0.86 : 0.35) ? 1 : 0;
         const night = r() < 0.93 ? 1 : 0;
         const guest = friday && r() < 0.18 ? 1 : 0;   // occasional guest meal on Friday
-        row[p.name + "_day"] = day + guest;
-        row[p.name + "_night"] = night;
-        row[p.name] = day + guest + night;
+        // stored by member id, like the live database (js/core/member-keys.js)
+        row[p.id + "_day"] = day + guest;
+        row[p.id + "_night"] = night;
+        row[p.id] = day + guest + night;
       });
       meals.push({ id: "demo-meal-" + date, mess_id: MESS, date, meals: row, created_at: new Date(d).toISOString() });
 
@@ -90,7 +91,7 @@
         const rb = rng("bazar-" + date);
         const buyer = people[(dayIdx >> 1) % people.length];
         const amt = Math.round((friday ? 1500 + rb() * 900 : 650 + rb() * 750) / 10) * 10;
-        const b = {}; people.forEach(p => { b[p.name] = p === buyer ? amt : 0; });
+        const b = {}; people.forEach(p => { b[p.id] = p === buyer ? amt : 0; });
         bazar.push({ id: "demo-bazar-" + date, mess_id: MESS, date, bazar: b, utility: {}, created_at: new Date(d).toISOString() });
       }
     }
@@ -106,7 +107,7 @@
       created_at: daysAgo(1),
       entries: people.map((p, i) => {
         const plan = rentPlan[mo.key](p, i);
-        return { name: p.name, rent: p.rent, paid: plan.paid === 1 ? p.rent : plan.paid, status: plan.status, notes: plan.status === "partial" ? "Rest by next week" : "" };
+        return { member_id: p.id, name: p.name, rent: p.rent, paid: plan.paid === 1 ? p.rent : plan.paid, status: plan.status, notes: plan.status === "partial" ? "Rest by next week" : "" };
       }),
     }));
 
@@ -127,7 +128,7 @@
       people.forEach((p, i) => {
         const f = utilPaidPlan[mo.key](i);
         const paid = Math.round(prepaidShare * f * 100) / 100;
-        payments[p.name] = { paid, meal_paid: 0, prev_due_paid: 0, status: paid <= 0 ? "unpaid" : paid >= prepaidShare ? "paid" : "partial", notes: "" };
+        payments[p.id] = { paid, meal_paid: 0, prev_due_paid: 0, status: paid <= 0 ? "unpaid" : paid >= prepaidShare ? "paid" : "partial", notes: "" };
       });
       if (mo.key === mA.key) bills.locked = true; // oldest month is closed
       if (mo.key === mB.key) {
