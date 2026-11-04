@@ -125,8 +125,8 @@ async function saveFundEntry() {
   if (!(await ensureMonthOpen(key))) return;
 
   try {
-    const { data: cur } = await getClient().from("utility_payments").select("*")
-      .eq("mess_id", messId()).eq("month_key", key).maybeSingle();
+    const cur = await mustRead(getClient().from("utility_payments").select("*")
+      .eq("mess_id", messId()).eq("month_key", key).maybeSingle());
     const bills = { ...(cur?.bills || {}) };
     if (!bills.fund_entries) bills.fund_entries = [];
     bills.fund_entries.push({
@@ -156,8 +156,8 @@ async function deleteFundEntry(monthKey, entryId) {
     onConfirm: async () => {
       try {
         const [y, m] = monthKey.split("-").map(Number);
-        const { data: cur } = await getClient().from("utility_payments").select("*")
-          .eq("mess_id", messId()).eq("month_key", monthKey).maybeSingle();
+        const cur = await mustRead(getClient().from("utility_payments").select("*")
+          .eq("mess_id", messId()).eq("month_key", monthKey).maybeSingle());
         if (!cur) return;
         const bills = { ...(cur.bills || {}) };
         bills.fund_entries = (bills.fund_entries || []).filter(e => e.id !== entryId);

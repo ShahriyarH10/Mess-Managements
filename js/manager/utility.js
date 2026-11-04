@@ -38,7 +38,7 @@ async function loadRentMonth() {
   const {data:rec}=await getClient().from("rent").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle();
   const wrap=document.getElementById("rent-rows"); if(!wrap) return;
   wrap.innerHTML=`<div class="ut-row rent-row ut-row-head"><span>Member</span><span>Rent</span><span>Paid</span><span>Status</span><span>Note</span></div>`+members.map((m,i)=>{
-    const e=rec?.entries?.find(x=>x.name===m.name)||{};
+    const e=rentEntryFor(rec?.entries, m)||{};
     const due=Number(e.rent||m.rent||0);
     const paid=Number(e.paid||0);
     const status=e.status||"unpaid";
@@ -126,7 +126,8 @@ async function saveRent() {
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);
   if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
-  const entries=members.map(m=>({
+  const listed=members.map(m=>({
+    member_id: m.id,
     name:   m.name,
     rent:   parseFloat(document.getElementById("rd-"+m.id)?.value||0),
     paid:   parseFloat(document.getElementById("rp-"+m.id)?.value||0),
@@ -135,12 +136,15 @@ async function saveRent() {
   }));
   try{
     // what was paid before this save, so each increase becomes a receipt
-    const { data: before } = await getClient().from("rent").select("entries").eq("mess_id", messId()).eq("month_key", key).maybeSingle();
-    const prevPaid = name => Number((before?.entries || []).find(e => e.name === name)?.paid || 0);
+    const before = await mustRead(getClient().from("rent").select("entries").eq("mess_id", messId()).eq("month_key", key).maybeSingle());
+    const prevPaid = m => Number(rentEntryFor(before?.entries, m)?.paid || 0);
+    // the form lists current members only: keep everyone else's entries (former members) as they are
+    const others = (before?.entries || []).filter(e => !members.some(m => rentEntryFor([e], m)));
+    const entries = [...listed, ...others];
     await dbUpsertRent(month,year,key,entries);
     toast("Rent saved","success");
     for (const m of members) {
-      const added = round2(Number(entries.find(e => e.name === m.name)?.paid || 0) - prevPaid(m.name));
+      const added = round2(Number(rentEntryFor(listed, m)?.paid || 0) - prevPaid(m));
       if (added > 0.01) await recordCreditedReceipt({ member: m, month, year, amount: added, source: "manager", split: { allocRent: added } });
     }
     loadRentHistory();

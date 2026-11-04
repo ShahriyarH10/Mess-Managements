@@ -431,6 +431,44 @@ function calcSettlementTotals(allMeals, allBazar, sourceKey) {
   return { totalMeals: round2(totalMeals), totalBazar: round2(totalBazar), mealRate, memberMeals, memberBazar };
 }
 
+/* A member's entry in a rent record. Matched by member_id first (ids are never
+   HTML-escaped); by name only for entries written before member ids existed,
+   comparing the plain text, because dbGetAll()/dbGetMonth() escape entry names
+   once more than members[] names (so "O'Neil" would never match by ===). */
+const _plainName = (s) => { let p = String(s ?? ""), q; while ((q = MemberKeys.unescape(p)) !== p) p = q; return p.trim(); };
+function rentEntryFor(entries, member) {
+  if (!Array.isArray(entries) || !member) return undefined;
+  const byId = member.id && entries.find(e => e && e.member_id && String(e.member_id) === String(member.id));
+  if (byId) return byId;
+  const plain = _plainName(member.name);
+  return entries.find(e => e && !e.member_id && _plainName(e.name) === plain);
+}
+
+/* Entries of a stored meals / bazar map that belong to NO current member — former
+   members, or members deleted before archiving existed. A whole-day save from the
+   manager lists current members only, so it must carry these over: dropping them
+   would erase those meals / bazar and change everyone's meal rate. (A current
+   member's own stale spellings, e.g. "rakib " next to "Rakib", are still replaced.) */
+function otherMembersEntries(stored, memberList) {
+  const norm = (s) => _plainName(s).replace(/\s+/g, " ").toLowerCase();
+  const current = new Set((memberList || []).map(m => norm(m.name)));
+  const out = {};
+  Object.entries(stored || {}).forEach(([k, v]) => {
+    if (!current.has(norm(k)) && !current.has(norm(k.replace(/_(day|night)$/, "")))) out[k] = v;
+  });
+  return out;
+}
+
+/* Copy of a month's rent entries with one entry for every current member.
+   Entries of anyone else (former members, older names) are KEPT, not dropped. */
+function withRentEntries(existing, memberList) {
+  const entries = (existing || []).map(e => ({ ...e }));
+  (memberList || []).forEach(m => {
+    if (!rentEntryFor(entries, m)) entries.push({ member_id: m.id, name: m.name, rent: 0, paid: 0, status: "unpaid", notes: "" });
+  });
+  return entries;
+}
+
 function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey) {
   const settlementMonth = monthIndexFromKey(settlementKey);
   const settlementYear  = yearFromKey(settlementKey);
@@ -440,7 +478,7 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
   const memberMeals = round2(totals.memberMeals[member.name] || 0);
   const memberBazar = round2(totals.memberBazar[member.name] || 0);
   const mealCost    = round2(memberMeals * totals.mealRate);
-  const rentEntry   = currentRentRec?.entries?.find(e => e.name === member.name) || {};
+  const rentEntry   = rentEntryFor(currentRentRec?.entries, member) || {};
   const roomRent    = Number(rentEntry.rent || 0);
   const roomRentPaid= Number(rentEntry.paid || 0);
   const memberCount = members.length || 1;

@@ -768,7 +768,7 @@ async function loadMyProfile(member) {
   const prevDueForOwe = calcPrevDueForMember(member, allM, allB, allR, allU || [], curKey);
   // mealNet: positive = member is owed back (bazar+paid > mealCost), negative = member still owes
   const mealNet  = round2(settlementCalc.memberBazar + settlementCalc.mealPaid - settlementCalc.mealCost);
-  const myRentEntry = profRentRes?.entries?.find(e => e.name === member.name) || {};
+  const myRentEntry = rentEntryFor(profRentRes?.entries, member) || {};
   const myUtilPay   = (curUtilRec?.payments || {})[member.name] || {};
   const rentNet  = round2(Number(myRentEntry.paid || 0) - Number(myRentEntry.rent || 0));
   const utilNet  = getUtilityBalance(member, curUtilRec, prevUtilRec);

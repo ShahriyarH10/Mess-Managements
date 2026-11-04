@@ -198,8 +198,8 @@ async function fillMyMealFromDate() {
   if (!member || !date) return;
 
   const [{ data: existing }, { data: att }] = await Promise.all([
-    sb.from("meals").select("*").eq("mess_id", messId()).eq("date", date).maybeSingle(),
-    sb.from("meal_attendance").select("day_meal,night_meal")
+    getClient().from("meals").select("*").eq("mess_id", messId()).eq("date", date).maybeSingle(),
+    getClient().from("meal_attendance").select("day_meal,night_meal")
       .eq("mess_id", messId()).eq("member_id", member.id).eq("date", date).maybeSingle(),
   ]);
 
@@ -248,12 +248,12 @@ async function saveMyMealEntry() {
   const member = await getMe();
 
   try {
-    const { data: existing } = await sb
+    const existing = await mustRead(getClient()
       .from("meals")
       .select("*")
       .eq("mess_id", messId())
       .eq("date", date)
-      .maybeSingle();
+      .maybeSingle());
 
     const merged = {
       ...(existing?.meals || {}),
@@ -408,7 +408,7 @@ async function fillMyBazarFromDate() {
 
   if (!member || !date) return;
 
-  const { data: existing } = await sb
+  const { data: existing } = await getClient()
     .from("bazar")
     .select("*")
     .eq("mess_id", messId())
@@ -441,12 +441,12 @@ async function saveMyBazarEntry() {
   const member = await getMe();
 
   try {
-    const { data: existing } = await sb
+    const existing = await mustRead(getClient()
       .from("bazar")
       .select("*")
       .eq("mess_id", messId())
       .eq("date", date)
-      .maybeSingle();
+      .maybeSingle());
 
     const merged = {
       ...(existing?.bazar || {}),
@@ -483,7 +483,7 @@ async function renderMyPayments(el) {
 
   const [allRent, { data: allUtil }] = await Promise.all([
     dbGetAll("rent"),
-    sb.from("utility_payments").select("*").eq("mess_id", messId()).order("month_key", { ascending: false }),
+    getClient().from("utility_payments").select("*").eq("mess_id", messId()).order("month_key", { ascending: false }),
   ]);
 
   const n = new Date(), month = n.getMonth(), year = n.getFullYear(), key = monthKey(year, month);
@@ -492,7 +492,7 @@ async function renderMyPayments(el) {
 
   // This month: rent due/paid and my utility share/paid (same share rule as saving)
   const rentRec   = (allRent || []).find(r => r.month_key === key);
-  const rentEntry = (rentRec?.entries || []).find(e => e.name === member.name) || {};
+  const rentEntry = rentEntryFor(rentRec?.entries, member) || {};
   const rentDue   = Number(rentEntry.rent || 0), rentPaid = Number(rentEntry.paid || 0);
   const rentLeft  = round2(Math.max(0, rentDue - rentPaid));
   const utilTotal = utilTotalFromBills(utilBy[key]?.bills || {}, UTIL_PREPAID_KEYS) + utilTotalFromBills(utilBy[prev.key]?.bills || {}, UTIL_POSTPAID_KEYS);
@@ -504,7 +504,7 @@ async function renderMyPayments(el) {
   // One history: rent + utility payments, newest month first
   const hist = [];
   (allRent || []).forEach(r => {
-    const e = (r.entries || []).find(x => x.name === member.name);
+    const e = rentEntryFor(r.entries, member);
     if (e && Number(e.paid || 0) > 0) hist.push({ key: r.month_key, type: "Rent", icon: "🏠", paid: Number(e.paid), of: Number(e.rent || 0), status: e.status, note: e.notes });
   });
   (allUtil || []).forEach(r => {
@@ -637,27 +637,19 @@ async function saveMyPaymentEntry() {
 
   try {
     if (billType === "rent") {
-      const { data: rentRec } = await sb
+      const rentRec = await mustRead(getClient()
         .from("rent")
         .select("*")
         .eq("mess_id", messId())
         .eq("month_key", key)
-        .maybeSingle();
+        .maybeSingle());
 
-      let entries = rentRec?.entries
-        ? rentRec.entries.map(e => ({ ...e }))
-        : members.map(m => ({
-            name: m.name,
-            rent: 0,
-            paid: 0,
-            status: "unpaid",
-            notes: "",
-          }));
-
+      let entries = withRentEntries(rentRec?.entries, rentRec?.entries ? [] : members);
+      const mine = rentEntryFor(entries, member);
       let found = false;
 
       entries = entries.map(e => {
-        if (e.name !== member.name) return e;
+        if (e !== mine) return e;
 
         found = true;
 
@@ -679,6 +671,7 @@ async function saveMyPaymentEntry() {
 
       if (!found) {
         entries.push({
+          member_id: member.id,
           name: member.name,
           rent: 0,
           paid: amount,
@@ -706,24 +699,21 @@ async function saveMyPaymentEntry() {
     else {
       const prev = memberPrevMonthInfo(month, year);
 
-      const [curRes, prevRes] = await Promise.all([
-        sb
+      const [curUtilRec, prevUtilRec] = await Promise.all([
+        mustRead(getClient()
           .from("utility_payments")
           .select("*")
           .eq("mess_id", messId())
           .eq("month_key", key)
-          .maybeSingle(),
+          .maybeSingle()),
 
-        sb
+        mustRead(getClient()
           .from("utility_payments")
           .select("*")
           .eq("mess_id", messId())
           .eq("month_key", prev.key)
-          .maybeSingle(),
+          .maybeSingle()),
       ]);
-
-      const curUtilRec = curRes.data;
-      const prevUtilRec = prevRes.data;
 
       const currentPrepaid = utilTotalFromBills(
         curUtilRec?.bills || {},
@@ -751,6 +741,7 @@ async function saveMyPaymentEntry() {
       const updatedPayments = {
         ...existingPayments,
         [member.name]: {
+          ...oldPayment,            // keep meal_paid / prev_due_paid / credit_paid
           paid: newPaid,
           status: myShare > 0 && newPaid >= myShare ? "paid" : "partial",
           notes: note || `Paid ${fmtTk(amount)} for ${billTypeLabel[billType] || billType}`,

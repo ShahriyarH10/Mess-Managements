@@ -186,9 +186,12 @@ async function saveMeals() {
   const date=document.getElementById("meal-date")?.value; if(!date){ toast("Select a date"); return; }
   const key = date.slice(0,7);
   if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
-  const meals={};
-  members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
-  try { await dbUpsertMeals(date,meals); await logAudit("update","meal",date,`Meals saved for ${date}`); toast("Meals saved","success"); refreshMealLists(); } catch(e){ toast("Save failed: "+e.message,"error"); }
+  try {
+    // start from what's stored so former members' meals for this day are kept
+    const stored = await mustRead(getClient().from("meals").select("meals").eq("mess_id",messId()).eq("date",date).maybeSingle());
+    const meals = otherMembersEntries(stored?.meals, members);
+    members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
+    await dbUpsertMeals(date,meals); await logAudit("update","meal",date,`Meals saved for ${date}`); toast("Meals saved","success"); refreshMealLists(); } catch(e){ toast("Save failed: "+e.message,"error"); }
 }
 /* One fetch for both lists below (and the month pop-ups). */
 async function refreshMealLists() {
@@ -259,8 +262,12 @@ async function saveBazar() {
   const date=document.getElementById("bazar-date")?.value; if(!date){ toast("Select a date"); return; }
   const key = date.slice(0,7);
   if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
-  const bazar={}; members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
-  try{ await dbUpsertBazar(date,bazar); await logAudit("update","bazar",date,`Bazar saved for ${date}`); toast("Bazar saved","success"); refreshBazarLists(); }catch(e){ toast("Error: "+e.message,"error"); }
+  try{
+    // start from what's stored so a former member's bazar spend for this day is kept
+    const stored = await mustRead(getClient().from("bazar").select("bazar").eq("mess_id",messId()).eq("date",date).maybeSingle());
+    const bazar = otherMembersEntries(stored?.bazar, members);
+    members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
+    await dbUpsertBazar(date,bazar); await logAudit("update","bazar",date,`Bazar saved for ${date}`); toast("Bazar saved","success"); refreshBazarLists(); }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function refreshBazarLists() {
   try { const all = await historyRows("bazar", true); loadBazarRecent(all); loadBazarMonths(all); }
