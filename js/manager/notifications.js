@@ -22,7 +22,7 @@ async function renderNotifications(el) {
       <div class="page-sub" id="nt-sub"></div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" data-on-click="markAllNotificationsSeen()">✓ Mark all seen</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="markAllNotificationsSeen()">${ic("check")} Mark all seen</button>
     </div>
   </div>
   <div class="content dk">
@@ -41,7 +41,7 @@ function drawNotifications() {
   if (sub) sub.textContent = fresh.length ? `${fresh.length} new update${fresh.length === 1 ? "" : "s"} from members` : "You're all caught up";
   const count = f => f === "all" ? all.length : f === "new" ? fresh.length : all.filter(n => NOTIF_GROUPS[f].includes(n.type)).length;
   const seg = document.getElementById("nt-seg");
-  if (seg) seg.innerHTML = [["all", "All"], ["new", "New"], ["meals", "🍽️ Meals"], ["bazar", "🛒 Bazar"], ["payments", "💵 Payments"]]
+  if (seg) seg.innerHTML = [["all", "All"], ["new", "New"], ["meals", ic("meal") + " Meals"], ["bazar", ic("cart") + " Bazar"], ["payments", ic("cash") + " Payments"]]
     .map(([f, t]) => `<button class="an-seg-btn${_notifFilter === f ? " on" : ""}" data-on-click="setNotifFilter('${f}')">${t} <span class="nt-c">${count(f)}</span></button>`).join("");
 
   const list = document.getElementById("nt-list");
@@ -50,7 +50,7 @@ function drawNotifications() {
   const matching = all.filter(n => _notifFilter === "all" ? true : _notifFilter === "new" ? _isNewNotif(n) : NOTIF_GROUPS[_notifFilter].includes(n.type));
   const shown = matching.slice(0, _notifLimit);
   if (!shown.length) {
-    list.innerHTML = `<div class="empty" style="padding:30px"><div>🔔</div><div>${all.length ? "Nothing here with this filter." : "No member updates yet — they appear when members change their own meals, bazar or payments."}</div></div>`;
+    list.innerHTML = `<div class="empty" style="padding:30px"><div>${ic("bell", "ic-lg ic-muted")}</div><div>${all.length ? "Nothing here with this filter." : "No member updates yet — they appear when members change their own meals, bazar or payments."}</div></div>`;
     return;
   }
   const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -67,24 +67,24 @@ function drawNotifications() {
 
 function notifCard(n) {
   const typeMap = {
-    meal_update:    { icon: "🍽️", label: "updated meal" },
-    bazar_update:   { icon: "🛒", label: "updated bazar" },
-    utility_update: { icon: "⚡", label: "updated utility payment" },
-    rent_update:    { icon: "🏠", label: "updated room rent payment" },
+    meal_update:    { icon: ic("meal"), label: "updated meal" },
+    bazar_update:   { icon: ic("cart"), label: "updated bazar" },
+    utility_update: { icon: ic("zap"), label: "updated utility payment" },
+    rent_update:    { icon: ic("home"), label: "updated room rent payment" },
 
     // Give Payment flow (member request → manager confirm / reject)
-    payment_request:   { icon: "💵", label: "wants to give a payment — confirm in Collect" },
-    payment_confirmed: { icon: "✅", label: "confirmed a member payment" },
-    payment_rejected:  { icon: "✖️", label: "rejected a member payment" },
+    payment_request:   { icon: ic("cash"), label: "wants to give a payment — confirm in Collect" },
+    payment_confirmed: { icon: ic("check"), label: "confirmed a member payment" },
+    payment_rejected:  { icon: ic("x"), label: "rejected a member payment" },
 
     // old rows support
-    meal_request:   { icon: "🍽️", label: "meal entry" },
-    bazar_request:  { icon: "🛒", label: "bazar entry" },
-    bill_payment:   { icon: "💡", label: "utility / room rent entry" },
+    meal_request:   { icon: ic("meal"), label: "meal entry" },
+    bazar_request:  { icon: ic("cart"), label: "bazar entry" },
+    bill_payment:   { icon: ic("lightbulb"), label: "utility / room rent entry" },
   };
 
   const { icon, label } = typeMap[n.type] || {
-    icon: "📋",
+    icon: ic("clipboard"),
     label: n.type,
   };
 
@@ -95,12 +95,12 @@ function notifCard(n) {
   const data = n.data || {};
 
   const billTypeLabel = {
-    elec: "⚡ Electricity",
-    wifi: "📶 WiFi",
-    gas: "🔥 Gas",
-    khala: "👩 Khala",
-    other: "📦 Other",
-    rent: "🏠 Rent",
+    elec: ic("zap") + " Electricity",
+    wifi: ic("wifi") + " WiFi",
+    gas: ic("flame") + " Gas",
+    khala: ic("cook") + " Khala",
+    other: ic("box") + " Other",
+    rent: ic("home") + " Rent",
   };
 
   let dataHtml = "";
@@ -129,7 +129,7 @@ function notifCard(n) {
   else if (n.type === "utility_update") {
     dataHtml = `
       <span class="nt-chip">
-        ${billTypeLabel[data.billType] || data.billLabel || "Utility"}
+        ${billTypeLabel[data.billType] || escapeHtml(stripEmoji(data.billLabel)) || "Utility"}
       </span>
 
       <span class="nt-chip nt-money">
@@ -144,7 +144,7 @@ function notifCard(n) {
   else if (n.type === "rent_update") {
     dataHtml = `
       <span class="nt-chip">
-        🏠 Room Rent
+        ${ic("home")} Room Rent
       </span>
 
       <span class="nt-chip nt-money">
@@ -159,7 +159,7 @@ function notifCard(n) {
   else if (n.type === "payment_request" || n.type === "payment_confirmed" || n.type === "payment_rejected") {
     const tag = n.type === "payment_request" ? "Pending" : n.type === "payment_confirmed" ? "Confirmed" : "Rejected";
     dataHtml = `
-      <span class="nt-chip">💵 ${tag}</span>
+      <span class="nt-chip">${ic("cash")} ${tag}</span>
 
       <span class="nt-chip nt-money">
         ${fmtTk(data.amount || 0)}
@@ -198,7 +198,7 @@ function notifCard(n) {
     <div class="nt-side">
       <span class="nt-time">${time}</span>
       ${n.type === "payment_request" ? `<button class="btn btn-primary btn-sm" data-on-click="navigate('collect')">Review</button>` : ""}
-      ${isNew ? `<button class="btn btn-ghost btn-sm nt-seen" data-on-click="markNotificationSeen('${n.id}')" title="Mark as seen">✓ Seen</button>` : ""}
+      ${isNew ? `<button class="btn btn-ghost btn-sm nt-seen" data-on-click="markNotificationSeen('${n.id}')" title="Mark as seen">${ic("check")} Seen</button>` : ""}
     </div>
   </div>`;
 }

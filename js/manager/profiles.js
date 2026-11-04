@@ -244,7 +244,7 @@ function buildWhatIOweHTML(
   const totalUtilDue     = round2(prepaidShare + khalaShare + otherShare);
   const utilFullyPaid    = utilityStatus === "paid";
   const utilPartiallyPaid= utilityStatus === "partial";
-  const utilStatusLabel  = utilFullyPaid ? "✅ Paid" : utilPartiallyPaid ? "⚠️ Partial" : "⏳ Not paid yet";
+  const utilStatusLabel  = utilFullyPaid ? "" + ic("checkCircle", "ic-green") + " Paid" : utilPartiallyPaid ? "" + ic("alert", "ic-amber") + " Partial" : "" + ic("hourglass") + " Not paid yet";
   const utilStatusColor  = utilFullyPaid ? "var(--green)" : utilPartiallyPaid ? "var(--amber)" : "var(--text)";
 
   const totalBeforeCredit = round2(mealCost + khalaShare + otherShare + myRentDue + prepaidShare);
@@ -258,12 +258,12 @@ function buildWhatIOweHTML(
       <div class="card-title">What I Owe — ${curLabel}</div>
 
       <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
-        🔴 Postpaid — from ${prevLabel}
+        ${ic("dot", "ic-red")} Postpaid — from ${prevLabel}
       </div>
 
       <div class="my-stat-row">
         <span class="my-stat-key">
-          🍽️ Meal cost
+          ${ic("meal")} Meal cost
           <span style="font-size:10px;color:var(--text3);display:block">
             ${round2(memberMeals)} meals × ${fmtTk(mealRate)}
           </span>
@@ -276,27 +276,27 @@ function buildWhatIOweHTML(
 
       <div class="my-stat-row">
         <span class="my-stat-key">
-          👩 Khala bill
+          ${ic("cook")} Khala bill
           <span style="font-size:10px;color:var(--text3);display:block">
             ${fmtTk(Number(khalaTotal))} ÷ ${members.length} members
           </span>
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
         <span class="my-stat-val" style="color:${utilStatusColor}">
-          ${fmtTk(khalaShare)} ${utilFullyPaid ? "✓" : ""}
+          ${fmtTk(khalaShare)} ${utilFullyPaid ? "" + ic("check") + "" : ""}
         </span>
       </div>
 
       <div class="my-stat-row">
         <span class="my-stat-key">
-          📦 Other cost
+          ${ic("box")} Other cost
           <span style="font-size:10px;color:var(--text3);display:block">
             ${fmtTk(Number(otherTotal))} ÷ ${members.length} members
           </span>
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
         <span class="my-stat-val" style="color:${utilStatusColor}">
-          ${fmtTk(otherShare)} ${utilFullyPaid ? "✓" : ""}
+          ${fmtTk(otherShare)} ${utilFullyPaid ? "" + ic("check") + "" : ""}
         </span>
       </div>
 
@@ -306,24 +306,24 @@ function buildWhatIOweHTML(
       </div>
 
       <div style="font-size:11px;color:var(--blue);font-weight:600;margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:10px">
-        🔵 Prepaid — for ${curLabel}
+        ${ic("dot", "ic-blue")} Prepaid — for ${curLabel}
       </div>
 
       <div class="my-stat-row">
         <span class="my-stat-key">
-          🏠 Rent
+          ${ic("home")} Rent
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${rentStatus === "paid" ? "✅ Paid" : rentStatus === "partial" ? "⚠️ Partial" : "⏳ Not paid yet"}
+            ${rentStatus === "paid" ? "" + ic("checkCircle", "ic-green") + " Paid" : rentStatus === "partial" ? "" + ic("alert", "ic-amber") + " Partial" : "" + ic("hourglass") + " Not paid yet"}
           </span>
         </span>
         <span class="my-stat-val" style="color:${rentStatus === "paid" ? "var(--green)" : "var(--text)"}">
-          ${fmtTk(myRentDue)} ${rentStatus === "paid" ? "✓" : ""}
+          ${fmtTk(myRentDue)} ${rentStatus === "paid" ? "" + ic("check") + "" : ""}
         </span>
       </div>
 
       <div class="my-stat-row">
         <span class="my-stat-key">
-          ⚡ Utility share (Elec+Gas+WiFi)
+          ${ic("zap")} Utility share (Elec+Gas+WiFi)
           <span style="font-size:10px;color:var(--text3);display:block">
             ${fmtTk(prepaidTotal)} ÷ ${members.length} members
           </span>
@@ -333,7 +333,7 @@ function buildWhatIOweHTML(
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
         <span class="my-stat-val" style="color:${utilStatusColor}">
-          ${fmtTk(prepaidShare)} ${utilFullyPaid ? "✓" : ""}
+          ${fmtTk(prepaidShare)} ${utilFullyPaid ? "" + ic("check") + "" : ""}
         </span>
       </div>
 
@@ -346,7 +346,7 @@ function buildWhatIOweHTML(
 
         ${myUtilActualPaid > 0 || utilFullyPaid ? `
         <div style="background:rgba(39,174,96,.07);border:1px solid rgba(39,174,96,.25);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px">
-          <div style="font-weight:700;color:var(--green);margin-bottom:4px">💳 Utility payment record</div>
+          <div style="font-weight:700;color:var(--green);margin-bottom:4px">${ic("card")} Utility payment record</div>
           <div style="display:flex;justify-content:space-between;gap:8px">
             <span style="color:var(--text2);flex:1;min-width:0">Total utility due (Elec+Gas+WiFi+Khala+Other)</span>
             <span style="font-weight:600;flex-shrink:0;white-space:nowrap">${fmtTk(totalUtilDue)}</span>
@@ -412,7 +412,7 @@ function buildWhatIOweHTML(
         ${messCredit > 0
           ? `<div class="my-stat-row" style="background:rgba(52,152,219,.07);border:1px solid rgba(52,152,219,.25);border-radius:6px;padding:8px 10px;margin-top:4px">
               <span class="my-stat-key" style="color:var(--blue)">
-                ↩ Carry-forward credit
+                ${ic("undo")} Carry-forward credit
                 <span style="font-size:10px;color:var(--text3);display:block">Applied from last month's overpayment or Mess Owes balance</span>
                 ${rawMessCredit > 0   ? `<span style="font-size:10px;color:var(--text3);display:block">Overpayment credit: ${fmtTk(rawMessCredit)}</span>` : ""}
                 ${rawChangeCredit > 0 ? `<span style="font-size:10px;color:var(--text3);display:block">Change/Mess Owes credit: ${fmtTk(rawChangeCredit)}</span>` : ""}
@@ -420,14 +420,14 @@ function buildWhatIOweHTML(
               <span class="my-stat-val" style="color:var(--blue);font-weight:800">− ${fmtTk(messCredit)}</span>
             </div>`
           : `<div style="font-size:11px;color:var(--text3);padding:6px 0;margin-top:2px">
-              ↩ No carry-forward credit this month
+              ${ic("undo")} No carry-forward credit this month
             </div>`
         }
 
         ${prevDue > 0
           ? `<div class="my-stat-row" style="background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:6px;padding:8px 10px;margin-top:4px">
               <span class="my-stat-key" style="color:var(--red)">
-                ⚠️ Previous due
+                ${ic("alert", "ic-amber")} Previous due
                 <span style="font-size:10px;color:var(--text3);display:block">Unpaid balance carried forward from before ${prevLabel}</span>
               </span>
               <span class="my-stat-val" style="color:var(--red);font-weight:800">+ ${fmtTk(prevDue)}</span>
@@ -438,7 +438,7 @@ function buildWhatIOweHTML(
         <div class="my-stat-row" style="font-size:15px;border-top:1px solid var(--border);margin-top:4px;background:var(--accent-bg);border-radius:6px;padding:10px;margin-top:8px;border-bottom:none">
           <span style="font-weight:700;flex:1">Net payable</span>
           <span style="font-weight:800;flex-shrink:0;white-space:nowrap;color:${netWithPrevDue > 0 ? "var(--red)" : netWithPrevDue < 0 ? "var(--green)" : "var(--text)"}">
-            ${netWithPrevDue > 0 ? "Pay " + fmtTk(netWithPrevDue) : netWithPrevDue < 0 ? "Get " + fmtTk(Math.abs(netWithPrevDue)) : "✓ Settled"}
+            ${netWithPrevDue > 0 ? "Pay " + fmtTk(netWithPrevDue) : netWithPrevDue < 0 ? "Get " + fmtTk(Math.abs(netWithPrevDue)) : "" + ic("check") + " Settled"}
           </span>
         </div>
 
@@ -497,10 +497,10 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
   const tile = (icon, label, value, sub, color) => `<div class="pf-tile"><div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
     <div class="stat-value pf-val" ${color ? `style="color:${color}"` : ""}>${value}</div><div class="dk-sub">${sub}</div></div>`;
   if (sum) sum.innerHTML = `<div class="pf-tiles">
-    ${tile("📌", "Outstanding", fmtTk(outstanding), `${owing.length} of ${rows.length} members owe · ${monthLabelFromKey(settlementKey)}`, outstanding > 0 ? "var(--red)" : "var(--green)")}
-    ${tile("⏪", "From earlier months", fmtTk(carried), carried > 0 ? "unpaid dues carried forward" : "nothing carried forward", carried > 0 ? "var(--red)" : null)}
-    ${tile("✅", "Settled", rows.length - owing.length - owed.length, "members with nothing to pay", "var(--green)")}
-    ${tile("💚", "Mess owes", owed.length, owed.length ? fmtTk(round2(Math.abs(owed.reduce((t, r) => t + r.p.netWithPrevDue, 0)))) + " to return" : "nobody to pay back", owed.length ? "var(--green)" : null)}
+    ${tile("" + ic("pin") + "", "Outstanding", fmtTk(outstanding), `${owing.length} of ${rows.length} members owe · ${monthLabelFromKey(settlementKey)}`, outstanding > 0 ? "var(--red)" : "var(--green)")}
+    ${tile("" + ic("rewind") + "", "From earlier months", fmtTk(carried), carried > 0 ? "unpaid dues carried forward" : "nothing carried forward", carried > 0 ? "var(--red)" : null)}
+    ${tile("" + ic("checkCircle", "ic-green") + "", "Settled", rows.length - owing.length - owed.length, "members with nothing to pay", "var(--green)")}
+    ${tile("" + ic("heart", "ic-green") + "", "Mess owes", owed.length, owed.length ? fmtTk(round2(Math.abs(owed.reduce((t, r) => t + r.p.netWithPrevDue, 0)))) + " to return" : "nobody to pay back", owed.length ? "var(--green)" : null)}
   </div>`;
   const maxMeals = Math.max(1, ...rows.map(r => r.s.totalMeals));
   const periodLabel = isSinglePeriod ? monthLabelFromKey(settlementKey) : (period === "all" ? "All time" : "Last " + period + " months");
@@ -510,17 +510,17 @@ function buildProfileCards(allM,allB,allR,allU,curUtilRec,prevUtilRec) {
     const pays = net > 0.01, gets = net < -0.01;
     const chip = (label, status) => {
       const st2 = status || "unpaid";
-      return `<span class="pc-chip ${st2 === "paid" ? "ok" : st2 === "partial" ? "mid" : "bad"}">${label} ${st2 === "paid" ? "✓" : st2 === "partial" ? "partial" : "due"}</span>`;
+      return `<span class="pc-chip ${st2 === "paid" ? "ok" : st2 === "partial" ? "mid" : "bad"}">${label} ${st2 === "paid" ? "" + ic("check") + "" : st2 === "partial" ? "partial" : "due"}</span>`;
     };
     return `<button class="pc-card ${pays ? "pc-pay" : gets ? "pc-get" : "pc-ok"}" data-on-click="selectProfile('${m.id}')">
       <div class="pc-head">
         <span class="avatar pc-av" style="background:${col.bg};color:${col.fg}">${avFace(m.id, m.name)}</span>
-        <div class="pc-who"><div class="pc-name">${m.name}</div><div class="pc-meta">${m.room ? "Room " + m.room + " · " : ""}${m.role === "manager" ? "👑 Manager" : m.role === "sub_manager" ? "⚡ Sub-manager" : "Member"}</div></div>
+        <div class="pc-who"><div class="pc-name">${m.name}</div><div class="pc-meta">${m.room ? "Room " + m.room + " · " : ""}${m.role === "manager" ? "" + ic("crown") + " Manager" : m.role === "sub_manager" ? "" + ic("zap") + " Sub-manager" : "Member"}</div></div>
         <span class="pc-go">›</span>
       </div>
       <div class="pc-net">
         <span class="pc-net-lbl">${pays ? "To pay" : gets ? "Mess owes" : "Balance"}</span>
-        <span class="pc-net-amt">${pays || gets ? fmtTk(Math.abs(net)) : "✓ Settled"}</span>
+        <span class="pc-net-amt">${pays || gets ? fmtTk(Math.abs(net)) : "" + ic("check") + " Settled"}</span>
       </div>
       ${p.prevDue > 0 ? `<div class="pc-warn">incl. ${fmtTk(p.prevDue)} from earlier months</div>` : ""}
       <div class="pc-chips">${chip("Rent", p.rentStatus)}${chip("Utility", p.utilityStatus)}</div>
@@ -584,7 +584,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   // Tiny formatter so all three header badges render "✓ Settled" at zero
   // (avoids awkward "Get ৳0" / "+৳0" displays).
   const fmtBal = (n, posLabel, negLabel) => n === 0
-    ? { html: "✓ Settled", cls: "net-pos" }
+    ? { html: "" + ic("check") + " Settled", cls: "net-pos" }
     : n > 0
       ? { html: posLabel + " " + fmtTk(Math.abs(n)),  cls: "net-pos" }
       : { html: negLabel + " " + fmtTk(Math.abs(n)),  cls: "net-neg" };
@@ -608,7 +608,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
   const settlKey2 = monthKey(curM || thisMonth().month, curY || thisMonth().year);
   const multiMonthBanner = isMultiMonth ? `
     <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px">
-      ℹ️ <span>Stats cover <b>${period === "all" ? "all time" : "last " + period + " months"}</b>. 
+      ${ic("info")} <span>Stats cover <b>${period === "all" ? "all time" : "last " + period + " months"}</b>. 
       Net payable and "What I Owe" are always pinned to the <b>latest settlement month (${monthLabelFromKey(settlKey2)})</b>.</span>
     </div>` : "";
   // History always spans every month (not just the selected period)
@@ -622,7 +622,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
     <div class="stat-value pf-val">${value}</div><div class="dk-sub">${sub}</div>${bar != null ? `<div class="dk-bar pf-share"><i style="width:${bar}%"></i></div>` : ""}</div>`;
   const recentRows = Object.keys(allTime.byMonth).sort().slice(-6).reverse().map(k => {
     const d = allTime.byMonth[k] || {}, n = monthlyNetFor(member, allM, allB, allR, allU, k);
-    const cell = n > 0.01 ? `<b class="net-neg">Pay ${fmtTk(n)}</b>` : n < -0.01 ? `<b class="net-pos">Get ${fmtTk(Math.abs(n))}</b>` : `<b class="net-pos">✓</b>`;
+    const cell = n > 0.01 ? `<b class="net-neg">Pay ${fmtTk(n)}</b>` : n < -0.01 ? `<b class="net-pos">Get ${fmtTk(Math.abs(n))}</b>` : `<b class="net-pos">${ic("check")}</b>`;
     return `<tr><td style="white-space:nowrap"><b>${MONTHS[parseInt(k.slice(5)) - 1].slice(0, 3)} ${k.slice(0, 4)}</b></td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(round2((d.rentPaid || 0) + (d.utilityPaid || 0)))}</td><td style="text-align:right">${cell}</td></tr>`;
   }).join("");
 
@@ -639,19 +639,19 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
       </div>
       <div class="pf-net">
         <div class="mb-hero-lbl">Net payable · ${monthLabelFromKey(currentKeyForOwe)}</div>
-        <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "Pays " : gets ? "Gets " : "✓ Settled"}${pays || gets ? fmtTk(Math.abs(net)) : ""}</div>
+        <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "Pays " : gets ? "Gets " : "" + ic("check") + " Settled"}${pays || gets ? fmtTk(Math.abs(net)) : ""}</div>
         <div class="pf-net-btns">
-          ${pays ? `<button class="btn btn-primary btn-sm" data-on-click="closeModal();navigate('collect')">💵 Collect</button>` : ""}
+          ${pays ? `<button class="btn btn-primary btn-sm" data-on-click="closeModal();navigate('collect')">${ic("cash")} Collect</button>` : ""}
           <button class="btn btn-ghost btn-sm" data-on-click="closeModal()">Close</button>
         </div>
       </div>
     </div>
 
     <div class="pf-tiles">
-      ${tile("🍽️", "Meals", s.totalMeals, `${s.activeDays} days · ${s.avgMeals}/day`, null)}
-      ${tile("🧾", "Meal cost", fmtTk(s.mealCost), `${mealShare}% of mess meals`, mealShare)}
-      ${tile("🛒", "Bazar spent", fmtTk(s.totalBazar), `${bazarShare}% of mess bazar`, bazarShare)}
-      ${tile("✅", "Paid", fmtTk(round2(s.rentPaid + s.utilityPaid)), `rent ${fmtTk(s.rentPaid)} · utility ${fmtTk(round2(s.utilityPaid))}`, null)}
+      ${tile("" + ic("meal") + "", "Meals", s.totalMeals, `${s.activeDays} days · ${s.avgMeals}/day`, null)}
+      ${tile("" + ic("receipt") + "", "Meal cost", fmtTk(s.mealCost), `${mealShare}% of mess meals`, mealShare)}
+      ${tile("" + ic("cart") + "", "Bazar spent", fmtTk(s.totalBazar), `${bazarShare}% of mess bazar`, bazarShare)}
+      ${tile("" + ic("checkCircle", "ic-green") + "", "Paid", fmtTk(round2(s.rentPaid + s.utilityPaid)), `rent ${fmtTk(s.rentPaid)} · utility ${fmtTk(round2(s.utilityPaid))}`, null)}
     </div>
 
     <div class="pf-grid">

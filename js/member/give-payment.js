@@ -208,7 +208,7 @@ async function loadGivePayment(resetSent) {
 }
 
 function _gpLine(label, value, surplus) {
-  if (value === 0 && !surplus) return `<div class="gp-line"><span>${label}</span><span style="color:var(--text3)">✓ 0</span></div>`;
+  if (value === 0 && !surplus) return `<div class="gp-line"><span>${label}</span><span style="color:var(--text3)">${ic("check")} 0</span></div>`;
   return `<div class="gp-line"><span>${label}</span><span style="font-weight:600;color:${surplus ? "var(--green)" : "var(--red)"}">${surplus ? "+" + fmtTk(Math.abs(value)) : fmtTk(value)}</span></div>`;
 }
 
@@ -221,7 +221,7 @@ function buildGivePayment() {
   const sent = document.getElementById("gp-sent");
   sent.innerHTML = ctx.sent ? `
     <div class="card" style="margin-bottom:14px;text-align:center;border-color:var(--green)">
-      <div style="font-size:30px">✅</div>
+      <div style="font-size:30px;color:var(--green)">${ic("checkCircle")}</div>
       <div style="font-size:16px;font-weight:800;margin-top:4px">${fmtTk(Number(ctx.sent.amount))} sent to the manager</div>
       <div style="font-size:12px;color:var(--text3);margin-top:5px">Receipt ${paymentReceiptNo(ctx.sent.receipt_no)} is pending. It becomes official once the manager confirms it.</div>
     </div>` : "";
@@ -247,7 +247,7 @@ function buildGivePayment() {
     ${settled ? `
       <div style="font-size:13px;color:var(--green);margin-top:14px">
         ${owed ? "You have nothing to pay — the manager will return your balance."
-               : `✓ You are fully settled for ${escapeHtml(monthLabelFromKey(ctx.key))}.`}
+               : `${ic("checkCircle", "ic-green")} You are fully settled for ${escapeHtml(monthLabelFromKey(ctx.key))}.`}
       </div>` : `
       <div class="field" style="margin-top:16px;margin-bottom:0">
         <label>Amount you are giving (৳)</label>
@@ -278,11 +278,11 @@ function onGiveAmtInput() {
   const s = computeSplit3(v, r.mealRem, r.utilRem, r.rentRem, r.prevDue);
   const chip = (txt, bg, fg) => `<span class="gp-chip" style="background:var(${bg});color:var(${fg})">${txt}</span>`;
   chips.innerHTML = [
-    s.allocPrevDue > 0 ? chip("⏪ Prev " + fmtTk(s.allocPrevDue), "--red-bg",    "--red")    : "",
-    s.allocRent    > 0 ? chip("🏠 Rent " + fmtTk(s.allocRent),    "--accent-bg", "--accent") : "",
-    s.allocUtil    > 0 ? chip("⚡ Util " + fmtTk(s.allocUtil),    "--blue-bg",   "--blue")   : "",
-    s.allocMeal    > 0 ? chip("🍽️ Meal " + fmtTk(s.allocMeal),    "--purple-bg", "--purple") : "",
-    s.change       > 0 ? chip("💸 Extra " + fmtTk(s.change),      "--green-bg",  "--green")  : "",
+    s.allocPrevDue > 0 ? chip(ic("rewind") + " Prev " + fmtTk(s.allocPrevDue), "--red-bg",    "--red")    : "",
+    s.allocRent    > 0 ? chip(ic("home") + " Rent " + fmtTk(s.allocRent),    "--accent-bg", "--accent") : "",
+    s.allocUtil    > 0 ? chip(ic("zap") + " Util " + fmtTk(s.allocUtil),    "--blue-bg",   "--blue")   : "",
+    s.allocMeal    > 0 ? chip(ic("meal") + " Meal " + fmtTk(s.allocMeal),    "--purple-bg", "--purple") : "",
+    s.change       > 0 ? chip(ic("send") + " Extra " + fmtTk(s.change),      "--green-bg",  "--green")  : "",
   ].join("");
 }
 
@@ -301,7 +301,7 @@ function buildGiveHistory() {
             <td style="font-family:monospace;font-size:12px">${paymentReceiptNo(p.receipt_no)}</td>
             <td style="font-weight:700">${fmtTk(Number(p.amount))}</td>
             <td><span class="badge ${st.cls}">${st.label}</span>
-              <div style="font-size:11px;color:var(--text3);margin-top:3px">${p.source === "manager" ? "🧑‍💼 " : "🙋 "}${escapeHtml(paymentGeneratedBy(p))}</div></td>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">${p.source === "manager" ? ic("briefcase") + " " : ic("user") + " "}${escapeHtml(paymentGeneratedBy(p))}</div></td>
             <td style="text-align:right"><button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${_safeId(p.id)}')">Receipt</button></td>
           </tr>`;
         }).join("")}</tbody></table></div>`);
@@ -339,7 +339,7 @@ async function submitGivePayment() {
       }, `Wants to give ${fmtTk(value)} for ${MONTHS[ctx.month]} ${ctx.year} — please confirm`);
     } catch (_) { /* the request itself is saved; the manager still sees it in Collect */ }
     ctx.sent = payment;
-    toast("Payment sent to the manager ✓", "success");
+    toast("Payment sent to the manager", "success");
     const r = ctx.row;
     const sp = computeSplit3(value, r.mealRem, r.utilRem, r.rentRem, r.prevDue);
     const newMealRem = round2(r.mealRem - sp.allocMeal);

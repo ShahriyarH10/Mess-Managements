@@ -284,7 +284,7 @@ function buildNav() {
 
     <div class="mob-drawer-header">
       <div class="mob-drawer-title">More options</div>
-      <button data-on-click="closeMobileMore()" class="mob-drawer-close">✕</button>
+      <button data-on-click="closeMobileMore()" class="mob-drawer-close" aria-label="Close">${ic("x")}</button>
     </div>
 
     <div class="mob-drawer-user">
@@ -295,7 +295,7 @@ function buildNav() {
       <div>
         <div style="font-weight:600;font-size:14px">${escapeHtml(currentUser.name)}</div>
         <div style="font-size:11px;color:var(--text3)">
-          ${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : "Member"} · @${escapeHtml(currentUser.username)}
+          ${isManager ? ic("crown") + " Manager" : isSubMgr ? ic("zap") + " Sub-manager" : "Member"} · @${escapeHtml(currentUser.username)}
         </div>
       </div>
     </div>
@@ -415,7 +415,7 @@ function updateSidebarUser() {
 
     <div class="su-info">
       <div class="su-name">${escapeHtml(currentUser.name)}</div>
-      <div class="su-role">${isManager ? "👑 Manager" : isSubMgr ? "⚡ Sub-manager" : asMember ? "👁 Member view" : "Member"}</div>
+      <div class="su-role">${isManager ? ic("crown") + " Manager" : isSubMgr ? ic("zap") + " Sub-manager" : asMember ? ic("eye") + " Member view" : "Member"}</div>
     </div>`;
 
   const mob = document.getElementById("mob-user-badge");
@@ -520,7 +520,7 @@ async function renderPage(page) {
   if (isMemberView()) {
     const bar = document.createElement("div");
     bar.className = "view-as-bar";
-    bar.innerHTML = `<span>👁 You're viewing as a member — <b>${escapeHtml(currentUser.name)}</b></span>
+    bar.innerHTML = `<span>${ic("eye")} You're viewing as a member — <b>${escapeHtml(currentUser.name)}</b></span>
       <button class="btn btn-sm btn-primary" data-on-click="backToManagerView()">Back to manager view</button>`;
     main.appendChild(bar);
   }

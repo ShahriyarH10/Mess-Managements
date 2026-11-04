@@ -24,7 +24,7 @@ function _rcptStatusText(total) {
     ? `<span style="color:var(--red)">Still due ${fmtTk(total)}</span>`
     : total < -0.01
       ? `<span style="color:var(--green)">Mess owes you ${fmtTk(Math.abs(total))}</span>`
-      : `<span style="color:var(--green)">✓ Fully paid</span>`;
+      : `<span style="color:var(--green)">${ic("check")} Fully paid</span>`;
 }
 
 /* Balance right after one confirmed receipt — a snapshot, so later payments can change it.
@@ -101,7 +101,7 @@ async function renderMyReceipts(el) {
       <div class="page-sub">Every payment you made — whether you sent it or the manager recorded it</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">💵 Give payment</button>
+      <button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">${ic("cash")} Give payment</button>
     </div>
   </div>
 
@@ -111,11 +111,11 @@ async function renderMyReceipts(el) {
         <div>
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">${escapeHtml(monthLabelFromKey(curKey))}</div>
           <div style="font-size:20px;font-weight:800;margin-top:4px;color:${settled ? "var(--green)" : "var(--red)"}">
-            ${row.total < -0.01 ? `Mess owes you ${fmtTk(Math.abs(row.total))}` : settled ? "✓ Fully paid" : `Still due ${fmtTk(row.total)}`}
+            ${row.total < -0.01 ? `Mess owes you ${fmtTk(Math.abs(row.total))}` : settled ? ic("check") + " Fully paid" : `Still due ${fmtTk(row.total)}`}
           </div>
           <div style="font-size:12px;color:var(--text2);margin-top:3px">Live balance — includes rent, utility, meals and any previous due</div>
         </div>
-        ${waiting > 0 ? `<span class="badge badge-amber">🕓 ${fmtTk(waiting)} waiting for confirmation</span>` : ""}
+        ${waiting > 0 ? `<span class="badge badge-amber">${ic("clock")} ${fmtTk(waiting)} waiting for confirmation</span>` : ""}
       </div>
     </div>
 
@@ -162,7 +162,7 @@ function buildMyReceiptsList() {
     f === "all" ? true : f === "pending" ? p.status === "pending" : (p.source || "member") === f);
 
   if (!list.length) {
-    wrap.innerHTML = `<div class="empty"><div>🧾</div><div>${_rcptList.length ? "No receipts match this filter" : "No receipts yet — they appear here when you give a payment or the manager records one"}</div></div>`;
+    wrap.innerHTML = `<div class="empty"><div>${ic("receipt", "ic-lg ic-muted")}</div><div>${_rcptList.length ? "No receipts match this filter" : "No receipts yet — they appear here when you give a payment or the manager records one"}</div></div>`;
     return;
   }
 
@@ -189,7 +189,7 @@ function buildMyReceiptsList() {
         <div class="rc-amt" style="color:${_rcptVoid(p.status) ? "var(--text3)" : "var(--text)"}">${fmtTk(Number(p.amount))}</div>
         <div class="rc-mid">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <span class="badge ${mgr ? "badge-blue" : "badge-purple"}">${mgr ? "🧑‍💼 Manager" : "🙋 You sent"}</span>
+            <span class="badge ${mgr ? "badge-blue" : "badge-purple"}">${mgr ? ic("briefcase") + " Manager" : ic("user") + " You sent"}</span>
             <span class="badge ${st.cls}">${st.label}</span>
           </div>
           <div class="rc-meta">
@@ -200,7 +200,7 @@ function buildMyReceiptsList() {
         <div class="rc-side">
           ${_rcptAfter(p) || (p.status === "pending" ? `<span style="color:var(--accent)">Not counted yet</span>` : `<span style="color:var(--text3)">Not counted</span>`)}
           <div style="display:flex;gap:6px">
-            <button class="btn btn-ghost btn-sm" data-on-click="copyReceiptLinkFor('${id}')" title="Copy receipt link" aria-label="Copy receipt link">🔗 Link</button>
+            <button class="btn btn-ghost btn-sm" data-on-click="copyReceiptLinkFor('${id}')" title="Copy receipt link" aria-label="Copy receipt link">${ic("link")} Link</button>
             <button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${id}')">View</button>
           </div>
         </div>
@@ -226,7 +226,7 @@ async function renderReceiptPage(el, id) {
   <div class="content">${body}</div>`;
 
   const notFound = (msg) => {
-    el.innerHTML = shell(`<div class="card"><div class="empty"><div>🧾</div><div>${msg}</div></div></div>`, "Shared receipt");
+    el.innerHTML = shell(`<div class="card"><div class="empty"><div>${ic("receipt", "ic-lg ic-muted")}</div><div>${msg}</div></div></div>`, "Shared receipt");
   };
 
   if (!_safeId(id)) return notFound("This receipt link is incomplete.");

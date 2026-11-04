@@ -106,11 +106,11 @@ async function loadAbsenceCalendar() {
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--blue);display:inline-block"></span>
-          <span style="color:var(--text2)">☀ Day off only</span>
+          <span style="color:var(--text2)">${ic("sun")} Day off only</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
-          <span style="color:var(--text2)">🌙 Night off only</span>
+          <span style="color:var(--text2)">${ic("moon")} Night off only</span>
         </span>
         <span style="display:flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 8px">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--bg3);border:1.5px dashed var(--text3);display:inline-block"></span>
@@ -211,13 +211,13 @@ async function loadAbsenceCalendar() {
         if (allOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px">${allOff.map(e   => avatarDot(e, "var(--red)",     "#fef2f2")).join("")}</div>`);
         // Day off = blue ☀, night off = gold 🌙 — same colours as the D/N chips everywhere else
         const tag = (icon) => `<span style="font-size:9px;line-height:24px;width:12px;text-align:center;flex-shrink:0" aria-hidden="true">${icon}</span>`;
-        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Day meal off">${tag("☀")}${dayOff.map(e   => avatarDot(e, "var(--blue)", "")).join("")}</div>`);
-        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Night meal off">${tag("🌙")}${nightOff.map(e => avatarDot(e, "var(--accent)", "")).join("")}</div>`);
+        if (dayOff.length)   sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Day meal off">${tag("" + ic("sun") + "")}${dayOff.map(e   => avatarDot(e, "var(--blue)", "")).join("")}</div>`);
+        if (nightOff.length) sections.push(`<div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center" title="Night meal off">${tag("" + ic("moon") + "")}${nightOff.map(e => avatarDot(e, "var(--accent)", "")).join("")}</div>`);
         content = `<div style="display:flex;flex-direction:column;gap:2px;margin-top:3px">${sections.join("")}</div>`;
       } else if (isPast && hasData) {
         // ✅ Only show "All ate" when we KNOW there was real meal data for this day
         content = `<div style="display:flex;align-items:center;gap:3px;margin-top:5px">
-          <span style="width:14px;height:14px;border-radius:50%;background:rgba(34,197,94,.15);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0">✓</span>
+          <span style="width:14px;height:14px;border-radius:50%;background:rgba(34,197,94,.15);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0">${ic("check")}</span>
           <span style="font-size:9px;color:var(--green);font-weight:600">All ate</span>
         </div>`;
       } else if (isPast && !hasData) {
@@ -325,8 +325,8 @@ async function loadAbsenceCalendar() {
                   <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(m.name)}</div>
                   <div style="font-size:10px;color:var(--text3);margin-top:3px;display:flex;flex-direction:column;gap:1px">
                     ${allOffDays   > 0 ? `<span style="color:var(--red)">All off: ${allOffDays}d</span>` : ""}
-                    ${dayOffDays   > 0 ? `<span style="color:var(--blue)">☀ Day off: ${dayOffDays}d</span>` : ""}
-                    ${nightOffDays > 0 ? `<span style="color:var(--accent)">🌙 Night off: ${nightOffDays}d</span>` : ""}
+                    ${dayOffDays   > 0 ? `<span style="color:var(--blue)">${ic("sun")} Day off: ${dayOffDays}d</span>` : ""}
+                    ${nightOffDays > 0 ? `<span style="color:var(--accent)">${ic("moon")} Night off: ${nightOffDays}d</span>` : ""}
                   </div>
                 </div>
               </div>`;
@@ -372,7 +372,7 @@ async function markAbsenceRange() {
     ));
     await logAudit("update", "attendance", `${from}→${to}`,
       `${currentUser.name} marked absent ${from} to ${to} (${dates.length} days)`);
-    toast(`Marked absent for ${dates.length} day${dates.length > 1 ? "s" : ""} ✓`, "success");
+    toast(`Marked absent for ${dates.length} day${dates.length > 1 ? "s" : ""}`, "success");
     // Refresh the upcoming absences list
     await refreshUpcomingAbsences(memberId);
   } catch (e) { toast("Error: " + e.message, "error"); }
@@ -397,7 +397,7 @@ async function clearAbsenceRange() {
 
   try {
     await Promise.all(dates.map(d => dbSetAttendance(memberId, d, true, true)));
-    toast(`Marked present for ${dates.length} day${dates.length > 1 ? "s" : ""} ✓`, "success");
+    toast(`Marked present for ${dates.length} day${dates.length > 1 ? "s" : ""}`, "success");
     await refreshUpcomingAbsences(memberId);
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
@@ -408,21 +408,21 @@ async function cancelAbsence(id) {
     const { error } = await getClient().from("meal_attendance").delete()
       .eq("id", id).eq("mess_id", messId()).eq("member_id", window._attMemberId);
     if (error) throw error;
-    toast("Absence cancelled ✓", "success");
+    toast("Absence cancelled", "success");
     await refreshUpcomingAbsences(window._attMemberId);
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
 /* Upcoming days off (member Meal Log). Shared by the first render and every refresh. */
 function buildUpcomingAbsences(upcoming) {
-  if (!upcoming.length) return `<div class="ma-none">No days off planned — you're eating every meal 🍽️</div>`;
+  if (!upcoming.length) return `<div class="ma-none">No days off planned — you're eating every meal ${ic("meal")}</div>`;
   const nice = d => { const [y, m, dd] = String(d).split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); };
   return upcoming.map(a => {
-    const off = !a.day_meal && !a.night_meal ? "All day" : !a.day_meal ? "☀ Day" : "🌙 Night";
+    const off = !a.day_meal && !a.night_meal ? "All day" : !a.day_meal ? "" + ic("sun") + " Day" : "" + ic("moon") + " Night";
     return `<div class="ma-row">
       <span class="ma-date">${nice(a.date)}</span>
       <span class="badge badge-red">${off} off</span>
-      <button class="btn btn-ghost btn-sm" data-on-click="cancelAbsence('${a.id}')" title="Cancel this day off">✕</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="cancelAbsence('${a.id}')" title="Cancel this day off">${ic("x")}</button>
     </div>`;
   }).join("");
 }
@@ -448,15 +448,15 @@ async function refreshUpcomingAbsences(memberId) {
 
 function openBroadcastModal() {
   document.getElementById("modal-content").innerHTML = `
-    <div class="modal-title">📢 New Broadcast</div>
+    <div class="modal-title">${ic("megaphone")} New Broadcast</div>
     <div class="modal-sub">This message will appear as a banner on every member's dashboard.</div>
     <div class="field"><label>Message *</label><textarea class="input" id="bc-msg" rows="3" placeholder="e.g. Pay rent by Friday!"></textarea></div>
     <div class="grid-2">
-      <div class="field"><label>Priority</label><select class="input" id="bc-priority"><option value="normal">Normal</option><option value="urgent">🔴 Urgent</option></select></div>
+      <div class="field"><label>Priority</label><select class="input" id="bc-priority"><option value="normal">Normal</option><option value="urgent">Urgent</option></select></div>
       <div class="field"><label>Auto-expire after</label><select class="input" id="bc-expiry"><option value="">Never</option><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">1 day</option><option value="72">3 days</option><option value="168">1 week</option></select></div>
     </div>
-    <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bc-pin" style="width:16px;height:16px"> 📌 Pin to top (always visible first)</label></div>
-    <div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button><button class="btn btn-primary" data-on-click="sendBroadcast()">📢 Send</button></div>`;
+    <div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bc-pin" style="width:16px;height:16px"> ${ic("pin")} Pin to top (always visible first)</label></div>
+    <div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button><button class="btn btn-primary" data-on-click="sendBroadcast()">${ic("megaphone")} Send</button></div>`;
   openModal();
 }
 
@@ -475,7 +475,7 @@ async function sendBroadcast() {
     });
     if (error) throw error;
     await logAudit("create", "broadcast", "", `Broadcast${pinned?" (pinned)":""}: "${msg.slice(0,50)}${msg.length>50?"…":""}"`, { priority, pinned });
-    closeModal(); toast("Notice sent to everyone ✓", "success");
+    closeModal(); toast("Notice sent to everyone", "success");
     const ta = document.getElementById("bc-msg"); if (ta) { ta.value = ""; bcCount(ta); }
     const pin = document.getElementById("bc-pin"); if (pin) pin.checked = false;
     if (typeof setBcPriority === "function") setBcPriority("normal");
@@ -514,29 +514,29 @@ async function renderMessRules(el, isManager) {
   if (isManager) {
     el.innerHTML = `
     <div class="topbar"><div><div class="page-title">Mess Rules</div><div class="page-sub">What members see on their Mess Info page</div></div>
-      <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" data-on-click="saveMessRules()">💾 Save</button></div>
+      <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" data-on-click="saveMessRules()">${ic("save")} Save</button></div>
     </div>
     <div class="content dk">
       <div class="mr-grid">
         <div class="card mr-info">
           <div class="dk-card-title"><span>Quick info</span></div>
           <div class="field">
-            <label>📶 WiFi password</label>
+            <label>${ic("wifi")} WiFi password</label>
             <input type="text" class="input mr-mono" id="mr-wifi" value="${escapeHtml(rules?.wifi_pass||"")}" placeholder="e.g. MyWiFi@123" data-on-input="markRulesDirty()"/>
           </div>
           <div class="field">
-            <label>💳 Payment info</label>
+            <label>${ic("card")} Payment info</label>
             <textarea class="input" id="mr-bank" rows="3" placeholder="e.g. bKash: 01712345678 (Personal)" data-on-input="markRulesDirty()">${escapeHtml(rules?.bank_info||"")}</textarea>
           </div>
           <div class="field" style="margin-bottom:0">
-            <label>📞 Emergency contacts</label>
+            <label>${ic("phone")} Emergency contacts</label>
             <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx&#10;Gas: 016xxx" data-on-input="markRulesDirty()">${escapeHtml(rules?.contacts||"")}</textarea>
           </div>
         </div>
 
         <div class="card mr-rules">
           <div class="dk-card-title">
-            <span>📜 House rules</span>
+            <span>${ic("file")} House rules</span>
             <div class="an-seg" id="mr-tabs">
               <button class="an-seg-btn on" data-tab="write" data-on-click="setRulesTab('write')">Write</button>
               <button class="an-seg-btn" data-tab="preview" data-on-click="setRulesTab('preview')">Preview</button>
@@ -565,12 +565,12 @@ async function renderMessRules(el, isManager) {
     <div class="topbar"><div><div class="page-title">Mess Info</div><div class="page-sub">WiFi, how to pay, contacts and the house rules</div></div></div>
     <div class="content dk">${hasAny ? `
       <div class="mi-grid">
-        ${rules.wifi_pass ? info("📶", "WiFi", `<div class="mi-wifi" id="mi-wifi">${escapeHtml(rules.wifi_pass)}</div>`, `<button class="btn btn-ghost btn-sm" data-on-click="copyMessWifi(this)">Copy</button>`) : ""}
-        ${rules.bank_info ? info("💳", "How to pay", `<div class="mi-text">${escapeHtml(rules.bank_info)}</div>`, `<button class="btn btn-ghost btn-sm" data-on-click="navigate('give-payment')">Give payment</button>`) : ""}
-        ${rules.contacts ? info("📞", "Contacts", `<div class="mi-text">${escapeHtml(rules.contacts)}</div>`) : ""}
+        ${rules.wifi_pass ? info("" + ic("wifi") + "", "WiFi", `<div class="mi-wifi" id="mi-wifi">${escapeHtml(rules.wifi_pass)}</div>`, `<button class="btn btn-ghost btn-sm" data-on-click="copyMessWifi(this)">Copy</button>`) : ""}
+        ${rules.bank_info ? info("" + ic("card") + "", "How to pay", `<div class="mi-text">${escapeHtml(rules.bank_info)}</div>`, `<button class="btn btn-ghost btn-sm" data-on-click="navigate('give-payment')">Give payment</button>`) : ""}
+        ${rules.contacts ? info("" + ic("phone") + "", "Contacts", `<div class="mi-text">${escapeHtml(rules.contacts)}</div>`) : ""}
       </div>
-      ${rules.rules_text ? info("📜", "House rules", `<div class="md-body">${renderMarkdown(rules.rules_text)}</div>`) : ""}
-    ` : '<div class="card"><div class="empty" style="padding:28px"><div>📌</div><div>The manager hasn\'t added any mess info yet.</div></div></div>'}</div>`;
+      ${rules.rules_text ? info("" + ic("file") + "", "House rules", `<div class="md-body">${renderMarkdown(rules.rules_text)}</div>`) : ""}
+    ` : '<div class="card"><div class="empty" style="padding:28px"><div>' + ic("pin") + '</div><div>The manager hasn\'t added any mess info yet.</div></div></div>'}</div>`;
   }
 }
 
@@ -581,11 +581,11 @@ function setRulesTab(tab) {
 }
 function markRulesDirty() {
   const b = document.getElementById("mr-save");
-  if (b && !b.classList.contains("mr-dirty")) { b.classList.add("mr-dirty"); b.innerHTML = "💾 Save changes"; }
+  if (b && !b.classList.contains("mr-dirty")) { b.classList.add("mr-dirty"); b.innerHTML = "" + ic("save") + " Save changes"; }
 }
 async function copyMessWifi(btn) {
   const t = document.getElementById("mi-wifi")?.textContent || "";
-  try { await navigator.clipboard.writeText(t); if (btn) { btn.textContent = "✓ Copied"; setTimeout(() => btn.textContent = "Copy", 1500); } }
+  try { await navigator.clipboard.writeText(t); if (btn) { btn.textContent = "Copied"; setTimeout(() => btn.textContent = "Copy", 1500); } }
   catch (_) { toast("Copy failed — press and hold to copy", "error"); }
 }
 
@@ -615,9 +615,9 @@ async function saveMessRules() {
       contacts:   document.getElementById("mr-contacts")?.value || "",
     });
     await logAudit("update", "mess_rules", "", "Updated mess rules & info");
-    toast("Mess info saved ✓", "success");
+    toast("Mess info saved", "success");
     const b = document.getElementById("mr-save");
-    if (b) { b.classList.remove("mr-dirty"); b.innerHTML = "💾 Save"; }
+    if (b) { b.classList.remove("mr-dirty"); b.innerHTML = "" + ic("save") + " Save"; }
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
@@ -747,14 +747,14 @@ function drawAnalytics() {
   el.innerHTML = head + `
   <div class="content dk an">
     <div class="stat-grid dk-kpis">
-      ${kpi("dk-blue", "📊", "Meal rate · " + MONTHS[Number(cur.key.slice(5)) - 1].slice(0, 3), fmtTk(cur.rate),
+      ${kpi("dk-blue", "" + ic("chart") + "", "Meal rate · " + MONTHS[Number(cur.key.slice(5)) - 1].slice(0, 3), fmtTk(cur.rate),
           `${tr(pct(cur.rate, avgRate), true, "avg " + fmtTk(avgRate))}`, buildSparkline(months.map(m => m.rate), "var(--blue)", { fit: true }))}
-      ${kpi("dk-green", "🛒", cur.proj != null ? "Bazar · projected" : "Bazar this month", fmtTk(projBazar),
+      ${kpi("dk-green", "" + ic("cart") + "", cur.proj != null ? "Bazar · projected" : "Bazar this month", fmtTk(projBazar),
           cur.proj != null ? `${fmtTk(round2(cur.bazar))} so far · ${tr(pct(projBazar, prev?.bazar), null, prev ? prev.label : "")}` : tr(pct(cur.bazar, prev?.bazar), null, prev ? prev.label : ""),
           buildSparkline(months.map(m => m.proj ?? m.bazar), "var(--green)"))}
-      ${kpi("dk-gold", "🍽️", "Meals per day", cur.perDay, `${round2(cur.meals)} meals · ${tr(pct(cur.perDay, prev?.perDay), null, prev ? prev.label : "")}`,
+      ${kpi("dk-gold", "" + ic("meal") + "", "Meals per day", cur.perDay, `${round2(cur.meals)} meals · ${tr(pct(cur.perDay, prev?.perDay), null, prev ? prev.label : "")}`,
           buildSparkline(months.map(m => m.perDay), "var(--accent)", { fit: true }))}
-      ${kpi("dk-gray", "🏷️", "Cheapest month", lo ? fmtTk(lo.rate) : "—",
+      ${kpi("dk-gray", "" + ic("tag") + "", "Cheapest month", lo ? fmtTk(lo.rate) : "—",
           lo && hi ? `${lo.label} · priciest ${hi.label} ${fmtTk(hi.rate)}` : "",
           `<div class="an-range"><i style="left:${hi && lo && hi.rate > lo.rate ? Math.round(((cur.rate - lo.rate) / (hi.rate - lo.rate)) * 100) : 50}%" title="This month"></i></div>`)}
     </div>
@@ -933,7 +933,7 @@ async function loadMonthLockList() {
 
     wrap.innerHTML = `
       <div class="info-banner" style="margin-bottom:14px">
-        🔒 Locking a month prevents any new saves to meals, bazar, utility, and rent for that period. You can unlock at any time.
+        ${ic("lock")} Locking a month prevents any new saves to meals, bazar, utility, and rent for that period. You can unlock at any time.
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
         ${keys.map(k => {
@@ -961,11 +961,11 @@ async function loadMonthLockList() {
                 background:${locked ? "var(--green-bg)" : "var(--bg3)"};
                 color:${locked ? "var(--green)" : "var(--text3)"};
                 border:1px solid ${locked ? "rgba(76,175,130,.3)" : "var(--border)"};
-              ">${locked ? "🔒 Locked" : "🔓 Open"}</span>
+              ">${locked ? "" + ic("lock") + " Locked" : "" + ic("unlock") + " Open"}</span>
             </div>
             ${locked ? `
               <div style="font-size:11px;color:var(--green);margin-bottom:10px">
-                ✓ No edits can be made to this month's data
+                ${ic("check")} No edits can be made to this month's data
               </div>` : `
               <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
                 Edits are still allowed for this month
@@ -973,7 +973,7 @@ async function loadMonthLockList() {
             <button class="btn btn-sm ${locked ? "btn-ghost" : "btn-primary"}"
               style="width:100%;justify-content:center"
               data-on-click="toggleMonthLock('${k}', ${!locked})">
-              ${locked ? "🔓 Unlock month" : "🔒 Close & lock month"}
+              ${locked ? "" + ic("unlock") + " Unlock month" : "" + ic("lock") + " Close & lock month"}
             </button>
           </div>`;
         }).join("")}
@@ -989,7 +989,7 @@ async function toggleMonthLock(key, lock) {
   const label  = MONTHS[m - 1] + " " + y;
 
   showConfirm({
-    title: lock ? `🔒 Lock ${label}?` : `🔓 Unlock ${label}?`,
+    title: lock ? `Lock ${label}?` : `Unlock ${label}?`,
     body:  lock
       ? `This will prevent any further saves to meals, bazar, utility, and rent for ${label}. You can unlock it later.`
       : `This will allow edits to ${label} again. Make sure you re-lock after any corrections.`,
@@ -999,7 +999,7 @@ async function toggleMonthLock(key, lock) {
       try {
         await dbSetMonthLocked(m - 1, y, key, lock);
         await logAudit("update", "month_lock", key, `${lock ? "Locked" : "Unlocked"} month ${label}`);
-        toast(lock ? `🔒 ${label} locked` : `🔓 ${label} unlocked`, "success");
+        toast(lock ? `${label} locked` : `${label} unlocked`, "success");
         await loadMonthLockList();
       } catch (e) {
         toast("Error: " + e.message, "error");

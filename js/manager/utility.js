@@ -21,11 +21,11 @@ function renderRent(el) {
       <div id="rent-stats" class="ut-summary"></div>
       <div class="ut-rows" id="rent-rows"><div class="loading"><div class="spinner"></div>Loading…</div></div>
       <div class="ent-foot" style="padding:14px 0 0;border-top:0">
-        <button class="btn btn-ghost" data-on-click="markAllRentPaid()">✓ Mark all paid</button>
-        <button class="btn btn-primary" data-on-click="saveRent()">💾 Save rent</button>
+        <button class="btn btn-ghost" data-on-click="markAllRentPaid()">${ic("check")} Mark all paid</button>
+        <button class="btn btn-primary" data-on-click="saveRent()">${ic("save")} Save rent</button>
       </div>
     </div>
-    <div class="card"><div class="dk-card-title"><span>📋 Rent history</span></div><div id="rent-history"></div></div>
+    <div class="card"><div class="dk-card-title"><span>${ic("clipboard")} Rent history</span></div><div id="rent-history"></div></div>
   </div>`;
   loadRentMonth(); loadRentHistory();
 }
@@ -49,9 +49,9 @@ async function loadRentMonth() {
       <div class="ml-amt ut-paid rent-due" data-cap="rent"><span>৳</span><input type="number" class="input input-sm" id="rd-${m.id}" value="${due}" data-on-input="updRentDue('${m.id}')" title="Rent for this month"/></div>
       <div class="ml-amt ut-paid" data-cap="paid"><span>৳</span><input type="number" class="input input-sm" id="rp-${m.id}" value="${paid}" data-due="${due}" data-on-input="updRentAutoStatus('${m.id}')" title="Amount paid"/></div>
       <select class="input input-sm ut-status" id="rs-${m.id}" data-on-change="rentStatusChanged('${m.id}')">
-        <option value="paid"    ${status==="paid"   ?"selected":""}>✅ Paid</option>
-        <option value="partial" ${status==="partial"?"selected":""}>⚠️ Partial</option>
-        <option value="unpaid"  ${status==="unpaid" ?"selected":""}>⏳ Not paid</option>
+        <option value="paid"    ${status==="paid"   ?"selected":""}>Paid</option>
+        <option value="partial" ${status==="partial"?"selected":""}>Partial</option>
+        <option value="unpaid"  ${status==="unpaid" ?"selected":""}>Not paid</option>
       </select>
       <input type="text" class="input input-sm ut-note" id="rn-${m.id}" placeholder="Note" value="${escapeHtml(notes)}"/>
     </div>`;
@@ -101,11 +101,11 @@ function updRentSum() {
   const out=round2(due-paid), rate=due>0?Math.min(100,Math.round((paid/due)*100)):0;
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   el.innerHTML=`
-    <div class="dk-card-title" style="margin-bottom:10px"><span>🏠 ${MONTHS[month]} rent</span><span class="dk-legend"><b style="color:var(--text)">${rate}%</b>&nbsp;collected</span></div>
+    <div class="dk-card-title" style="margin-bottom:10px"><span>${ic("home")} ${MONTHS[month]} rent</span><span class="dk-legend"><b style="color:var(--text)">${rate}%</b>&nbsp;collected</span></div>
     <div class="ent-pills">
       <span class="ent-pill">Total due <b>${fmtTk(due)}</b></span>
       <span class="ent-pill ent-g">Collected <b>${fmtTk(paid)}</b></span>
-      <span class="ent-pill">Outstanding <b style="color:${out>0?"var(--red)":"var(--green)"}">${out>0?fmtTk(out):"✓ None"}</b></span>
+      <span class="ent-pill">Outstanding <b style="color:${out>0?"var(--red)":"var(--green)"}">${out>0?fmtTk(out):ic("check")+" None"}</b></span>
     </div>
     <div class="dk-bar ut-progress"><i style="width:${rate}%;background:${rate>=100?"var(--green)":"var(--accent)"}"></i></div>`;
 }
@@ -125,7 +125,7 @@ async function saveRent() {
   const month=parseInt(document.getElementById("rent-month")?.value||0);
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);
-  if (await isMonthLocked(key)) { toast("🔒 " + monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
+  if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
   const listed=members.map(m=>({
     member_id: m.id,
     name:   m.name,
@@ -169,7 +169,7 @@ async function loadRentHistory() {
     return `<div class="rh-row">
       <div class="rh-month"><b>${monthLabelFromKey(r.month_key)}</b><span>${done}/${es.length} paid</span></div>
       <div class="rh-bar"><div class="dk-bar"><i style="width:${rate}%;background:${st === "ok" ? "var(--green)" : st === "mid" ? "var(--accent)" : "var(--red)"}"></i></div>
-        <span class="rh-left">${left.length ? "Pending: " + left.slice(0, 4).join(", ") + (left.length > 4 ? ` +${left.length - 4}` : "") : "All cleared 🎉"}</span></div>
+        <span class="rh-left">${left.length ? "Pending: " + left.slice(0, 4).join(", ") + (left.length > 4 ? ` +${left.length - 4}` : "") : "All cleared"}</span></div>
       <div class="rh-amt"><b style="color:var(--green)">${fmtTk(paid)}</b><span>of ${fmtTk(due)}</span></div>
       <span class="dk-chip ${st}">${rate}%</span>
     </div>`;

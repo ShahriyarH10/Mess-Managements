@@ -90,7 +90,7 @@
   .profile-balance-item-bordered{padding-left:0!important;border-left:none!important;}
 
   /* Toast above mobile nav */
-  #toast{bottom:calc(78px + env(safe-area-inset-bottom, 8px));right:12px;left:12px;max-width:none;text-align:center;}
+  #toast{bottom:calc(78px + env(safe-area-inset-bottom, 8px));right:12px;left:12px;max-width:none;text-align:center;justify-content:center;}
 
   /* Modals: full-width on phones */
   .modal-bg{padding:8px;}

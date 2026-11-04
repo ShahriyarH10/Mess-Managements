@@ -47,7 +47,7 @@ function buildPendingPayments() {
       <div class="pr-amt">${fmtTk(Number(p.amount))}</div>
       <div class="pr-actions">
         <button class="btn btn-ghost btn-sm" data-on-click="rejectPaymentRequest('${id}')"${busy}>Reject</button>
-        <button class="btn btn-primary btn-sm" data-on-click="confirmPaymentRequest('${id}')"${busy}>✓ Confirm received</button>
+        <button class="btn btn-primary btn-sm" data-on-click="confirmPaymentRequest('${id}')"${busy}>${ic("check")} Confirm received</button>
       </div>
     </div>`;
   }).join("");
@@ -55,7 +55,7 @@ function buildPendingPayments() {
   wrap.innerHTML = `
   <div class="card" style="margin-bottom:14px;border-color:var(--accent)">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔔</div>
+      <div style="width:34px;height:34px;border-radius:50%;background:var(--accent-bg);border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:var(--accent)">${ic("bell")}</div>
       <div>
         <div style="font-weight:700;font-size:14px;color:var(--accent)">Member payments to confirm
           <span class="badge badge-amber" style="margin-left:6px">${_pendingPays.length}</span></div>
@@ -163,7 +163,7 @@ async function confirmPaymentRequest(id) {
 
     const done = { ...claimed, split, still_due: stillDue };
     _paymentCache.set(id, done);
-    toast(`Confirmed ${fmtTk(amount)} from ${paymentMemberName(p)} ✓`, "success");
+    toast(`Confirmed ${fmtTk(amount)} from ${paymentMemberName(p)}`, "success");
     _payBusy.delete(id);
     try { await loadCollectMonth(); } catch (_) { /* the payment is applied; a manual refresh will show it */ }
     showPaymentReceipt(id);

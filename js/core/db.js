@@ -86,7 +86,7 @@ async function isMonthLocked(key) {
 /* true = the month is open. Shows the standard message when it's closed. */
 async function ensureMonthOpen(key) {
   if (!key || !(await isMonthLocked(String(key).slice(0, 7)))) return true;
-  toast("🔒 " + monthLabelFromKey(String(key).slice(0, 7)) + " is closed — ask the manager to unlock it in Month Close", "error");
+  toast(monthLabelFromKey(String(key).slice(0, 7)) + " is closed — ask the manager to unlock it in Month Close", "error");
   return false;
 }
 

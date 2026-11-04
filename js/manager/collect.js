@@ -39,7 +39,7 @@ async function renderCollect(el) {
         <select class="input" id="cp-month" style="width:148px">${opts.monthOptions}</select>
         <select class="input" id="cp-year"  style="width:92px">${opts.yearOptions}</select>
         <button class="btn btn-primary btn-sm" data-on-click="loadCollectMonth()" style="gap:6px">
-          ↻ Load
+          ${ic("refresh")} Load
         </button>
       </div>
 
@@ -75,15 +75,15 @@ async function renderCollect(el) {
     <!-- Member payment cards -->
     <div id="cp-table-wrap">
       <div class="empty" style="padding:32px;text-align:center">
-        <div style="font-size:32px;margin-bottom:8px">💵</div>
-        <div style="font-size:14px;color:var(--text2)">Pick a month above and click <b>↻ Load</b></div>
+        <div style="font-size:32px;margin-bottom:8px">${ic("cash")}</div>
+        <div style="font-size:14px;color:var(--text2)">Pick a month above and click <b>${ic("refresh")} Load</b></div>
       </div>
     </div>
 
     <!-- Return Amount section — overpaid change + negative balance, merged -->
     <div class="card" id="cp-return-card" style="display:none;margin-top:14px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--green-bg);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">💵</div>
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--green-bg);border:1.5px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">${ic("cash")}</div>
         <div>
           <div style="font-weight:700;font-size:14px;color:var(--green)">Return Amount to These Members</div>
           <div style="font-size:12px;color:var(--text3);margin-top:1px">Overpaid change and negative balances — hand cash back now or carry it forward</div>
@@ -263,7 +263,7 @@ function buildCollectTable() {
   if (!owing.length) {
     wrap.innerHTML = `
       <div style="text-align:center;padding:36px 20px">
-        <div style="font-size:40px;margin-bottom:10px">✅</div>
+        <div style="font-size:40px;margin-bottom:10px">${ic("checkCircle", "ic-green")}</div>
         <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">All settled!</div>
         <div style="font-size:13px;color:var(--text3)">Every member has paid up for this month.</div>
       </div>`;
@@ -303,54 +303,54 @@ function buildCollectTable() {
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
             <div class="cp-mcard-name">${m.name}</div>
-            ${r.messCredit > 0 ? `<span class="cp-carry-tag is-green" title="Carry-forward credit from a previous month, reducing this month's total">↩ −${fmtTk(r.messCredit)} carried-forward credit</span>` : ''}
+            ${r.messCredit > 0 ? `<span class="cp-carry-tag is-green" title="Carry-forward credit from a previous month, reducing this month's total">${ic("undo")} −${fmtTk(r.messCredit)} carried-forward credit</span>` : ''}
           </div>
           <div class="cp-mcard-total">
             <div class="cp-mcard-total-lbl">Total due</div>
-            <div class="cp-mcard-total-val" id="cp-net-${m.id}" style="color:${total > 0 ? 'var(--red)' : 'var(--green)'}">${total > 0 ? fmtTk(total) : '✓ Clear'}</div>
+            <div class="cp-mcard-total-val" id="cp-net-${m.id}" style="color:${total > 0 ? 'var(--red)' : 'var(--green)'}">${total > 0 ? fmtTk(total) : '' + ic("check") + ' Clear'}</div>
           </div>
         </div>
 
         ${pd > 0.01 ? `
           <div class="cp-prevdue-banner" id="cp-pd-disp-${m.id}">
-            ⚠ ${fmtTk(pd)} unpaid from last month
+            ${ic("alert", "ic-amber")} ${fmtTk(pd)} unpaid from last month
           </div>
         ` : `<div id="cp-pd-disp-${m.id}" style="display:none"></div>`}
 
         <div class="cp-breakdown">
           ${pd > 0.01 ? `
           <div class="cp-brow">
-            <span class="cp-brow-ico">⏪</span>
+            <span class="cp-brow-ico">${ic("rewind")}</span>
             <span class="cp-brow-lbl">Prev. Month Due</span>
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctPd}%;background:var(--red)"></div></div>
             <span class="cp-brow-val" id="cp-pd-bar-${m.id}" style="color:var(--red)">${fmtTk(pd)}</span>
           </div>` : ''}
           <div class="cp-brow">
-            <span class="cp-brow-ico">🏠</span>
+            <span class="cp-brow-ico">${ic("home")}</span>
             <span class="cp-brow-lbl">Rent</span>
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctRent}%;background:var(--accent)"></div></div>
-            <span class="cp-brow-val" id="cp-rr-${m.id}" style="color:${rentRem > 0 ? 'var(--red)' : 'var(--green)'}">${rentRem > 0 ? fmtTk(rentRem) : '✓ 0'}</span>
+            <span class="cp-brow-val" id="cp-rr-${m.id}" style="color:${rentRem > 0 ? 'var(--red)' : 'var(--green)'}">${rentRem > 0 ? fmtTk(rentRem) : '' + ic("check") + ' 0'}</span>
           </div>
           <div class="cp-brow">
-            <span class="cp-brow-ico">⚡</span>
+            <span class="cp-brow-ico">${ic("zap")}</span>
             <span class="cp-brow-lbl">Utility</span>
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctUtil}%;background:var(--blue)"></div></div>
-            <span class="cp-brow-val" id="cp-ur-${m.id}" style="color:${utilRem > 0 ? 'var(--red)' : 'var(--green)'}">${utilRem > 0 ? fmtTk(utilRem) : '✓ 0'}</span>
+            <span class="cp-brow-val" id="cp-ur-${m.id}" style="color:${utilRem > 0 ? 'var(--red)' : 'var(--green)'}">${utilRem > 0 ? fmtTk(utilRem) : '' + ic("check") + ' 0'}</span>
           </div>
           <div class="cp-brow">
-            <span class="cp-brow-ico">🍽️</span>
+            <span class="cp-brow-ico">${ic("meal")}</span>
             <span class="cp-brow-lbl">Meal Balance</span>
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pctMeal}%;background:var(--purple)"></div></div>
-            <span class="cp-brow-val" id="cp-mr-${m.id}" style="color:${mealRem > 0 ? 'var(--red)' : mealRem < 0 ? 'var(--green)' : 'var(--text3)'}">${mealRem > 0 ? fmtTk(mealRem) : mealRem < 0 ? '+'+fmtTk(Math.abs(mealRem)) : '✓ 0'}</span>
+            <span class="cp-brow-val" id="cp-mr-${m.id}" style="color:${mealRem > 0 ? 'var(--red)' : mealRem < 0 ? 'var(--green)' : 'var(--text3)'}">${mealRem > 0 ? fmtTk(mealRem) : mealRem < 0 ? '+'+fmtTk(Math.abs(mealRem)) : '' + ic("check") + ' 0'}</span>
           </div>
         </div>
 
         <div class="cp-split-preview" id="cp-split-${m.id}" style="display:none">
-          <span class="cp-chip cp-chip-pd"     id="cp-apd-${m.id}" style="display:none">⏪ ৳0</span>
-          <span class="cp-chip cp-chip-rent"   id="cp-ar-${m.id}"  style="display:none">🏠 ৳0</span>
-          <span class="cp-chip cp-chip-util"   id="cp-au-${m.id}"  style="display:none">⚡ ৳0</span>
-          <span class="cp-chip cp-chip-meal"   id="cp-am-${m.id}"  style="display:none">🍽️ ৳0</span>
-          <span class="cp-chip cp-chip-change" id="cp-ch-${m.id}"  style="display:none">💸 Change ৳0</span>
+          <span class="cp-chip cp-chip-pd"     id="cp-apd-${m.id}" style="display:none">${ic("rewind")} ৳0</span>
+          <span class="cp-chip cp-chip-rent"   id="cp-ar-${m.id}"  style="display:none">${ic("home")} ৳0</span>
+          <span class="cp-chip cp-chip-util"   id="cp-au-${m.id}"  style="display:none">${ic("zap")} ৳0</span>
+          <span class="cp-chip cp-chip-meal"   id="cp-am-${m.id}"  style="display:none">${ic("meal")} ৳0</span>
+          <span class="cp-chip cp-chip-change" id="cp-ch-${m.id}"  style="display:none">${ic("send")} Change ৳0</span>
         </div>
 
         <div class="cp-input-row">
@@ -374,7 +374,7 @@ function buildCollectTable() {
   wrap.innerHTML = `
     <div class="cp-cards-grid">${cards}</div>
     <div style="margin-top:12px;display:flex;gap:8px;">
-      <button class="btn btn-ghost btn-sm" data-on-click="loadCollectMonth()">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="loadCollectMonth()">${ic("refresh")} Refresh</button>
     </div>`;
 
   // Trigger split calculation for all pre-filled inputs
@@ -506,7 +506,7 @@ async function doReverseCollection(id, memberId) {
     }
 
     await logAudit("delete", "collect", ctx.key, `Reversed payment ${claimed.amount} from ${m.name}`, sp);
-    toast(`Reversed ${fmtTk(Number(claimed.amount))} from ${_decodeEntities(m.name)} ✓`, "success");
+    toast(`Reversed ${fmtTk(Number(claimed.amount))} from ${_decodeEntities(m.name)}`, "success");
   } catch (e) {
     if (claimed && wrote) {
       // utility was already undone — releasing the claim would let a retry undo it twice
@@ -553,14 +553,14 @@ function buildReturnTable() {
     const breakdown = [];
     if (changeRemaining > 0.01) breakdown.push(`
           <div class="cp-brow">
-            <span class="cp-brow-ico">💸</span>
+            <span class="cp-brow-ico">${ic("send")}</span>
             <span class="cp-brow-lbl">Overpaid change</span>
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(changeRemaining)}%;background:var(--accent)"></div></div>
             <span class="cp-brow-val" style="color:var(--accent)">${fmtTk(changeRemaining)}</span>
           </div>`);
     if (owesRemaining > 0.01) breakdown.push(`
           <div class="cp-brow">
-            <span class="cp-brow-ico">🏦</span>
+            <span class="cp-brow-ico">${ic("bank")}</span>
             <span class="cp-brow-lbl">Negative balance owed</span>
             <div class="cp-brow-bar-wrap"><div class="cp-brow-bar" style="width:${pct(owesRemaining)}%;background:var(--green)"></div></div>
             <span class="cp-brow-val" style="color:var(--green)">${fmtTk(owesRemaining)}</span>
@@ -568,7 +568,7 @@ function buildReturnTable() {
 
     return `
       <div class="cp-mcard cp-mcard-ret" id="retr-${m.id}">
-        ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" data-on-click="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">✕</button>` : ""}
+        ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" data-on-click="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">${ic("x")}</button>` : ""}
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
@@ -584,8 +584,8 @@ function buildReturnTable() {
         <div class="cp-breakdown">${breakdown.join('')}</div>
 
         <div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px">
-          ${alreadyCarried > 0 ? `<span class="cp-carry-tag" title="Already moved to next month as account credit — shown for context">↩ ${fmtTk(alreadyCarried)} already carried → ${MONTHS[nm.month]} ${nm.year}</span>` : ''}
-          <span id="ret-carry-${m.id}" class="cp-carry-tag">↩ carry ${fmtTk(total)} → ${MONTHS[nm.month]} ${nm.year}</span>
+          ${alreadyCarried > 0 ? `<span class="cp-carry-tag" title="Already moved to next month as account credit — shown for context">${ic("undo")} ${fmtTk(alreadyCarried)} already carried → ${MONTHS[nm.month]} ${nm.year}</span>` : ''}
+          <span id="ret-carry-${m.id}" class="cp-carry-tag">${ic("undo")} carry ${fmtTk(total)} → ${MONTHS[nm.month]} ${nm.year}</span>
         </div>
 
         <div class="cp-input-row">
@@ -607,7 +607,7 @@ function buildReturnTable() {
   wrap.innerHTML = `
     <div class="cp-cards-grid">${cards}</div>
     <div style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-      💡 Enter ৳0 and Save to carry the whole amount to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
+      ${ic("lightbulb")} Enter ৳0 and Save to carry the whole amount to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
     </div>`;
 }
 
@@ -624,7 +624,7 @@ function onReturnAmtInput(memberId) {
 
   const carryEl = document.getElementById("ret-carry-" + memberId);
   if (carryEl) {
-    carryEl.textContent = carryFwd > 0 ? "↩ carry " + fmtTk(carryFwd) + " → next month" : "✓ fully returned — nothing carried";
+    carryEl.textContent = carryFwd > 0 ? "carry " + fmtTk(carryFwd) + " → next month" : "fully returned — nothing carried";
     carryEl.classList.toggle("is-green", carryFwd <= 0);
   }
   const remEl = document.getElementById("ret-rem-" + memberId);
@@ -738,7 +738,7 @@ async function saveReturnRow(memberId) {
     const parts = [];
     if (cashTotal  > 0) parts.push(`Cash returned: ${fmtTk(cashTotal)}`);
     if (carryTotal > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(carryTotal)}`);
-    toast("Return saved ✓  " + (parts.join("  ·  ") || "Nothing to return"), "success");
+    toast("Return saved  " + (parts.join("  ·  ") || "Nothing to return"), "success");
 
     const nextMonthLabel = MONTHS[nm.month] + " " + nm.year;
     if (chgRes) {
@@ -768,7 +768,7 @@ function buildChangeReceiptText(d) {
     hour:"2-digit", minute:"2-digit", hour12:true
   });
   const lines = [];
-  lines.push(`💸 CHANGE RECEIPT`);
+  lines.push(`CHANGE RECEIPT`);
   lines.push(`─────────────────────`);
   lines.push(`Mess:    ${messName}`);
   lines.push(`Member:  ${d.member.name}`);
@@ -777,12 +777,12 @@ function buildChangeReceiptText(d) {
   lines.push(``);
   lines.push(`Overpaid (change):  ${fmtTk(d.totalChange)}`);
   lines.push(`─────────────────────`);
-  if (d.cashNow  > 0) lines.push(`💵 Cash returned now:  ${fmtTk(d.cashNow)}`);
-  if (d.newCarry > 0) lines.push(`↩ Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
+  if (d.cashNow  > 0) lines.push(`Cash returned now:  ${fmtTk(d.cashNow)}`);
+  if (d.newCarry > 0) lines.push(`Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
   lines.push(`─────────────────────`);
   lines.push(d.newCarry > 0
     ? `Remaining carried forward: ${fmtTk(d.newCarry)}`
-    : `✓ Change fully returned`);
+    : `Change fully returned`);
   lines.push(``);
   lines.push(`— sent from ${messName} manager`);
   return lines.join("\n");
@@ -848,11 +848,11 @@ function showChangeReceipt(d) {
 
   <div id="chg-modal">
     <div class="chg-head">
-      <div class="chg-head-icon">💸</div>
+      <div class="chg-head-icon">${ic("send")}</div>
       <div class="chg-head-name">${messName}</div>
       <div class="chg-head-sub">Change & Carry Forward Receipt</div>
       <span class="chg-badge ${isFullyReturned ? 'chg-badge-ok' : 'chg-badge-fwd'}">
-        ${isFullyReturned ? "✓ Fully Returned" : "↩ Partially Carried"}
+        ${isFullyReturned ? "" + ic("check") + " Fully Returned" : "" + ic("undo") + " Partially Carried"}
       </span>
     </div>
 
@@ -876,7 +876,7 @@ function showChangeReceipt(d) {
     ${d.cashNow > 0 ? `
     <div class="chg-row">
       <div class="chg-row-left">
-        <span class="chg-row-ico">💵</span>
+        <span class="chg-row-ico">${ic("cash")}</span>
         <div>
           <div class="chg-row-lbl">Cash Returned Now</div>
           <div class="chg-row-sub">Handed back to ${d.member.name}</div>
@@ -888,7 +888,7 @@ function showChangeReceipt(d) {
     ${d.newCarry > 0 ? `
     <div class="chg-row" style="border:1px solid var(--blue)">
       <div class="chg-row-left">
-        <span class="chg-row-ico">↩</span>
+        <span class="chg-row-ico">${ic("undo")}</span>
         <div>
           <div class="chg-row-lbl">Carried to ${d.nextMonthLabel}</div>
           <div class="chg-row-sub">Reduces utility total due next month</div>
@@ -905,23 +905,23 @@ function showChangeReceipt(d) {
     <div class="chg-net ${isFullyReturned ? 'chg-net-ok' : 'chg-net-fwd'}">
       <span>Change Status</span>
       <span style="color:${isFullyReturned ? 'var(--green)' : 'var(--blue)'}">
-        ${isFullyReturned ? "✓ Fully returned" : `↩ ${fmtTk(d.newCarry)} carried forward`}
+        ${isFullyReturned ? "" + ic("check") + " Fully returned" : `${ic("undo")} ${fmtTk(d.newCarry)} carried forward`}
       </span>
     </div>
 
     <div class="chg-foot">
       <div class="chg-foot-txt">— Generated by ${messName} Manager —</div>
-      ${d.member.phone ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
+      ${d.member.phone ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">${ic("lightbulb")} Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
     </div>
 
     <div class="chg-btns">
-      <button class="btn btn-primary btn-sm" data-on-click="copyChangeReceipt(this)">📋 Copy</button>
+      <button class="btn btn-primary btn-sm" data-on-click="copyChangeReceipt(this)">${ic("clipboard")} Copy</button>
       <a class="btn btn-sm" href="${waUrl}" target="_blank" rel="noopener"
          style="background:#25D366;border:1px solid #1fb759;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;border-radius:var(--radius-sm)">
-        💬 WhatsApp
+        ${ic("message")} WhatsApp
       </a>
-      <button class="btn btn-ghost btn-sm" data-on-click="printChangeReceipt()">🖨 Print</button>
-      <button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">✕ Close</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="printChangeReceipt()">${ic("print")} Print</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">${ic("x")} Close</button>
     </div>
   </div>`;
 
@@ -936,7 +936,7 @@ async function copyChangeReceipt(btn) {
   const text = window._lastChangeReceiptText || "";
   try {
     await navigator.clipboard.writeText(text);
-    if (btn) { const o = btn.textContent; btn.textContent = "✓ Copied"; setTimeout(() => btn.textContent = o, 1600); }
+    if (btn) { const o = btn.textContent; btn.textContent = "Copied"; setTimeout(() => btn.textContent = o, 1600); }
     toast("Receipt copied to clipboard", "success");
   } catch (e) {
     const ta = document.createElement("textarea");
@@ -983,8 +983,8 @@ function printChangeReceipt() {
   .divider{border:none;border-top:2px dashed #ccc;margin:14px 0;}.net{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-radius:10px;margin-top:12px;font-weight:800;font-size:15px;}.net-ok{background:#e8f8f0;border:2px solid #b2dfce;}.net-fwd{background:#fef9ee;border:2px solid #d4950a;}
   .foot{text-align:center;padding:12px 0 2px;border-top:2px dashed #ccc;margin-top:16px;}.foot-txt{font-size:10px;color:#aaa;letter-spacing:.4px;}
   @media print{body{padding:16px 14px;}@page{margin:10mm;size:A5;}}</style></head><body>
-  <div class="head"><div class="head-icon">💸</div><div class="head-name">${messName}</div><div class="head-sub">Change &amp; Carry Forward Receipt</div>
-  <span class="badge ${isFullyReturned ? 'badge-ok' : 'badge-fwd'}">${isFullyReturned ? "✓ Fully Returned" : "↩ Partially Carried"}</span></div>
+  <div class="head"><div class="head-icon">${ic("send")}</div><div class="head-name">${messName}</div><div class="head-sub">Change &amp; Carry Forward Receipt</div>
+  <span class="badge ${isFullyReturned ? 'badge-ok' : 'badge-fwd'}">${isFullyReturned ? "" + ic("check") + " Fully Returned" : "" + ic("undo") + " Partially Carried"}</span></div>
   <div class="meta">
     <div class="ml"><span class="ml-lbl">Receipt No.</span><span class="ml-val" style="font-family:monospace;font-size:11px">${receiptNo}</span></div>
     <div class="ml"><span class="ml-lbl">Date &amp; Time</span><span class="ml-val" style="font-size:11px">${dt}</span></div>
@@ -993,10 +993,10 @@ function printChangeReceipt() {
   </div>
   <div class="hero"><div><div class="hero-lbl">Overpaid (Change Owed)</div><div class="hero-sub">Member paid more than net payable</div></div><div class="hero-amt">${fmtTkP(d.totalChange)}</div></div>
   <div class="sec">Breakdown</div>
-  ${d.cashNow > 0 ? `<div class="row"><div class="row-left"><span class="row-ico">💵</span><div><div class="row-lbl">Cash Returned Now</div><div class="row-sub">Handed back to ${d.member.name}</div></div></div><span class="row-val" style="color:#27ae60">${fmtTkP(d.cashNow)}</span></div>` : ""}
-  ${d.newCarry > 0 ? `<div class="row" style="border:1px solid #aed6f1"><div class="row-left"><span class="row-ico">↩</span><div><div class="row-lbl">Carried to ${d.nextMonthLabel}</div><div class="row-sub">Reduces utility total due next month</div></div></div><span class="row-val" style="color:#2980b9">${fmtTkP(d.newCarry)}</span></div>` : ""}
+  ${d.cashNow > 0 ? `<div class="row"><div class="row-left"><span class="row-ico">${ic("cash")}</span><div><div class="row-lbl">Cash Returned Now</div><div class="row-sub">Handed back to ${d.member.name}</div></div></div><span class="row-val" style="color:#27ae60">${fmtTkP(d.cashNow)}</span></div>` : ""}
+  ${d.newCarry > 0 ? `<div class="row" style="border:1px solid #aed6f1"><div class="row-left"><span class="row-ico">${ic("undo")}</span><div><div class="row-lbl">Carried to ${d.nextMonthLabel}</div><div class="row-sub">Reduces utility total due next month</div></div></div><span class="row-val" style="color:#2980b9">${fmtTkP(d.newCarry)}</span></div>` : ""}
   <hr class="divider">
-  <div class="net ${isFullyReturned ? 'net-ok' : 'net-fwd'}"><span>Change Status</span><span style="color:${isFullyReturned ? '#27ae60' : '#d4950a'}">${isFullyReturned ? "✓ Fully returned" : `↩ ${fmtTkP(d.newCarry)} carried forward`}</span></div>
+  <div class="net ${isFullyReturned ? 'net-ok' : 'net-fwd'}"><span>Change Status</span><span style="color:${isFullyReturned ? '#27ae60' : '#d4950a'}">${isFullyReturned ? "" + ic("check") + " Fully returned" : `${ic("undo")} ${fmtTkP(d.newCarry)} carried forward`}</span></div>
   <div class="foot"><div class="foot-txt">— Generated by ${messName} Manager —</div></div>
   </body></html>`);
   w.document.close();
@@ -1030,17 +1030,17 @@ function onCollectAmtInput(memberId) {
     const el = document.getElementById(id);
     if (!el) return;
     if (v > 0) {
-      el.textContent = label + " " + fmtTk(v);
+      el.innerHTML = label + " " + fmtTk(v);   // label is an icon (ic()), v a number
       el.style.display = "inline-flex";
     } else {
       el.style.display = "none";
     }
   };
-  setChip("cp-apd-" + memberId, "⏪",         allocPrevDue);
-  setChip("cp-ar-"  + memberId, "🏠",         allocRent);
-  setChip("cp-au-"  + memberId, "⚡",         allocUtil);
-  setChip("cp-am-"  + memberId, "🍽️",        allocMeal);
-  setChip("cp-ch-"  + memberId, "💸 Change", change);
+  setChip("cp-apd-" + memberId, "" + ic("rewind") + "",         allocPrevDue);
+  setChip("cp-ar-"  + memberId, "" + ic("home") + "",         allocRent);
+  setChip("cp-au-"  + memberId, "" + ic("zap") + "",         allocUtil);
+  setChip("cp-am-"  + memberId, "" + ic("meal") + "",        allocMeal);
+  setChip("cp-ch-"  + memberId, "" + ic("send") + " Change", change);
 }
 
 async function saveCollectRow(memberId) {
@@ -1125,15 +1125,15 @@ async function saveCollectRow(memberId) {
         ? `<span style="color:var(--red)">${fmtTk(newMealRem)}</span>`
         : newMealRem < 0
           ? `<span style="color:var(--green)" title="Bazar credit (৳${fmtTk(Math.abs(mealRem))}) covers meal — no meal payment needed">surplus ${fmtTk(Math.abs(mealRem))}</span>`
-          : `<span style="color:var(--green)">✓ 0</span>`);
-    setCell("cp-ur-" + memberId, newUtilRem > 0 ? fmtTk(newUtilRem) : "✓ 0", newUtilRem > 0 ? "var(--red)" : "var(--green)");
-    setCell("cp-rr-" + memberId, newRentRem > 0 ? fmtTk(newRentRem) : "✓ 0", newRentRem > 0 ? "var(--red)" : "var(--green)");
+          : `<span style="color:var(--green)">${ic("check")} 0</span>`);
+    setCell("cp-ur-" + memberId, newUtilRem > 0 ? fmtTk(newUtilRem) : "" + ic("check") + " 0", newUtilRem > 0 ? "var(--red)" : "var(--green)");
+    setCell("cp-rr-" + memberId, newRentRem > 0 ? fmtTk(newRentRem) : "" + ic("check") + " 0", newRentRem > 0 ? "var(--red)" : "var(--green)");
     setCell("cp-net-" + memberId,
       newTotal > 0
         ? `<b style="color:var(--red)">${fmtTk(newTotal)}</b>`
         : r.netPayable < 0
           ? `<b style="color:var(--green)">Get ${fmtTk(Math.abs(r.netPayable))}</b>`
-          : `<b style="color:var(--green)">✓ Settled</b>`);
+          : `<b style="color:var(--green)">${ic("check")} Settled</b>`);
 
     const amtEl = document.getElementById("cp-amt-" + memberId);
     if (amtEl) amtEl.value = "";
@@ -1169,8 +1169,8 @@ async function saveCollectRow(memberId) {
     if (allocUtil    > 0) parts.push(`Util ${fmtTk(allocUtil)}`);
     if (allocRent    > 0) parts.push(`Rent ${fmtTk(allocRent)}`);
     const msg = change > 0
-      ? `Saved ✓  ${parts.join(" • ") || "—"}  · Change: ${fmtTk(change)}`
-      : `Saved ✓  ${parts.join(" • ") || "—"}`;
+      ? `Saved ${ic("check")}  ${parts.join(" • ") || "—"}  · Change: ${fmtTk(change)}`
+      : `Saved ${ic("check")}  ${parts.join(" • ") || "—"}`;
     toast(msg, "success");
 
     // ── Re-fetch from DB so the table reflects exactly what was saved ──
@@ -1222,7 +1222,7 @@ function buildCreditReceiptText(d) {
     hour:"2-digit", minute:"2-digit", hour12:true
   });
   const lines = [];
-  lines.push(`🏦 CREDIT DRAWDOWN NOTICE`);
+  lines.push(`CREDIT DRAWDOWN NOTICE`);
   lines.push(`─────────────────────`);
   lines.push(`Mess:    ${messName}`);
   lines.push(`Member:  ${d.member.name}`);
@@ -1231,12 +1231,12 @@ function buildCreditReceiptText(d) {
   lines.push(``);
   lines.push(`Mess owed total:  ${fmtTk(d.messOwes)}`);
   lines.push(`─────────────────────`);
-  if (d.cashNow > 0)  lines.push(`💵 Cash handed back now:  ${fmtTk(d.cashNow)}`);
-  if (d.newCarry > 0) lines.push(`↩ Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
+  if (d.cashNow > 0)  lines.push(`Cash handed back now:  ${fmtTk(d.cashNow)}`);
+  if (d.newCarry > 0) lines.push(`Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
   lines.push(`─────────────────────`);
   lines.push(d.newCarry > 0
     ? `Remaining credit carried forward: ${fmtTk(d.newCarry)}`
-    : `✓ Credit fully settled`);
+    : `Credit fully settled`);
   lines.push(``);
   lines.push(`— sent from ${messName} manager`);
   return lines.join("\n");
@@ -1306,11 +1306,11 @@ function showCreditReceipt(d) {
 
     <!-- ── Header ── -->
     <div class="crdt-head">
-      <div class="crdt-head-icon">🏦</div>
+      <div class="crdt-head-icon">${ic("bank")}</div>
       <div class="crdt-head-name">${messName}</div>
       <div class="crdt-head-sub">Credit Drawdown Receipt</div>
       <span class="crdt-badge ${isFullySettled ? 'crdt-badge-ok' : 'crdt-badge-fwd'}">
-        ${isFullySettled ? "✓ Fully Settled" : "↩ Partially Carried"}
+        ${isFullySettled ? "" + ic("check") + " Fully Settled" : "" + ic("undo") + " Partially Carried"}
       </span>
     </div>
 
@@ -1349,7 +1349,7 @@ function showCreditReceipt(d) {
     ${d.cashNow > 0 ? `
     <div class="crdt-row">
       <div class="crdt-row-left">
-        <span class="crdt-row-ico">💵</span>
+        <span class="crdt-row-ico">${ic("cash")}</span>
         <div>
           <div class="crdt-row-lbl">Cash Handed Back</div>
           <div class="crdt-row-sub">Given to ${d.member.name} now</div>
@@ -1361,7 +1361,7 @@ function showCreditReceipt(d) {
     ${d.newCarry > 0 ? `
     <div class="crdt-row" style="border:1px solid var(--blue)">
       <div class="crdt-row-left">
-        <span class="crdt-row-ico">↩</span>
+        <span class="crdt-row-ico">${ic("undo")}</span>
         <div>
           <div class="crdt-row-lbl">Carried to ${d.nextMonthLabel}</div>
           <div class="crdt-row-sub">Auto-deducted from utility bills</div>
@@ -1381,25 +1381,25 @@ function showCreditReceipt(d) {
     <div class="crdt-net ${isFullySettled ? 'crdt-net-ok' : 'crdt-net-fwd'}">
       <span>Credit Status</span>
       <span style="color:${isFullySettled ? 'var(--green)' : 'var(--blue)'}">
-        ${isFullySettled ? "✓ Fully settled" : `↩ ${fmtTk(d.newCarry)} carried forward`}
+        ${isFullySettled ? "" + ic("check") + " Fully settled" : `${ic("undo")} ${fmtTk(d.newCarry)} carried forward`}
       </span>
     </div>
 
     <!-- ── Footer ── -->
     <div class="crdt-foot">
       <div class="crdt-foot-txt">— Generated by ${messName} Manager —</div>
-      ${d.member.phone ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
+      ${d.member.phone ? "" : `<div style="font-size:10px;color:var(--text3);margin-top:4px">${ic("lightbulb")} Add ${d.member.name}'s phone to enable direct WhatsApp</div>`}
     </div>
 
     <!-- ── Actions ── -->
     <div class="crdt-btns">
-      <button class="btn btn-primary btn-sm" data-on-click="copyCreditReceipt(this)">📋 Copy</button>
+      <button class="btn btn-primary btn-sm" data-on-click="copyCreditReceipt(this)">${ic("clipboard")} Copy</button>
       <a class="btn btn-sm" href="${waUrl}" target="_blank" rel="noopener"
          style="background:#25D366;border:1px solid #1fb759;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;text-decoration:none;border-radius:var(--radius-sm)">
-        💬 WhatsApp
+        ${ic("message")} WhatsApp
       </a>
-      <button class="btn btn-ghost btn-sm" data-on-click="printCreditReceipt()">🖨 Print</button>
-      <button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">✕ Close</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="printCreditReceipt()">${ic("print")} Print</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="closeModal()" style="margin-left:auto">${ic("x")} Close</button>
     </div>
 
   </div>`;
@@ -1415,7 +1415,7 @@ async function copyCreditReceipt(btn) {
   const text = window._lastCreditReceiptText || "";
   try {
     await navigator.clipboard.writeText(text);
-    if (btn) { const o = btn.textContent; btn.textContent = "✓ Copied"; setTimeout(() => btn.textContent = o, 1600); }
+    if (btn) { const o = btn.textContent; btn.textContent = "Copied"; setTimeout(() => btn.textContent = o, 1600); }
     toast("Receipt copied to clipboard", "success");
   } catch (e) {
     const ta = document.createElement("textarea");
@@ -1502,10 +1502,10 @@ function printCreditReceipt() {
 </head>
 <body>
   <div class="head">
-    <div class="head-icon">🏦</div>
+    <div class="head-icon">${ic("bank")}</div>
     <div class="head-name">${messName}</div>
     <div class="head-sub">Credit Drawdown Receipt</div>
-    <span class="badge ${isFullySettled ? 'badge-ok' : 'badge-fwd'}">${isFullySettled ? "✓ Fully Settled" : "↩ Partially Carried"}</span>
+    <span class="badge ${isFullySettled ? 'badge-ok' : 'badge-fwd'}">${isFullySettled ? "" + ic("check") + " Fully Settled" : "" + ic("undo") + " Partially Carried"}</span>
   </div>
 
   <div class="meta">
@@ -1528,7 +1528,7 @@ function printCreditReceipt() {
   ${d.cashNow > 0 ? `
   <div class="row">
     <div class="row-left">
-      <span class="row-ico">💵</span>
+      <span class="row-ico">${ic("cash")}</span>
       <div>
         <div class="row-lbl">Cash Handed Back</div>
         <div class="row-sub">Given to ${d.member.name} now</div>
@@ -1540,7 +1540,7 @@ function printCreditReceipt() {
   ${d.newCarry > 0 ? `
   <div class="row" style="border:1px solid #aed6f1">
     <div class="row-left">
-      <span class="row-ico">↩</span>
+      <span class="row-ico">${ic("undo")}</span>
       <div>
         <div class="row-lbl">Carried to ${d.nextMonthLabel}</div>
         <div class="row-sub">Auto-deducted from utility bills</div>
@@ -1554,7 +1554,7 @@ function printCreditReceipt() {
   <div class="net ${isFullySettled ? 'net-ok' : 'net-fwd'}">
     <span>Credit Status</span>
     <span style="color:${isFullySettled ? '#27ae60' : '#2980b9'}">
-      ${isFullySettled ? "✓ Fully settled" : `↩ ${fmtTkP(d.newCarry)} carried forward`}
+      ${isFullySettled ? "" + ic("check") + " Fully settled" : `${ic("undo")} ${fmtTkP(d.newCarry)} carried forward`}
     </span>
   </div>
 

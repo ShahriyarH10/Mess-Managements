@@ -8,9 +8,9 @@ function renderMembers(el) {
     <div><div class="page-title">Members</div><div class="page-sub">Manage accounts, roles, and transfers</div></div>
     <div class="topbar-actions">
       <div class="an-seg">
-        <button id="mem-tab-members" class="an-seg-btn on" data-on-click="switchMembersTab('members')">👥 Members</button>
-        <button id="mem-tab-roles" class="an-seg-btn" data-on-click="switchMembersTab('roles')">⚡ Roles</button>
-        <button id="mem-tab-transfer" class="an-seg-btn" data-on-click="switchMembersTab('transfer')">👑 Transfer</button>
+        <button id="mem-tab-members" class="an-seg-btn on" data-on-click="switchMembersTab('members')">${ic("users")} Members</button>
+        <button id="mem-tab-roles" class="an-seg-btn" data-on-click="switchMembersTab('roles')">${ic("zap")} Roles</button>
+        <button id="mem-tab-transfer" class="an-seg-btn" data-on-click="switchMembersTab('transfer')">${ic("crown")} Transfer</button>
       </div>
       <button class="btn btn-primary btn-sm" id="mem-add-btn" data-on-click="openAddMemberModal()">+ Add member</button>
     </div>
@@ -18,7 +18,7 @@ function renderMembers(el) {
   <div class="content">
     <!-- Members tab -->
     <div id="mem-pane-members">
-      <div class="info-banner"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Members sign in with their username & password. 👑 = current manager.</div>
+      <div class="info-banner"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Members sign in with their username & password. ${ic("crown")} = current manager.</div>
       <div class="card"><div class="card-title">Members (${members.length})</div><div class="tbl-wrap" id="mem-table"></div></div>
       <div id="mem-former"></div>
     </div>
@@ -30,15 +30,15 @@ function renderMembers(el) {
           <thead><tr><th>Permission</th><th>Manager</th><th>Sub-manager</th><th>Member</th></tr></thead>
           <tbody>
             ${[
-              ["Enter meals & bazar",      "✅","✅","❌"],
-              ["Enter rent & utility",      "✅","✅","❌"],
-              ["View all member profiles",  "✅","✅","❌"],
-              ["Post messages",             "✅","✅","❌"],
-              ["Collect payment",           "✅","✅","❌"],
-              ["Add / remove members",      "✅","❌","❌"],
-              ["Change member passwords",   "✅","❌","❌"],
-              ["Transfer manager role",     "✅","❌","❌"],
-              ["Promote sub-managers",      "✅","❌","❌"],
+              ["Enter meals & bazar",      "" + ic("checkCircle", "ic-green") + "","" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Enter rent & utility",      "" + ic("checkCircle", "ic-green") + "","" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + ""],
+              ["View all member profiles",  "" + ic("checkCircle", "ic-green") + "","" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Post messages",             "" + ic("checkCircle", "ic-green") + "","" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Collect payment",           "" + ic("checkCircle", "ic-green") + "","" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Add / remove members",      "" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Change member passwords",   "" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Transfer manager role",     "" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + "","" + ic("xCircle", "ic-red") + ""],
+              ["Promote sub-managers",      "" + ic("checkCircle", "ic-green") + "","" + ic("xCircle", "ic-red") + "","" + ic("xCircle", "ic-red") + ""],
             ].map(([perm, mgr, sub, mem]) =>
               `<tr><td>${perm}</td><td style="color:var(--green)">${mgr}</td><td style="color:var(--blue)">${sub}</td><td style="color:var(--text3)">${mem}</td></tr>`
             ).join("")}
@@ -53,10 +53,10 @@ function renderMembers(el) {
     <!-- Transfer tab -->
     <div id="mem-pane-transfer" style="display:none">
       <div class="card" style="max-width:520px">
-        <div style="background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--red)">⚠️ Once you transfer the role, you will lose manager access immediately.</div>
+        <div style="background:var(--red-bg);border:1px solid rgba(224,82,82,.25);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--red)">${ic("alert", "ic-amber")} Once you transfer the role, you will lose manager access immediately.</div>
         <div class="card-title">Transfer manager role to</div>
         <div id="transfer-list-inner" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
-        <button class="btn btn-danger" style="width:100%;justify-content:center" data-on-click="doTransferRole()">👑 Transfer manager role</button>
+        <button class="btn btn-danger" style="width:100%;justify-content:center" data-on-click="doTransferRole()">${ic("crown")} Transfer manager role</button>
       </div>
     </div>
   </div>`;
@@ -90,7 +90,7 @@ function renderFormerMembers() {
       <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
       <td>${m.room || "—"}</td>
       <td style="color:var(--text2)">${m.left_at || "—"}</td>
-      <td><button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="restoreMember(this.dataset.mid)">↩ Restore</button></td>
+      <td><button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="restoreMember(this.dataset.mid)">${ic("undo")} Restore</button></td>
     </tr>`).join("")}</tbody></table></div>
   </div>`;
 }
@@ -124,15 +124,15 @@ function renderMembersTable() {
   <tbody>${members.map((m, i) => {
     const col = avatarCol(i); const isMgr = m.role === "manager";
     return `<tr>
-      <td><button class="avatar mm-tbl-av" style="background:${col.bg};color:${col.fg}" data-on-click="openEditMemberModal('${m.id}')" title="${isPhoto(m.photo) ? "Change photo" : "Add a photo"}">${avFace(m.id, m.name)}${isPhoto(m.photo) ? "" : `<span class="mm-cam">📷</span>`}</button></td>
+      <td><button class="avatar mm-tbl-av" style="background:${col.bg};color:${col.fg}" data-on-click="openEditMemberModal('${m.id}')" title="${isPhoto(m.photo) ? "Change photo" : "Add a photo"}">${avFace(m.id, m.name)}${isPhoto(m.photo) ? "" : `<span class="mm-cam">${ic("camera")}</span>`}</button></td>
       <td><b>${m.name}</b></td>
       <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
-      <td>${isMgr ? `<span class="badge badge-amber">👑 Manager</span>` : m.role === 'sub_manager' ? `<span class="badge badge-blue">⚡ Sub</span>` : `<span class="badge">Member</span>`}</td>
+      <td>${isMgr ? `<span class="badge badge-amber">${ic("crown")} Manager</span>` : m.role === 'sub_manager' ? `<span class="badge badge-blue">${ic("zap")} Sub</span>` : `<span class="badge">Member</span>`}</td>
       <td>${m.room || "—"}</td>
       <td style="color:var(--text2)">${m.phone || "—"}</td>
       <td><div style="display:flex;gap:4px">
         <button class="btn btn-ghost btn-sm" data-on-click="openEditMemberModal('${m.id}')">Edit</button>
-        <button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="openManagerResetPasswordModal(this.dataset.mid)" title="Reset password">🔑</button>
+        <button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="openManagerResetPasswordModal(this.dataset.mid)" title="Reset password">${ic("key")}</button>
         ${isMgr ? `<button class="btn btn-ghost btn-sm" disabled style="opacity:.4">Remove</button>` : `<button class="btn btn-danger btn-sm" data-on-click="openLeavingFlow('${m.id}')">Remove</button>`}
       </div></td>
     </tr>`;
@@ -155,8 +155,8 @@ function renderRolesList() {
         <div style="font-size:11px;color:var(--text3)">@${escapeHtml(m.username)}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        ${isMgr ? `<span class="badge badge-amber">👑 Manager</span>` :
-          isSubMgr ? `<span class="badge badge-blue">⚡ Sub-manager</span>
+        ${isMgr ? `<span class="badge badge-amber">${ic("crown")} Manager</span>` :
+          isSubMgr ? `<span class="badge badge-blue">${ic("zap")} Sub-manager</span>
                       <button class="btn btn-ghost btn-sm" data-on-click="setSubManager('${m.id}', false)">Demote</button>` :
           `<span class="badge">Member</span>
            <button class="btn btn-ghost btn-sm" data-on-click="setSubManager('${m.id}', true)">Promote</button>`}
@@ -179,7 +179,7 @@ async function setSubManager(memberId, promote) {
       try {
         await getClient().from("members").update({ role: promote ? "sub_manager" : "member" }).eq("id", memberId).eq("mess_id", messId());
         await logAudit("update", "member", m.name, `${m.name} ${promote ? "promoted to sub-manager" : "demoted to member"}`);
-        toast(promote ? `${m.name} promoted ✓` : `${m.name} demoted ✓`, "success");
+        toast(promote ? `${m.name} promoted` : `${m.name} demoted`, "success");
         members = await dbGetMembers(); buildInitialsMap(members);
         renderRolesList(); renderMembersTable();
       } catch(e) { toast("Error: " + e.message, "error"); }
@@ -243,11 +243,11 @@ function memberModalHTML(m) {
   const col = avatarCol(Math.max(0, idx));
   return `
   <div class="mm-photo">
-    <div class="mm-photo-prev" id="mm-photo-prev" style="background:${col.bg};color:${col.fg}">${m ? avFace(m.id, m.name) : "📷"}</div>
+    <div class="mm-photo-prev" id="mm-photo-prev" style="background:${col.bg};color:${col.fg}">${m ? avFace(m.id, m.name) : "" + ic("camera") + ""}</div>
     <div class="mm-photo-ctl">
       <div class="mm-photo-title">Profile photo</div>
       <div class="mm-photo-btns">
-        <label class="btn btn-ghost btn-sm mm-upload">📷 ${m && isPhoto(m.photo) ? "Change" : "Upload"} photo<input type="file" accept="image/*" id="mm-photo-file" data-on-change="pickMemberPhoto(this)"/></label>
+        <label class="btn btn-ghost btn-sm mm-upload">${ic("camera")} ${m && isPhoto(m.photo) ? "Change" : "Upload"} photo<input type="file" accept="image/*" id="mm-photo-file" data-on-change="pickMemberPhoto(this)"/></label>
         <button class="btn btn-ghost btn-sm" id="mm-photo-rm" data-on-click="removeMemberPhoto()" ${m && isPhoto(m.photo) ? "" : "hidden"}>Remove</button>
       </div>
       <div class="mm-photo-hint">Cropped to a square and resized — any JPG or PNG works.</div>
@@ -361,7 +361,8 @@ async function pickMemberPhoto(input) {
 function removeMemberPhoto() {
   window._mmPhoto = { value: null, changed: true };
   const prev = document.getElementById("mm-photo-prev");
-  if (prev) prev.textContent = (document.getElementById("mm-name")?.value || "?").split(" ").map(w => w[0] || "").join("").slice(0, 2).toUpperCase() || "📷";
+  const initials = (document.getElementById("mm-name")?.value || "").split(" ").map(w => w[0] || "").join("").slice(0, 2).toUpperCase();
+  if (prev) { if (initials) prev.textContent = initials; else prev.innerHTML = ic("camera"); }
   document.getElementById("mm-photo-rm")?.setAttribute("hidden", "");
 }
 
@@ -382,7 +383,7 @@ async function openLeavingFlow(id) {
   const calc = calcMemberSettlement(m, allMeals, allBazar, rentRec, utilRes.data, prevUtilRes.data, key);
   const net = calc.netPayable;
   const netColor = net > 0 ? "var(--red)" : net < 0 ? "var(--green)" : "var(--text3)";
-  const netLabel = net > 0 ? `Owes ${fmtTk(net)}` : net < 0 ? `Mess owes them ${fmtTk(Math.abs(net))}` : "Fully settled ✓";
+  const netLabel = net > 0 ? `Owes ${fmtTk(net)}` : net < 0 ? `Mess owes them ${fmtTk(Math.abs(net))}` : "Fully settled " + ic("check") + "";
 
   document.getElementById("modal-content").innerHTML = `
     <div class="modal-title">Remove ${escapeHtml(m.name)}</div>
@@ -404,10 +405,10 @@ async function openLeavingFlow(id) {
 
     ${net !== 0 ? `
     <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--accent)">
-      ⚠️ This member has an outstanding balance. Settle it before removing, or proceed anyway — the balance stays on record if they're restored later.
+      ${ic("alert", "ic-amber")} This member has an outstanding balance. Settle it before removing, or proceed anyway — the balance stays on record if they're restored later.
     </div>` : `
     <div style="background:var(--green-bg);border:1px solid rgba(76,175,130,.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--green)">
-      ✓ Balance is clear — safe to remove.
+      ${ic("check")} Balance is clear — safe to remove.
     </div>`}
 
     <div class="modal-footer">
@@ -444,7 +445,7 @@ function openManagerResetPasswordModal(memberId) {
   const member = members.find(m => m.id === memberId);
   if (!member) { toast("Member not found", "error"); return; }
   document.getElementById("modal-content").innerHTML = `
-    <div class="modal-title">🔑 Reset Password — ${member.name}</div>
+    <div class="modal-title">${ic("key")} Reset Password — ${member.name}</div>
     <div class="modal-sub">Set a new password for this member.</div>
     <div class="field"><label>New password *</label><input type="password" class="input" id="mrp-new" placeholder="Min 6 characters" autocomplete="new-password"/></div>
     <div class="field"><label>Confirm new password *</label><input type="password" class="input" id="mrp-confirm" placeholder="Repeat new password" autocomplete="new-password"/></div>
@@ -469,6 +470,6 @@ async function doManagerResetPassword(memberId, memberName) {
     const newHash = await hashPassword(newPw);
     const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId).eq("mess_id", messId());
     if (error) throw error;
-    closeModal(); toast(`Password reset for ${memberName} ✓`, "success");
+    closeModal(); toast(`Password reset for ${memberName}`, "success");
   } catch(e) { showErr("Error: " + e.message); }
 }

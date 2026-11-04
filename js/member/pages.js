@@ -101,10 +101,10 @@ async function renderMyMeals(el) {
 
   <div class="content dk">
     <div class="pf-tiles">
-      ${tile("🍽️", "Meals · " + MONTHS[mo], myTotal, `${daysEaten ? round2(myTotal / daysEaten) : 0}/day on days you ate`)}
-      ${tile("📅", "Days eaten", daysEaten, `of ${loggedDays} logged day${loggedDays === 1 ? "" : "s"} so far`)}
-      ${tile("🧾", "Meal cost so far", fmtTk(round2(myTotal * rate)), `at ${fmtTk(round2(rate))}/meal right now`)}
-      ${tile("🌙", "Days off planned", upcoming.length, upcoming.length ? "next: " + new Date(upcoming[0].date + "T00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "none coming up")}
+      ${tile("" + ic("meal") + "", "Meals · " + MONTHS[mo], myTotal, `${daysEaten ? round2(myTotal / daysEaten) : 0}/day on days you ate`)}
+      ${tile("" + ic("calendar") + "", "Days eaten", daysEaten, `of ${loggedDays} logged day${loggedDays === 1 ? "" : "s"} so far`)}
+      ${tile("" + ic("receipt") + "", "Meal cost so far", fmtTk(round2(myTotal * rate)), `at ${fmtTk(round2(rate))}/meal right now`)}
+      ${tile("" + ic("moon") + "", "Days off planned", upcoming.length, upcoming.length ? "next: " + new Date(upcoming[0].date + "T00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "none coming up")}
     </div>
 
     <div class="ml-grid">
@@ -123,14 +123,14 @@ async function renderMyMeals(el) {
             </div>
           </div>
           <div class="ms-steps">
-            ${stepper("my-meal-day", "☀", "Day")}
-            ${stepper("my-meal-night", "🌙", "Night")}
+            ${stepper("my-meal-day", "" + ic("sun") + "", "Day")}
+            ${stepper("my-meal-night", "" + ic("moon") + "", "Night")}
           </div>
           <div class="field">
             <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
             <input type="text" class="input" id="my-meal-note" placeholder="e.g. Guest for dinner"/>
           </div>
-          <button class="btn btn-primary ml-save" data-on-click="saveMyMealEntry()">✓ Save my meals</button>
+          <button class="btn btn-primary ml-save" data-on-click="saveMyMealEntry()">${ic("check")} Save my meals</button>
           <div class="ml-hint">Saved straight away; the manager is notified. Tip: tap a day on the calendar to edit it.</div>
         </div>
 
@@ -141,12 +141,12 @@ async function renderMyMeals(el) {
             <div class="field"><label>To</label><input type="date" class="input" id="abs-to" value="${dt}" min="${dt}"/></div>
           </div>
           <div class="ma-skips">
-            <label class="ma-skip"><input type="checkbox" id="abs-skip-day" checked/><span>☀ Skip day</span></label>
-            <label class="ma-skip"><input type="checkbox" id="abs-skip-night" checked/><span>🌙 Skip night</span></label>
+            <label class="ma-skip"><input type="checkbox" id="abs-skip-day" checked/><span>${ic("sun")} Skip day</span></label>
+            <label class="ma-skip"><input type="checkbox" id="abs-skip-night" checked/><span>${ic("moon")} Skip night</span></label>
           </div>
           <div class="ml-2" style="margin-top:12px">
-            <button class="btn btn-primary" style="justify-content:center" data-on-click="markAbsenceRange()">✗ Mark off</button>
-            <button class="btn btn-ghost" style="justify-content:center" data-on-click="clearAbsenceRange()">✓ I'll eat</button>
+            <button class="btn btn-primary" style="justify-content:center" data-on-click="markAbsenceRange()">${ic("x")} Mark off</button>
+            <button class="btn btn-ghost" style="justify-content:center" data-on-click="clearAbsenceRange()">${ic("check")} I'll eat</button>
           </div>
           <div class="ma-head">Coming up</div>
           <div id="upcoming-absences">${buildUpcomingAbsences(upcoming)}</div>
@@ -165,7 +165,7 @@ async function renderMyMeals(el) {
               const a = v ? (0.3 + (v / myMax) * 0.7).toFixed(2) : 0;
               return `<button class="dk-day${d === now.getDate() ? " dk-today-cell" : ""}${d > gone && !off ? " dk-future" : ""}${off ? " ma-off" : ""}"
                 ${v ? `style="--a:${a}"` : ""} title="${MONTHS[mo]} ${d}: ${v} meal${v === 1 ? "" : "s"}${off ? " · " + off + " off" : ""}"
-                data-on-click="${setDate(date)}"><span>${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">✗</b>` : ""}</button>`;
+                data-on-click="${setDate(date)}"><span>${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">${ic("x")}</b>` : ""}</button>`;
             }).join("")}
           </div>
         </div>
@@ -289,7 +289,7 @@ async function saveMyMealEntry() {
       note
     );
 
-    toast("Meal updated. Manager notified ✓", "success");
+    toast("Meal updated. Manager notified", "success");
     // Small delay before re-render so Supabase write propagates
     setTimeout(() => navigate("my-meals"), 350);
   } catch (e) {
@@ -353,10 +353,10 @@ async function renderMyBazar(el) {
 
   <div class="content dk">
     <div class="pf-tiles">
-      ${tile("🛒", "This month", fmtTk(thisM), `${share}% of ${fmtTk(round2(messTotal))} mess bazar`, share)}
-      ${tile("🏅", "Your rank", rank ? "#" + rank : "—", rank ? `of ${ranked.length} contributor${ranked.length === 1 ? "" : "s"} this month` : "no bazar yet this month", null)}
-      ${tile("🗓️", "Last month", fmtTk(lastM), lastM && thisM ? `${thisM >= lastM ? "↑" : "↓"} ${Math.abs(Math.round(((thisM - lastM) / lastM) * 100))}% so far vs last month` : MONTHS[Number(prevKey.slice(5)) - 1], null)}
-      ${tile("🧾", "Entries", entriesThis, `this month · ${mine.length} in total`, null)}
+      ${tile("" + ic("cart") + "", "This month", fmtTk(thisM), `${share}% of ${fmtTk(round2(messTotal))} mess bazar`, share)}
+      ${tile("" + ic("award", "ic-amber") + "", "Your rank", rank ? "#" + rank : "—", rank ? `of ${ranked.length} contributor${ranked.length === 1 ? "" : "s"} this month` : "no bazar yet this month", null)}
+      ${tile("" + ic("calendar") + "", "Last month", fmtTk(lastM), lastM && thisM ? `${thisM >= lastM ? "↑" : "↓"} ${Math.abs(Math.round(((thisM - lastM) / lastM) * 100))}% so far vs last month` : MONTHS[Number(prevKey.slice(5)) - 1], null)}
+      ${tile("" + ic("receipt") + "", "Entries", entriesThis, `this month · ${mine.length} in total`, null)}
     </div>
 
     <div class="ml-grid">
@@ -381,7 +381,7 @@ async function renderMyBazar(el) {
           <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
           <input type="text" class="input" id="my-bazar-note" placeholder="e.g. Vegetables and fish"/>
         </div>
-        <button class="btn btn-primary ml-save" data-on-click="saveMyBazarEntry()">✓ Save bazar</button>
+        <button class="btn btn-primary ml-save" data-on-click="saveMyBazarEntry()">${ic("check")} Save bazar</button>
         <div class="ml-hint">Saving the same date again replaces that day's amount. The manager is notified.</div>
       </div>
 
@@ -396,7 +396,7 @@ async function renderMyBazar(el) {
               <b class="ml-val">${fmtTk(x.amt)}</b>
               <button class="btn btn-ghost btn-sm" data-on-click="document.getElementById('my-bazar-date').value='${x.date}';fillMyBazarFromDate()" title="Load this day into the form">Edit</button>
             </div>`).join("")}
-        `).join("") : `<div class="empty"><div>🛒</div><div>No bazar yet — add your first one on the left.</div></div>`}
+        `).join("") : `<div class="empty"><div>${ic("cart")}</div><div>No bazar yet — add your first one on the left.</div></div>`}
       </div>
     </div>
   </div>`;
@@ -466,7 +466,7 @@ async function saveMyBazarEntry() {
       note
     );
 
-    toast("Bazar updated. Manager notified ✓", "success");
+    toast("Bazar updated. Manager notified", "success");
     setTimeout(() => navigate("my-bazar"), 350);
   } catch (e) {
     toast("Error: " + e.message, "error");
@@ -505,11 +505,11 @@ async function renderMyPayments(el) {
   const hist = [];
   (allRent || []).forEach(r => {
     const e = rentEntryFor(r.entries, member);
-    if (e && Number(e.paid || 0) > 0) hist.push({ key: r.month_key, type: "Rent", icon: "🏠", paid: Number(e.paid), of: Number(e.rent || 0), status: e.status, note: e.notes });
+    if (e && Number(e.paid || 0) > 0) hist.push({ key: r.month_key, type: "Rent", icon: "" + ic("home") + "", paid: Number(e.paid), of: Number(e.rent || 0), status: e.status, note: e.notes });
   });
   (allUtil || []).forEach(r => {
     const p = (r.payments || {})[member.name];
-    if (p && Number(p.paid || 0) > 0) hist.push({ key: r.month_key, type: "Utility", icon: "⚡", paid: Number(p.paid), of: null, status: p.status, note: p.notes });
+    if (p && Number(p.paid || 0) > 0) hist.push({ key: r.month_key, type: "Utility", icon: "" + ic("zap") + "", paid: Number(p.paid), of: null, status: p.status, note: p.notes });
   });
   hist.sort((a, b) => b.key.localeCompare(a.key) || a.type.localeCompare(b.type));
 
@@ -521,7 +521,7 @@ async function renderMyPayments(el) {
       ${pct != null ? `<div class="dk-bar pf-share"><i style="width:${pct}%;background:${pct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>` : ""}
     </div>`;
   const pct = (a, b) => (b > 0 ? Math.min(100, Math.round((a / b) * 100)) : null);
-  const types = [["rent", "🏠", "Room rent"], ["elec", "⚡", "Electricity"], ["gas", "🔥", "Gas"], ["wifi", "📶", "WiFi"], ["khala", "👩", "Khala"], ["other", "📦", "Other"]];
+  const types = [["rent", "" + ic("home") + "", "Room rent"], ["elec", "" + ic("zap") + "", "Electricity"], ["gas", "" + ic("flame") + "", "Gas"], ["wifi", "" + ic("wifi") + "", "WiFi"], ["khala", "" + ic("cook") + "", "Khala"], ["other", "" + ic("box") + "", "Other"]];
   const statusBadge = st => `<span class="badge ${st === "paid" ? "badge-green" : st === "partial" ? "badge-amber" : "badge-red"}">${st === "paid" ? "Paid" : st === "partial" ? "Partial" : "Unpaid"}</span>`;
 
   el.innerHTML = `
@@ -531,17 +531,17 @@ async function renderMyPayments(el) {
       <div class="page-sub">Record a rent or utility payment you made — it's credited right away</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" data-on-click="navigate('give-payment')" title="Or send money to the manager to confirm">💵 Give payment instead</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="navigate('give-payment')" title="Or send money to the manager to confirm">${ic("cash")} Give payment instead</button>
     </div>
   </div>
 
   <div class="content dk">
     <div class="pf-tiles ml-tiles3">
-      ${tile("🏠", "Rent · " + MONTHS[month], rentDue ? (rentLeft ? fmtTk(rentLeft) + " due" : "✓ Paid") : "—",
+      ${tile("" + ic("home") + "", "Rent · " + MONTHS[month], rentDue ? (rentLeft ? fmtTk(rentLeft) + " due" : "" + ic("check") + " Paid") : "—",
           rentDue ? `${fmtTk(rentPaid)} of ${fmtTk(rentDue)} paid` : "no rent set yet", pct(rentPaid, rentDue), rentDue ? (rentLeft ? "var(--red)" : "var(--green)") : null)}
-      ${tile("⚡", "Utility share · " + MONTHS[month], utilShare ? (utilLeft ? fmtTk(utilLeft) + " due" : "✓ Paid") : "—",
+      ${tile("" + ic("zap") + "", "Utility share · " + MONTHS[month], utilShare ? (utilLeft ? fmtTk(utilLeft) + " due" : "" + ic("check") + " Paid") : "—",
           utilShare ? `${fmtTk(utilPaid)} of ${fmtTk(utilShare)} paid` : "no bills yet", pct(utilPaid, utilShare), utilShare ? (utilLeft ? "var(--red)" : "var(--green)") : null)}
-      ${tile("📌", "Left to pay", totalLeft ? fmtTk(totalLeft) : "✓ Nothing", "rent + utility this month", null, totalLeft ? "var(--red)" : "var(--green)")}
+      ${tile("" + ic("pin") + "", "Left to pay", totalLeft ? fmtTk(totalLeft) : "" + ic("check") + " Nothing", "rent + utility this month", null, totalLeft ? "var(--red)" : "var(--green)")}
     </div>
 
     <div class="ml-grid">
@@ -551,7 +551,7 @@ async function renderMyPayments(el) {
         <div class="field">
           <label>What did you pay?</label>
           <div class="ml-types">
-            ${types.map(([v, ic, t]) => `<button class="ml-type" data-type="${v}" data-on-click="pickBpType(this)">${ic}<span>${t}</span></button>`).join("")}
+            ${types.map(([v, icon, t]) => `<button class="ml-type" data-type="${v}" data-on-click="pickBpType(this)">${icon}<span>${t}</span></button>`).join("")}
           </div>
         </div>
         <div class="ml-2">
@@ -572,7 +572,7 @@ async function renderMyPayments(el) {
           <label>Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
           <input type="text" class="input" id="bp-note" placeholder="e.g. Paid the full electricity bill"/>
         </div>
-        <button class="btn btn-primary ml-save" data-on-click="saveMyPaymentEntry()">✓ Save payment</button>
+        <button class="btn btn-primary ml-save" data-on-click="saveMyPaymentEntry()">${ic("check")} Save payment</button>
         <div class="ml-hint">Credited immediately and added to My Receipts. The manager is notified.</div>
       </div>
 
@@ -585,7 +585,7 @@ async function renderMyPayments(el) {
             <td>${h.icon} ${h.type}${h.note ? `<div class="dk-mini">${escapeHtml(h.note)}</div>` : ""}</td>
             <td style="text-align:right;color:var(--green);font-weight:600;white-space:nowrap">${fmtTk(h.paid)}${h.of ? `<div class="dk-mini">of ${fmtTk(h.of)}</div>` : ""}</td>
             <td>${statusBadge(h.status)}</td></tr>`).join("")}</tbody>
-        </table></div>` : `<div class="empty"><div>🧾</div><div>No rent or utility payments recorded yet</div></div>`}
+        </table></div>` : `<div class="empty"><div>${ic("receipt")}</div><div>No rent or utility payments recorded yet</div></div>`}
       </div>
     </div>
   </div>`;
@@ -778,7 +778,7 @@ async function saveMyPaymentEntry() {
       split: billType === "rent" ? { allocRent: amount } : { allocUtil: amount },
     });
 
-    toast("Payment saved. Manager notified ✓", "success");
+    toast("Payment saved. Manager notified", "success");
     setTimeout(() => navigate("my-payments"), 350);
   } catch (e) {
     toast("Error: " + e.message, "error");
@@ -814,7 +814,7 @@ function renderMyMonthLog(el) {
 
       <div id="mylog-content">
         <div class="empty" style="padding:32px;text-align:center">
-          <div style="font-size:32px;margin-bottom:8px">📋</div>
+          <div style="font-size:32px;margin-bottom:8px">${ic("clipboard")}</div>
           <div>Select a month and click <b>Generate Report</b></div>
         </div>
       </div>
@@ -891,30 +891,30 @@ async function loadMyMonthLog() {
 
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-label">🍽 Total meals (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-label">${ic("meal")} Total meals (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value">${totalMeals}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">📊 Meal rate</div>
+          <div class="stat-label">${ic("chart")} Meal rate</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(mealRate)}</div>
           <div class="stat-sub">${fmtTk(totalBazar)} ÷ ${totalMeals} meals</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">🛒 Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-label">${ic("cart")} Total bazar (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(totalBazar)}</div>
         </div>
         <div class="stat-card" style="border-color:rgba(91,155,213,.3)">
-          <div class="stat-label" style="color:var(--blue)">🔵 Prepaid bills (${MONTHS[month].slice(0,3)})</div>
+          <div class="stat-label" style="color:var(--blue)">${ic("dot", "ic-blue")} Prepaid bills (${MONTHS[month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px;color:var(--blue)">${fmtTk(prepaidTotal)}</div>
           <div class="stat-sub">Elec ${fmtTk(elecAmt)} + Gas ${fmtTk(gasAmt)} + WiFi ${fmtTk(wifiAmt)}</div>
         </div>
         <div class="stat-card" style="border-color:rgba(231,76,60,.3)">
-          <div class="stat-label" style="color:var(--red)">🔴 Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
+          <div class="stat-label" style="color:var(--red)">${ic("dot", "ic-red")} Postpaid bills (${MONTHS[prev.month].slice(0,3)})</div>
           <div class="stat-value" style="font-size:17px;color:var(--red)">${fmtTk(postpaidTotal)}</div>
           <div class="stat-sub">Khala ${fmtTk(khalaTotal)} + Other ${fmtTk(otherTotal)}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">⚡ Prepaid per member</div>
+          <div class="stat-label">${ic("zap")} Prepaid per member</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(prepaidShare)}</div>
           <div class="stat-sub">${prepaidTotal} ÷ ${members.length} members</div>
         </div>
@@ -939,13 +939,13 @@ async function loadMyMonthLog() {
               <th rowspan="2">Member</th>
               <th rowspan="2">Meals<br><span style="font-size:10px;color:var(--text3)">${MONTHS[prev.month].slice(0,3)}</span></th>
               <th colspan="3" style="color:var(--red);background:rgba(231,76,60,.07)">
-                🔴 Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
+                ${ic("dot", "ic-red")} Postpaid — ${MONTHS[prev.month].slice(0,3)} ${prev.year}
               </th>
               <th colspan="2" style="color:var(--blue);background:rgba(91,155,213,.07)">
-                🔵 Prepaid — ${MONTHS[month].slice(0,3)} ${year}
+                ${ic("dot", "ic-blue")} Prepaid — ${MONTHS[month].slice(0,3)} ${year}
               </th>
               <th colspan="6" style="color:var(--green);background:rgba(39,174,96,.07)">
-                ✅ Credits
+                ${ic("checkCircle", "ic-green")} Credits
               </th>
               <th rowspan="2" style="background:var(--bg3)">Net</th>
             </tr>
@@ -959,7 +959,7 @@ async function loadMyMonthLog() {
               <th style="color:var(--green)">Meal paid</th>
               <th style="color:var(--green)">Rent paid</th>
               <th style="color:var(--green)">Util paid</th>
-              <th style="color:var(--blue)">↩ Carried fwd</th>
+              <th style="color:var(--blue)">${ic("undo")} Carried fwd</th>
               <th style="color:var(--red)">Prev due</th>
             </tr>
           </thead>
@@ -970,10 +970,10 @@ async function loadMyMonthLog() {
                 <td><b>${p.memberName}</b>
                   <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">
                     <span class="badge ${p.rentStatus === 'paid' ? 'badge-green' : p.rentStatus === 'partial' ? 'badge-amber' : 'badge-red'}" style="font-size:9px">
-                      rent ${p.rentStatus === 'paid' ? '✓' : p.rentStatus === 'partial' ? '~' : '✗'}
+                      rent ${p.rentStatus === 'paid' ? '' + ic("check") + '' : p.rentStatus === 'partial' ? '~' : '' + ic("x") + ''}
                     </span>
                     <span class="badge ${p.utilityStatus === 'paid' ? 'badge-green' : p.utilityStatus === 'partial' ? 'badge-amber' : 'badge-red'}" style="font-size:9px">
-                      util ${p.utilityStatus === 'paid' ? '✓' : p.utilityStatus === 'partial' ? '~' : '✗'}
+                      util ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : p.utilityStatus === 'partial' ? '~' : '' + ic("x") + ''}
                     </span>
                   </div>
                 </td>
@@ -1000,7 +1000,7 @@ async function loadMyMonthLog() {
                   ${p.utilityPaid > 0 ? fmtTk(p.utilityPaid) : '৳0'}
                 </td>
                 <td style="color:${(p.messCredit||0) > 0 ? 'var(--blue)' : 'var(--text3)'}">
-                  ${(p.messCredit||0) > 0 ? '↩ ' + fmtTk(p.messCredit) : '—'}
+                  ${(p.messCredit||0) > 0 ? '' + ic("undo") + ' ' + fmtTk(p.messCredit) : '—'}
                 </td>
                 <td style="color:${(p.prevDue||0) > 0 ? 'var(--red)' : 'var(--text3)'}">
                   ${(p.prevDue||0) > 0 ? fmtTk(p.prevDue) : '—'}
@@ -1013,7 +1013,7 @@ async function loadMyMonthLog() {
                   >Details</button>
                   <div>
                     <b class="${p.netWithPrevDue > 0 ? 'net-neg' : p.netWithPrevDue < 0 ? 'net-pos' : ''}" style="font-size:14px">
-                      ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '✓ Settled'}
+                      ${p.netWithPrevDue > 0 ? 'Pay ' + fmtTk(p.netWithPrevDue) : p.netWithPrevDue < 0 ? 'Get ' + fmtTk(Math.abs(p.netWithPrevDue)) : '' + ic("check") + ' Settled'}
                     </b>
                   </div>
                 </td>
@@ -1037,7 +1037,7 @@ async function loadMyMonthLog() {
               <td style="color:var(--blue)">${fmtTk(round2(payData.reduce((s,p) => s + (p.messCredit||0), 0)))}</td>
               <td style="color:var(--red)">${fmtTk(round2(payData.reduce((s,p) => s + (p.prevDue||0), 0)))}</td>
               <td><b class="${grandNetPayable > 0 ? 'net-neg' : grandNetPayable < 0 ? 'net-pos' : ''}">
-                ${grandNetPayable > 0 ? 'Pay ' + fmtTk(grandNetPayable) : grandNetPayable < 0 ? 'Get ' + fmtTk(Math.abs(grandNetPayable)) : '✓ Balanced'}
+                ${grandNetPayable > 0 ? 'Pay ' + fmtTk(grandNetPayable) : grandNetPayable < 0 ? 'Get ' + fmtTk(Math.abs(grandNetPayable)) : '' + ic("check") + ' Balanced'}
               </b></td>
             </tr>
           </tfoot>
@@ -1045,7 +1045,7 @@ async function loadMyMonthLog() {
       </div>
 
       <div style="font-size:12px;color:var(--text3);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        💡 Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">↩ Carried fwd</b> = credit applied from last month's overpayment — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month.
+        ${ic("lightbulb")} Click <b>Details</b> on any row for a step-by-step breakdown. <b style="color:var(--blue)">${ic("undo")} Carried fwd</b> = credit applied from last month's overpayment — reduces this month's net payable. <b style="color:var(--red)">Prev due</b> = unpaid balance from last month.
       </div>
     </div>
   `;

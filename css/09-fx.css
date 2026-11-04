@@ -342,7 +342,7 @@ tbody tr:hover>td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 
 /* Feature icons spin up, step numbers ripple */
 .feature-icon{display:inline-flex;transition:transform .6s var(--ease-snap);}
-.feature-card:hover .feature-icon{transform:rotate(-12deg) scale(1.25) translateY(-3px);}
+.feature-card:hover .feature-icon{transform:translateY(-2px) scale(1.06);}
 .step-num{position:relative;}
 .step-num::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:0 0 0 0 rgba(212,168,83,.5);animation:fxRing 2.6s ease-out infinite;}
 .step:nth-child(3) .step-num::after{animation-delay:.6s;}.step:nth-child(5) .step-num::after{animation-delay:1.2s;}

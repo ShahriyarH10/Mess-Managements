@@ -188,7 +188,7 @@ async function renderDashboard(el) {
       <div class="page-sub">${MONTHS[month]} ${year} · ${members.length} member${members.length === 1 ? "" : "s"} · day ${daysGone} of ${daysInMonth}</div>
     </div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost btn-sm" data-on-click="navigate('collect')">💵 Collect</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="navigate('collect')">${ic("cash")} Collect</button>
       <button class="btn btn-primary btn-sm" data-on-click="navigate('meals')">+ Meal</button>
     </div>
   </div>
@@ -197,10 +197,10 @@ async function renderDashboard(el) {
 
     <!-- ── KPIs ── -->
     <div class="stat-grid dk-kpis">
-      ${kpi("dk-gold",  "🍽️", "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, buildSparkline(mealSeries, "var(--accent)"))}
-      ${kpi("dk-blue",  "📊", "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             buildSparkline(rateSeries, "var(--blue)"))}
-      ${kpi("dk-green", "🛒", "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, buildSparkline(bazarSeries, "var(--green)"))}
-      ${kpi("dk-gray",  "📅", "Days logged", daysLogged, `of ${daysGone} so far · ${daysInMonth - daysGone} left`,
+      ${kpi("dk-gold",  ic("meal"), "Meals",     round2(totalMeals), `${pace}/day · ${trend(pace, prevPace, null)}`, buildSparkline(mealSeries, "var(--accent)"))}
+      ${kpi("dk-blue",  ic("chart"), "Meal rate", fmtTk(mealRate),   trend(mealRate, prevMealRate, "down"),             buildSparkline(rateSeries, "var(--blue)"))}
+      ${kpi("dk-green", ic("cart"), "Bazar",     fmtTk(totalBazar), `${fmtTk(bzPace)}/day · ${trend(bzPace, prevBzPace, null)}`, buildSparkline(bazarSeries, "var(--green)"))}
+      ${kpi("dk-gray",  ic("calendar"), "Days logged", daysLogged, `of ${daysGone} so far · ${daysInMonth - daysGone} left`,
         `<div class="dk-bar dk-bar-kpi"><i style="width:${logPct}%;background:${logPct >= 100 ? "var(--green)" : "var(--accent)"}"></i></div>`)}
     </div>
 
@@ -252,17 +252,17 @@ async function renderDashboard(el) {
     <div class="card dk-collections">
       <div class="dk-card-title">
         <span>Collections · ${MONTHS[month]}</span>
-        <span class="dk-outstanding">${outstanding > 0 ? `Outstanding <b>${fmtTk(outstanding)}</b>` : `<b style="color:var(--green)">✓ All collected</b>`}</span>
+        <span class="dk-outstanding">${outstanding > 0 ? `Outstanding <b>${fmtTk(outstanding)}</b>` : `<b style="color:var(--green)">${ic("check")} All collected</b>`}</span>
       </div>
       <div class="dk-coll-grid">
         ${rentRec?.entries?.length
-          ? collectRow("🏠", "Room rent", totalRentPaid, totalRentDue, rentPct,
+          ? collectRow(ic("home"), "Room rent", totalRentPaid, totalRentDue, rentPct,
               chip(rentPaidCount, "paid", "ok") + chip(rentPartCount, "partial", "mid") + chip(rentDueCount, "due", "bad"), "var(--accent)")
-          : `<div class="dk-coll dk-coll-empty">🏠 No rent set for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('rent')">Set rent</button></div>`}
+          : `<div class="dk-coll dk-coll-empty">${ic("home")} No rent set for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('rent')">Set rent</button></div>`}
         ${totalUtil > 0
-          ? collectRow("⚡", "Utility", totalUtilPaid, totalUtil, utilPct,
+          ? collectRow(ic("zap"), "Utility", totalUtilPaid, totalUtil, utilPct,
               chip(utilPaidCount, "paid", "ok") + chip(utilPartCount, "partial", "mid") + chip(utilDueCount, "due", "bad"), "var(--purple)")
-          : `<div class="dk-coll dk-coll-empty">⚡ No utility bills for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('utility')">Add bills</button></div>`}
+          : `<div class="dk-coll dk-coll-empty">${ic("zap")} No utility bills for ${MONTHS[month]} <button class="btn btn-ghost btn-sm" data-on-click="navigate('utility')">Add bills</button></div>`}
       </div>
     </div>
 
