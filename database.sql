@@ -34,6 +34,7 @@ create table if not exists members (
   meal_default_day float  default 1,
   meal_default_night float default 1,
   photo      text,                       -- 160×160 JPEG data: URL (see supabase/member-photos.sql)
+  left_at    date,                       -- set when removed: archived, never deleted (supabase/member-id-keys.sql)
   unique(mess_id, username)
 );
 
@@ -42,8 +43,9 @@ create table if not exists members (
 -- ALTER TABLE members ADD COLUMN IF NOT EXISTS meal_default_night float default 1;
 
 -- ── MEALS ──────────────────────────────────────────────
--- meals column is a JSON object:
--- { "MemberName_day": 1, "MemberName_night": 1, "MemberName": 2 }
+-- meals column is a JSON object, keyed by member id (members.id).
+-- The app translates ids <-> names (js/core/member-keys.js):
+-- { "<member id>_day": 1, "<member id>_night": 1 }
 create table if not exists meals (
   id         uuid primary key default uuid_generate_v4(),
   mess_id    uuid references messes(id) on delete cascade,
@@ -54,8 +56,8 @@ create table if not exists meals (
 );
 
 -- ── BAZAR ──────────────────────────────────────────────
--- bazar column is a JSON object:
--- { "MemberName": 850 }
+-- bazar column is a JSON object, keyed by member id (members.id):
+-- { "<member id>": 850 }
 create table if not exists bazar (
   id         uuid primary key default uuid_generate_v4(),
   mess_id    uuid references messes(id) on delete cascade,
@@ -68,7 +70,7 @@ create table if not exists bazar (
 
 -- ── RENT ───────────────────────────────────────────────
 -- entries is a JSON array:
--- [{ name, rent, paid, status, notes }]
+-- [{ member_id, name, rent, paid, status, notes }]   (name = readable copy)
 -- status = 'paid' | 'partial' | 'unpaid'
 create table if not exists rent (
   id         uuid primary key default uuid_generate_v4(),
@@ -86,7 +88,7 @@ create table if not exists rent (
 -- bills column: { elec, gas, wifi, khala, other }
 --   elec/gas/wifi = prepaid bills
 --   khala/other   = postpaid bills
--- payments column: { "MemberName": { paid, status, notes } }
+-- payments column: { "<member id>": { paid, status, notes } }
 -- status = 'paid' | 'partial' | 'unpaid'
 create table if not exists utility_payments (
   id         uuid primary key default uuid_generate_v4(),

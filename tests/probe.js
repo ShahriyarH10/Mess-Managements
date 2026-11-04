@@ -7,4 +7,7 @@ window.__probe = {
   user: () => currentUser,
   managerNav: () => MANAGER_NAV,
   memberNav: () => MEMBER_NAV,
+  memberKeys: () => MemberKeys,
+  members: () => members,
+  formerMembers: () => formerMembers,
 };

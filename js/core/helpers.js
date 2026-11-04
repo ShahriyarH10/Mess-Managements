@@ -198,6 +198,7 @@ function saveSession(u, m, jwt = null) {
 // account in the same browser (and vice-versa).
 function clearSession() {
   currentUser = null; currentMess = null; members = [];
+  MemberKeys.clear(); formerMembers = [];
   try {
     if (MM_MODE === "demo") sessionStorage.removeItem(DEMO_SESSION_KEY);
     else { localStorage.removeItem(SESSION_KEY); localStorage.removeItem("mm_user"); localStorage.removeItem("mm_mess"); }
@@ -207,7 +208,7 @@ function clearSession() {
 /* ROLE GUARD */
 // Actions only the full manager can do — never sub_manager
 const FULL_MANAGER_ONLY_FNS = new Set([
-  "addMember", "updateMember", "deleteMember", "openLeavingFlow",
+  "addMember", "updateMember", "archiveMember", "restoreMember", "openLeavingFlow",
   "openManagerResetPasswordModal", "doManagerResetPassword",
   "setSubManager",
   "toggleMonthLock",

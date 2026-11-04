@@ -86,7 +86,7 @@ const Router = (() => {
     const valid = !!(p && p.u && p.exp && Date.now() <= p.exp);
     currentUser = valid ? p.u : null;
     currentMess = valid ? (p.m || null) : null;
-    members = [];
+    members = []; formerMembers = []; MemberKeys.clear();
     if (p && !valid) clearSession();
     document.body.classList.toggle("is-demo", w === "demo");
   }

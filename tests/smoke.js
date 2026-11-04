@@ -252,6 +252,56 @@
     setv("login-user", "smoke_member"); setv("login-pass", "memberpass1"); W().doLogin();
     await until(() => W().location.hash === "#/demo/app/my-dashboard", 10000);
     log(W().location.hash === "#/demo/app/my-dashboard", "sign in as the new member via the login form");
+
+    /* 8b. records are stored by member id; removing a member archives them and keeps every record */
+    const loginAs = async (u, p, hash) => {
+      W().doLogout(); await until(() => visible("landing-page"));
+      await openHash("#/demo/login"); await until(() => visible("login-screen"));
+      setv("login-user", u); setv("login-pass", p); W().doLogin();
+      if (hash) { await until(() => W().location.hash === hash, 10000); await settle(); }
+    };
+    const smId = mm.data.id, smMess = mm.data.mess_id, raw = () => P().memberKeys().raw(P().sb());
+    await loginAs("smoke_mgr", "secret12", "#/demo/app/dashboard");
+    await openHash("#/demo/app/meals"); await settle();
+    await W().saveMeals(); await sleep(400);
+    const stored = (await raw().from("meals").select("*").eq("mess_id", smMess)).data || [];
+    log(stored.some(r => (smId + "_day") in r.meals) && !stored.some(r => "Smoke Member_day" in r.meals),
+      "saveMeals() stores the member's meals under their member id: " + JSON.stringify(stored.map(r => r.meals)));
+    const viaApp = (await P().sb().from("meals").select("*").eq("mess_id", smMess)).data || [];
+    log(viaApp.some(r => "Smoke Member_day" in r.meals), "…and the app reads them back by name");
+
+    await openHash("#/demo/app/members"); await settle();
+    await W().openLeavingFlow(smId); await sleep(200);
+    log(/records kept/i.test(D().getElementById("modal-content").innerText), "leaving flow explains records are kept");
+    W().archiveMember(smId); await sleep(150);
+    D().getElementById("confirm-ok-btn").click();
+    await until(() => P().formerMembers().some(m => m.id === smId), 5000); await sleep(200);
+    const archived = await raw().from("members").select("*").eq("id", smId).maybeSingle();
+    log(!!archived.data && !!archived.data.left_at, "removing a member archives them (row kept, left_at set)");
+    log(!P().members().some(m => m.id === smId) && /former members/i.test(D().getElementById("main-content").innerText),
+      "archived member leaves the list and appears under Former members");
+    const kept = (await raw().from("meals").select("*").eq("mess_id", smMess)).data || [];
+    log(kept.some(r => (smId + "_day") in r.meals), "archived member's meals are kept");
+    log(((await P().sb().from("meals").select("*").eq("mess_id", smMess)).data || []).some(r => "Smoke Member_day" in r.meals),
+      "…and still read under their name");
+    W().openAddMemberModal(); await sleep(150);
+    setv("mm-name", "Smoke Member"); setv("mm-user", "smoke_member"); setv("mm-pass", "memberpass1");
+    await W().addMember(); await sleep(300);
+    log(/former member/i.test(D().getElementById("toast").textContent), "re-adding a former member points to Restore: '" + D().getElementById("toast").textContent + "'");
+    W().closeModal();
+
+    await loginAs("smoke_member", "memberpass1");
+    await until(() => /removed from the mess/.test(D().getElementById("login-error").textContent), 10000);
+    log(/removed from the mess/.test(D().getElementById("login-error").textContent) && !P().user(), "an archived member can't sign in");
+
+    await loginAs("smoke_mgr", "secret12", "#/demo/app/dashboard");
+    await openHash("#/demo/app/members"); await settle();
+    W().restoreMember(smId); await sleep(150);
+    D().getElementById("confirm-ok-btn").click();
+    await until(() => P().members().some(m => m.id === smId), 5000);
+    log(P().members().some(m => m.id === smId) && !P().formerMembers().length, "restoring brings the member back");
+    await loginAs("smoke_member", "memberpass1", "#/demo/app/my-dashboard");
+    log(W().location.hash === "#/demo/app/my-dashboard", "a restored member can sign in again");
     W().doLogout(); await until(() => visible("landing-page"));
     await openHash("#/demo/create"); await until(() => visible("create-mess-screen"));
     setv("cm-name", "Dup"); setv("cm-admin-name", "Dup"); setv("cm-username", "demo_manager"); setv("cm-password", "secret12");

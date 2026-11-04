@@ -482,10 +482,30 @@ function pageLabel(page) {
   return hit ? hit.label : "";
 }
 
+/* The signed-in member as the database has them now: an archived member is signed
+   out, and a rename by the manager reaches their open session. false = signed out. */
+function syncCurrentMember() {
+  const id = currentUser?.memberId;
+  if (!id) return true;
+  if (formerMembers.some(m => m.id === id)) {
+    toast("Your account has been removed from this mess", "error");
+    doLogout();
+    return false;
+  }
+  const me = members.find(m => m.id === id);
+  const name = me && MemberKeys.unescape(me.name);
+  if (name && name !== currentUser.name) {
+    currentUser.name = name;
+    saveSession(currentUser, currentMess, _getSessionToken());
+  }
+  return true;
+}
+
 async function renderPage(page) {
   const token = (renderPage._t = (renderPage._t || 0) + 1); // drop out-of-order renders
   members = await dbGetMembers(); buildInitialsMap(members);
   if (token !== renderPage._t) return;
+  if (!syncCurrentMember()) return;
 
   updateSidebarUser();
 
