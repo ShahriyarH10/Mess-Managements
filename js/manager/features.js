@@ -400,6 +400,14 @@ async function clearAbsenceRange() {
   }
   if (dates.length > 90) { toast("Range too large (max 90 days)", "error"); return; }
 
+  // Meal counts can't be written into a closed month.
+  for (const mk of [...new Set(dates.map(d => d.slice(0, 7)))]) {
+    if (!(await ensureMonthOpen(mk))) return;
+  }
+
+  const member = members.find(m => m.id === memberId);
+  if (!member) { toast("Member not loaded", "error"); return; }
+
   try {
     const { data: existing, error } = await getClient().from("meal_attendance")
       .select("date,day_meal,night_meal").eq("mess_id", messId()).eq("member_id", memberId)
@@ -412,8 +420,34 @@ async function clearAbsenceRange() {
       const night = eatNight ? true : (prev ? prev.night_meal !== false : true);
       return dbSetAttendance(memberId, d, day, night);
     }));
-    toast(`Marked present for ${dates.length} day${dates.length > 1 ? "s" : ""}`, "success");
+
+    // Put a default count of 1 in the meal log for each ticked meal that has no count yet.
+    // A count that's already there (e.g. 2 with a guest) is kept.
+    const { data: mealRows, error: mErr } = await getClient().from("meals")
+      .select("date,meals").eq("mess_id", messId()).gte("date", from).lte("date", to);
+    if (mErr) throw mErr;
+    const mealsByDate = Object.fromEntries((mealRows || []).map(r => [String(r.date), r.meals || {}]));
+    const dk = member.name + "_day", nk = member.name + "_night";
+    let added = 0;
+    await Promise.all(dates.map(d => {
+      const meals = { ...(mealsByDate[d] || {}) };
+      let changed = false;
+      if (eatDay   && !(Number(meals[dk]) > 0)) { meals[dk] = 1; changed = true; }
+      if (eatNight && !(Number(meals[nk]) > 0)) { meals[nk] = 1; changed = true; }
+      if (!changed) return null;
+      meals[member.name] = round2(Number(meals[dk] || 0) + Number(meals[nk] || 0));
+      added++;
+      return dbUpsertMeals(d, meals);
+    }));
+
+    if (added) {
+      await notifyManagerUpdate("meal_update", from,
+        { member: member.name, day: eatDay ? 1 : 0, night: eatNight ? 1 : 0, total: (eatDay ? 1 : 0) + (eatNight ? 1 : 0) },
+        `I'll eat ${from === to ? from : `${from} → ${to}`} (${added} day${added > 1 ? "s" : ""})`);
+    }
+    toast(`Eating on ${dates.length} day${dates.length > 1 ? "s" : ""}${added ? ` — ${added} added to meal log` : ""}`, "success");
     await refreshUpcomingAbsences(memberId);
+    if (added) setTimeout(() => navigate("my-meals"), 350); // re-render so the calendar shows the new counts
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
