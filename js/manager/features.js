@@ -343,53 +343,65 @@ async function loadAbsenceCalendar() {
    ABSENCE RANGE FUNCTIONS (used in Meal Log)
 ═══════════════════════════════════════════ */
 async function markAbsenceRange() {
-  const from = document.getElementById("abs-from")?.value;
-  const to   = document.getElementById("abs-to")?.value;
-  const skipDay   = document.getElementById("abs-skip-day")?.checked ?? true;
-  const skipNight = document.getElementById("abs-skip-night")?.checked ?? true;
-
-  if (!from || !to) { toast("Select both dates", "error"); return; }
-  if (to < from)    { toast("To date must be after from date", "error"); return; }
-  if (!skipDay && !skipNight) { toast("Select at least one meal to skip", "error"); return; }
-
-  const memberId = window._attMemberId;
-  if (!memberId) { toast("Member not loaded", "error"); return; }
-
-  // Enumerate all dates in range
-  const dates = [];
-  const cur = new Date(from);
-  const end = new Date(to);
-  while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
-  }
-
-  if (dates.length > 90) { toast("Range too large (max 90 days)", "error"); return; }
+  const r = await readAbsenceRangeForm("Select day and/or night to mark off");
+  if (!r) return;
+  const { from, to, dates, day: offDay, night: offNight, member } = r;
 
   try {
-    await Promise.all(dates.map(d =>
-      dbSetAttendance(memberId, d, !skipDay, !skipNight)
-    ));
+    // Turn off the ticked meal(s); the other meal keeps its current state.
+    await setAttendanceInRange(member.id, from, to, dates, offDay ? false : null, offNight ? false : null);
+    // Ticked meals count 0 in the meal log.
+    const changed = await setMealCountsInRange(member.name, from, to, dates, offDay ? 0 : null, offNight ? 0 : null);
     await logAudit("update", "attendance", `${from}→${to}`,
       `${currentUser.name} marked absent ${from} to ${to} (${dates.length} days)`);
-    toast(`Marked absent for ${dates.length} day${dates.length > 1 ? "s" : ""}`, "success");
-    // Refresh the upcoming absences list
-    await refreshUpcomingAbsences(memberId);
+    if (changed) {
+      await notifyManagerUpdate("meal_update", from,
+        { member: member.name, day: 0, night: 0, total: 0 },
+        `Day off ${rangeLabel(from, to)}: ${mealsLabel(offDay, offNight)} (${changed} day${changed > 1 ? "s" : ""})`);
+    }
+    toast(`Marked off for ${dates.length} day${dates.length > 1 ? "s" : ""}${changed ? ` — ${changed} removed from meal log` : ""}`, "success");
+    await refreshUpcomingAbsences(member.id);
+    if (changed) setTimeout(() => navigate("my-meals"), 350); // re-render so the calendar shows the new counts
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
 async function clearAbsenceRange() {
-  const from = document.getElementById("abs-from")?.value;
-  const to   = document.getElementById("abs-to")?.value;
-  if (!from || !to) { toast("Select both dates", "error"); return; }
-  if (to < from)    { toast("To date must be after from date", "error"); return; }
-  // The checkboxes pick which meal(s) to turn back on; the other meal keeps its current state.
-  const eatDay   = document.getElementById("abs-skip-day")?.checked ?? true;
-  const eatNight = document.getElementById("abs-skip-night")?.checked ?? true;
-  if (!eatDay && !eatNight) { toast("Select day and/or night to eat", "error"); return; }
+  const r = await readAbsenceRangeForm("Select day and/or night to eat");
+  if (!r) return;
+  const { from, to, dates, day: eatDay, night: eatNight, member } = r;
 
-  const memberId = window._attMemberId;
-  if (!memberId) return;
+  try {
+    // Turn on the ticked meal(s); the other meal keeps its current state.
+    await setAttendanceInRange(member.id, from, to, dates, eatDay ? true : null, eatNight ? true : null);
+    // Ticked meals with no count yet get 1 (an existing count, e.g. 2 with a guest, is kept).
+    const changed = await setMealCountsInRange(member.name, from, to, dates, eatDay ? 1 : null, eatNight ? 1 : null);
+    if (changed) {
+      await notifyManagerUpdate("meal_update", from,
+        { member: member.name, day: eatDay ? 1 : 0, night: eatNight ? 1 : 0, total: (eatDay ? 1 : 0) + (eatNight ? 1 : 0) },
+        `I'll eat ${rangeLabel(from, to)}: ${mealsLabel(eatDay, eatNight)} (${changed} day${changed > 1 ? "s" : ""})`);
+    }
+    toast(`Eating on ${dates.length} day${dates.length > 1 ? "s" : ""}${changed ? ` — ${changed} added to meal log` : ""}`, "success");
+    await refreshUpcomingAbsences(member.id);
+    if (changed) setTimeout(() => navigate("my-meals"), 350); // re-render so the calendar shows the new counts
+  } catch (e) { toast("Error: " + e.message, "error"); }
+}
+
+const rangeLabel = (from, to) => from === to ? from : `${from} → ${to}`;
+const mealsLabel = (day, night) => day && night ? "day & night" : day ? "day" : "night";
+
+/* Reads and validates the Days off form. Returns null (after a toast) if it can't be used. */
+async function readAbsenceRangeForm(noMealMsg) {
+  const from  = document.getElementById("abs-from")?.value;
+  const to    = document.getElementById("abs-to")?.value;
+  const day   = document.getElementById("abs-skip-day")?.checked ?? true;
+  const night = document.getElementById("abs-skip-night")?.checked ?? true;
+
+  if (!from || !to) { toast("Select both dates", "error"); return null; }
+  if (to < from)    { toast("To date must be after from date", "error"); return null; }
+  if (!day && !night) { toast(noMealMsg, "error"); return null; }
+
+  const member = members.find(m => m.id === window._attMemberId);
+  if (!member) { toast("Member not loaded", "error"); return null; }
 
   const dates = [];
   const cur = new Date(from);
@@ -398,57 +410,55 @@ async function clearAbsenceRange() {
     dates.push(cur.toISOString().slice(0, 10));
     cur.setDate(cur.getDate() + 1);
   }
-  if (dates.length > 90) { toast("Range too large (max 90 days)", "error"); return; }
+  if (dates.length > 90) { toast("Range too large (max 90 days)", "error"); return null; }
 
   // Meal counts can't be written into a closed month.
   for (const mk of [...new Set(dates.map(d => d.slice(0, 7)))]) {
-    if (!(await ensureMonthOpen(mk))) return;
+    if (!(await ensureMonthOpen(mk))) return null;
   }
+  return { from, to, dates, day, night, member };
+}
 
-  const member = members.find(m => m.id === memberId);
-  if (!member) { toast("Member not loaded", "error"); return; }
+/* Sets day/night attendance for each date. null = keep that meal's current state. */
+async function setAttendanceInRange(memberId, from, to, dates, day, night) {
+  const { data, error } = await getClient().from("meal_attendance")
+    .select("date,day_meal,night_meal").eq("mess_id", messId()).eq("member_id", memberId)
+    .gte("date", from).lte("date", to);
+  if (error) throw error;
+  const byDate = Object.fromEntries((data || []).map(a => [String(a.date), a]));
+  await Promise.all(dates.map(d => {
+    const prev = byDate[d];
+    const dm = day   ?? (prev ? prev.day_meal   !== false : true);
+    const nm = night ?? (prev ? prev.night_meal !== false : true);
+    return dbSetAttendance(memberId, d, dm, nm);
+  }));
+}
 
-  try {
-    const { data: existing, error } = await getClient().from("meal_attendance")
-      .select("date,day_meal,night_meal").eq("mess_id", messId()).eq("member_id", memberId)
-      .gte("date", from).lte("date", to);
-    if (error) throw error;
-    const byDate = Object.fromEntries((existing || []).map(a => [a.date, a]));
-    await Promise.all(dates.map(d => {
-      const prev = byDate[d];
-      const day   = eatDay   ? true : (prev ? prev.day_meal   !== false : true);
-      const night = eatNight ? true : (prev ? prev.night_meal !== false : true);
-      return dbSetAttendance(memberId, d, day, night);
-    }));
-
-    // Put a default count of 1 in the meal log for each ticked meal that has no count yet.
-    // A count that's already there (e.g. 2 with a guest) is kept.
-    const { data: mealRows, error: mErr } = await getClient().from("meals")
-      .select("date,meals").eq("mess_id", messId()).gte("date", from).lte("date", to);
-    if (mErr) throw mErr;
-    const mealsByDate = Object.fromEntries((mealRows || []).map(r => [String(r.date), r.meals || {}]));
-    const dk = member.name + "_day", nk = member.name + "_night";
-    let added = 0;
-    await Promise.all(dates.map(d => {
-      const meals = { ...(mealsByDate[d] || {}) };
-      let changed = false;
-      if (eatDay   && !(Number(meals[dk]) > 0)) { meals[dk] = 1; changed = true; }
-      if (eatNight && !(Number(meals[nk]) > 0)) { meals[nk] = 1; changed = true; }
-      if (!changed) return null;
-      meals[member.name] = round2(Number(meals[dk] || 0) + Number(meals[nk] || 0));
-      added++;
-      return dbUpsertMeals(d, meals);
-    }));
-
-    if (added) {
-      await notifyManagerUpdate("meal_update", from,
-        { member: member.name, day: eatDay ? 1 : 0, night: eatNight ? 1 : 0, total: (eatDay ? 1 : 0) + (eatNight ? 1 : 0) },
-        `I'll eat ${from === to ? from : `${from} → ${to}`} (${added} day${added > 1 ? "s" : ""})`);
-    }
-    toast(`Eating on ${dates.length} day${dates.length > 1 ? "s" : ""}${added ? ` — ${added} added to meal log` : ""}`, "success");
-    await refreshUpcomingAbsences(memberId);
-    if (added) setTimeout(() => navigate("my-meals"), 350); // re-render so the calendar shows the new counts
-  } catch (e) { toast("Error: " + e.message, "error"); }
+/* Writes the member's meal-log counts for each date.
+   0 = set that meal to 0; 1 = set it to 1 only if it has no count yet; null = leave it.
+   Returns how many dates changed. */
+async function setMealCountsInRange(name, from, to, dates, day, night) {
+  const { data, error } = await getClient().from("meals")
+    .select("date,meals").eq("mess_id", messId()).gte("date", from).lte("date", to);
+  if (error) throw error;
+  const byDate = Object.fromEntries((data || []).map(r => [String(r.date), r.meals || {}]));
+  const dk = name + "_day", nk = name + "_night";
+  const apply = (meals, k, v) => {
+    const has = Number(meals[k]) > 0;
+    if (v === 0 && has)  { meals[k] = 0; return true; }
+    if (v === 1 && !has) { meals[k] = 1; return true; }
+    return false;
+  };
+  let changed = 0;
+  await Promise.all(dates.map(d => {
+    const meals = { ...(byDate[d] || {}) };
+    const a = apply(meals, dk, day), b = apply(meals, nk, night);
+    if (!a && !b) return null;
+    meals[name] = round2(Number(meals[dk] || 0) + Number(meals[nk] || 0));
+    changed++;
+    return dbUpsertMeals(d, meals);
+  }));
+  return changed;
 }
 
 async function cancelAbsence(id) {
