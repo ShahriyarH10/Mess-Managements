@@ -383,6 +383,10 @@ async function clearAbsenceRange() {
   const to   = document.getElementById("abs-to")?.value;
   if (!from || !to) { toast("Select both dates", "error"); return; }
   if (to < from)    { toast("To date must be after from date", "error"); return; }
+  // The checkboxes pick which meal(s) to turn back on; the other meal keeps its current state.
+  const eatDay   = document.getElementById("abs-skip-day")?.checked ?? true;
+  const eatNight = document.getElementById("abs-skip-night")?.checked ?? true;
+  if (!eatDay && !eatNight) { toast("Select day and/or night to eat", "error"); return; }
 
   const memberId = window._attMemberId;
   if (!memberId) return;
@@ -394,9 +398,20 @@ async function clearAbsenceRange() {
     dates.push(cur.toISOString().slice(0, 10));
     cur.setDate(cur.getDate() + 1);
   }
+  if (dates.length > 90) { toast("Range too large (max 90 days)", "error"); return; }
 
   try {
-    await Promise.all(dates.map(d => dbSetAttendance(memberId, d, true, true)));
+    const { data: existing, error } = await getClient().from("meal_attendance")
+      .select("date,day_meal,night_meal").eq("mess_id", messId()).eq("member_id", memberId)
+      .gte("date", from).lte("date", to);
+    if (error) throw error;
+    const byDate = Object.fromEntries((existing || []).map(a => [a.date, a]));
+    await Promise.all(dates.map(d => {
+      const prev = byDate[d];
+      const day   = eatDay   ? true : (prev ? prev.day_meal   !== false : true);
+      const night = eatNight ? true : (prev ? prev.night_meal !== false : true);
+      return dbSetAttendance(memberId, d, day, night);
+    }));
     toast(`Marked present for ${dates.length} day${dates.length > 1 ? "s" : ""}`, "success");
     await refreshUpcomingAbsences(memberId);
   } catch (e) { toast("Error: " + e.message, "error"); }

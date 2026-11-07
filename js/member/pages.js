@@ -141,8 +141,8 @@ async function renderMyMeals(el) {
             <div class="field"><label>To</label><input type="date" class="input" id="abs-to" value="${dt}" min="${dt}"/></div>
           </div>
           <div class="ma-skips">
-            <label class="ma-skip"><input type="checkbox" id="abs-skip-day" checked/><span>${ic("sun")} Skip day</span></label>
-            <label class="ma-skip"><input type="checkbox" id="abs-skip-night" checked/><span>${ic("moon")} Skip night</span></label>
+            <label class="ma-skip"><input type="checkbox" id="abs-skip-day" checked/><span>${ic("sun")} Day</span></label>
+            <label class="ma-skip"><input type="checkbox" id="abs-skip-night" checked/><span>${ic("moon")} Night</span></label>
           </div>
           <div class="ml-2" style="margin-top:12px">
             <button class="btn btn-primary" style="justify-content:center" data-on-click="markAbsenceRange()">${ic("x")} Mark off</button>
