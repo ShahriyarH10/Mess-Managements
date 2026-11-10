@@ -161,8 +161,11 @@ async function deleteFundEntry(monthKey, entryId) {
           .eq("mess_id", messId()).eq("month_key", monthKey).maybeSingle());
         if (!cur) return;
         const bills = { ...(cur.bills || {}) };
+        const gone = (bills.fund_entries || []).find(e => e.id === entryId);
         bills.fund_entries = (bills.fund_entries || []).filter(e => e.id !== entryId);
         await dbUpsertUtility(m - 1, y, monthKey, bills, cur.payments || {});
+        if (gone) await logAudit("delete", "fund", gone.date || monthKey,
+          `Deleted fund ${gone.type} ${auditTk(gone.amount)} of ${gone.date || monthKey}${gone.note ? " — " + gone.note : ""}`, { entry: gone });
         toast("Entry deleted", "success");
         await loadFund();
       } catch(e) { toast("Error: " + e.message, "error"); }

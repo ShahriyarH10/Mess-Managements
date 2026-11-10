@@ -470,6 +470,7 @@ async function doManagerResetPassword(memberId, memberName) {
     const newHash = await hashPassword(newPw);
     const { error } = await getClient().from("members").update({ password: newHash }).eq("id", memberId).eq("mess_id", messId());
     if (error) throw error;
+    await logAudit("update", "member", auditName(memberName), `Reset the password of ${auditName(memberName)}`);
     closeModal(); toast(`Password reset for ${memberName}`, "success");
   } catch(e) { showErr("Error: " + e.message); }
 }

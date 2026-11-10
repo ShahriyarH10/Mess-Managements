@@ -353,7 +353,7 @@ async function markAbsenceRange() {
     // Ticked meals count 0 in the meal log.
     const changed = await setMealCountsInRange(member.name, from, to, dates, offDay ? 0 : null, offNight ? 0 : null);
     await logAudit("update", "attendance", `${from}→${to}`,
-      `${currentUser.name} marked absent ${from} to ${to} (${dates.length} days)`);
+      `${auditName(member.name)} off ${rangeLabel(from, to)}: ${mealsLabel(offDay, offNight)} (${dates.length} day${dates.length > 1 ? "s" : ""}${changed ? `, ${changed} removed from meal log` : ""})`);
     if (changed) {
       await notifyManagerUpdate("meal_update", from,
         { member: member.name, day: 0, night: 0, total: 0 },
@@ -375,6 +375,8 @@ async function clearAbsenceRange() {
     await setAttendanceInRange(member.id, from, to, dates, eatDay ? true : null, eatNight ? true : null);
     // Ticked meals with no count yet get 1 (an existing count, e.g. 2 with a guest, is kept).
     const changed = await setMealCountsInRange(member.name, from, to, dates, eatDay ? 1 : null, eatNight ? 1 : null);
+    await logAudit("update", "attendance", `${from}→${to}`,
+      `${auditName(member.name)} will eat ${rangeLabel(from, to)}: ${mealsLabel(eatDay, eatNight)} (${dates.length} day${dates.length > 1 ? "s" : ""}${changed ? `, ${changed} added to meal log` : ""})`);
     if (changed) {
       await notifyManagerUpdate("meal_update", from,
         { member: member.name, day: eatDay ? 1 : 0, night: eatNight ? 1 : 0, total: (eatDay ? 1 : 0) + (eatNight ? 1 : 0) },
@@ -464,9 +466,13 @@ async function setMealCountsInRange(name, from, to, dates, day, night) {
 async function cancelAbsence(id) {
   try {
     // only this member's own day-off, in this mess
+    const { data: gone } = await getClient().from("meal_attendance").select("*")
+      .eq("id", id).eq("mess_id", messId()).eq("member_id", window._attMemberId).maybeSingle();
     const { error } = await getClient().from("meal_attendance").delete()
       .eq("id", id).eq("mess_id", messId()).eq("member_id", window._attMemberId);
     if (error) throw error;
+    const who = members.find(m => m.id === window._attMemberId);
+    await logAudit("delete", "attendance", gone?.date || "", `Cancelled ${auditName(who?.name || "a member")}'s day off${gone?.date ? " on " + gone.date : ""}`);
     toast("Absence cancelled", "success");
     await refreshUpcomingAbsences(window._attMemberId);
   } catch (e) { toast("Error: " + e.message, "error"); }

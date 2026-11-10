@@ -91,10 +91,17 @@
     await openHash("#/demo/app/meals"); await settle();
     const dayInput = D().querySelector(".meal-num-input"); 
     errors.length = 0;
+    const firstM = P().members()[0], mdv = P().mealDayVals();
+    const dayBefore = mdv[firstM.id] || 0; mdv[firstM.id] = dayBefore + 1;   // a real change, so it's audited
     await W().saveMeals(); await sleep(300);
     log(/saved/i.test(D().getElementById("toast").textContent), "saveMeals() works against mock: toast '" + D().getElementById("toast").textContent + "'");
     const rows = await P().sb().from("audit_log").select("*", { count: "exact", head: true });
-    log(rows.count >= 9, "audit log got a new row (count " + rows.count + ")");
+    const mealA = ((await P().sb().from("audit_log").select("*").eq("entity", "meal")).data || [])
+      .find(e => e.summary.includes(`${firstM.name} ${dayBefore}+`) && e.summary.includes(`→ ${dayBefore + 1}+`));
+    log(rows.count >= 9 && !!mealA, "audit log got a new row with old → new (count " + rows.count + ": \"" + (mealA?.summary || "none") + "\")");
+    const n1 = (await P().sb().from("audit_log").select("*", { count: "exact", head: true })).count;
+    await W().saveMeals(); await sleep(300);
+    log((await P().sb().from("audit_log").select("*", { count: "exact", head: true })).count === n1, "saving again with nothing changed adds no audit noise");
 
     D().querySelector('[data-on-click="toggleTheme()"]').click();
     log(["light", "dark"].includes(D().documentElement.getAttribute("data-theme")), "toggleTheme handler runs");
@@ -131,6 +138,10 @@
       const up = D().getElementById("up-" + mid);
       if (up) { up.value = String(Number(up.value || 0) + 300); await W().saveUtilityPayments(); await sleep(300); }
       log(!!up && (await rcpts()) === n0, `raising paid on Room Rent / Utility creates no receipt (${n0} → ${await rcpts()}, utility field ${!!up})`);
+      const aud = ((await P().sb().from("audit_log").select("*").eq("mess_id", P().messId())).data || []);
+      const rentA = aud.find(e => e.entity === "rent" && /^Room Rent .*: .* paid ৳[\d.]+ → ৳[\d.]+/.test(e.summary));
+      const utilA = aud.find(e => e.entity === "utility" && /^Utility payments .*: .* paid ৳[\d.]+ → ৳[\d.]+/.test(e.summary));
+      log(!!rentA && !!utilA, `…but both saves are in the audit log with old → new ("${rentA?.summary}" / "${utilA?.summary}")`);
     }
     await openHash("#/demo/app/messages"); await settle();
     D().getElementById("bc-msg").value = "Smoke test notice";
@@ -394,6 +405,22 @@
       log(!chk.ok && /handed back or carried/i.test(chk.reason), "a payment whose excess was already returned / carried cannot be reversed (" + chk.reason + ")");
     }
     log(errors.length === 0, "no console errors during the Receipts flow" + (errors.length ? " ← " + errors.join(" | ") : ""));
+
+    /* 6f. the audit log now records the money actions above, with old → new values */
+    {
+      const all = ((await P().sb().from("audit_log").select("*").eq("mess_id", P().messId())).data || []);
+      const has = (entity, re) => all.some(e => e.entity === entity && re.test(e.summary));
+      const checks = [
+        ["collect",  /^Collected ৳[\d.]+ from Rakib Hasan/, "Collect Payment save"],
+        ["collect",  /^Return Amount for Mahfuz Alam: returned ৳200 cash/, "Return Amount Save"],
+        ["collect",  /^Return Amount for Mahfuz Alam: carried ৳300 to /, "Return Amount Carry fwd"],
+        ["collect",  /^Reversed payment ৳[\d.]+ from Rakib Hasan · receipt #/, "receipt reversal"],
+        ["collect",  /sent a payment request of ৳100/, "member's Give Payment request"],
+      ];
+      const miss = checks.filter(([e, re]) => !has(e, re)).map(c => c[2]);
+      log(!miss.length, "audit log records: " + checks.map(c => c[2]).join(", ") + (miss.length ? " ← MISSING: " + miss.join(", ") : ""));
+      log(!all.some(e => /&amp;|&lt;|&#39;/.test(e.summary || "")), "audit summaries hold plain names (no HTML entities)");
+    }
 
     /* 7. login form works against demo accounts, reset + logout */
     W().doLogout(); await until(() => visible("landing-page"));

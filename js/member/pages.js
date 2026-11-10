@@ -259,6 +259,7 @@ async function saveMyMealEntry() {
       ...(existing?.meals || {}),
     };
 
+    const oldDN = `${round2(Number(existing?.meals?.[member.name + "_day"] ?? existing?.meals?.[member.name] ?? 0))}+${round2(Number(existing?.meals?.[member.name + "_night"] ?? 0))}`;
     merged[member.name + "_day"] = day;
     merged[member.name + "_night"] = night;
     merged[member.name] = round2(day + night);
@@ -276,6 +277,8 @@ async function saveMyMealEntry() {
     });
 
     await dbUpsertMeals(date, merged);
+    if (oldDN !== `${day}+${night}`)
+      await logAudit("update", "meal", date, `${auditName(member.name)}'s own meals ${date} (day+night): ${oldDN} → ${day}+${night}${note ? " — " + note : ""}`);
 
     await notifyManagerUpdate(
       "meal_update",
@@ -452,9 +455,12 @@ async function saveMyBazarEntry() {
       ...(existing?.bazar || {}),
     };
 
+    const oldAmt = Number(existing?.bazar?.[member.name] || 0);
     merged[member.name] = amount;
 
     await dbUpsertBazar(date, merged);
+    if (round2(oldAmt) !== round2(amount))
+      await logAudit(existing ? "update" : "create", "bazar", date, `${auditName(member.name)}'s own bazar ${date}: ${auditTk(oldAmt)} → ${auditTk(amount)}${note ? " — " + note : ""}`);
 
     await notifyManagerUpdate(
       "bazar_update",
@@ -682,6 +688,7 @@ async function _saveMyPaymentEntry() {
       }
 
       await dbUpsertRent(month, year, key, entries);
+      await logAudit("create", "rent", key, `${auditName(member.name)} paid ${auditTk(amount)} rent for ${MONTHS[month]} ${year} (own entry)${note ? " — " + note : ""}`);
 
       await notifyManagerUpdate(
         "rent_update",
@@ -756,6 +763,7 @@ async function _saveMyPaymentEntry() {
         curUtilRec?.bills || {},
         updatedPayments
       );
+      await logAudit("create", "utility", key, `${auditName(member.name)} paid ${auditTk(amount)} for ${billTypeLabel[billType] || billType}, ${MONTHS[month]} ${year} (own entry) — utility paid ${auditTk(oldPayment.paid)} → ${auditTk(newPaid)}${note ? " — " + note : ""}`);
 
       await notifyManagerUpdate(
         "utility_update",

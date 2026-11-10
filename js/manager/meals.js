@@ -191,8 +191,24 @@ async function saveMeals() {
     const stored = await mustRead(getClient().from("meals").select("meals").eq("mess_id",messId()).eq("date",date).maybeSingle());
     const meals = otherMembersEntries(stored?.meals, members);
     members.forEach(m=>{ meals[m.name+"_day"]=mealDayVals[m.id]||0; meals[m.name+"_night"]=mealNightVals[m.id]||0; meals[m.name]=round2((mealDayVals[m.id]||0)+(mealNightVals[m.id]||0)); });
-    await dbUpsertMeals(date,meals); await logAudit("update","meal",date,`Meals saved for ${date}`); toast("Meals saved","success"); refreshMealLists(); } catch(e){ toast("Save failed: "+e.message,"error"); }
+    await dbUpsertMeals(date,meals);
+    const diffs = auditDiffs(members.map(m => [auditName(m.name), _mealDN(stored?.meals, m.name), _mealDN(meals, m.name)]));
+    if (diffs.length) await logAudit(stored ? "update" : "create", "meal", date, auditLine(`Meals ${date} (day+night)`, diffs), { changes: diffs });
+    toast("Meals saved","success"); refreshMealLists(); } catch(e){ toast("Save failed: "+e.message,"error"); }
 }
+/* "day+night" of one member in a meals record, for audit diffs. */
+function _mealDN(rec, name) {
+  if (!rec) return "0+0";
+  const d = Number(rec[name + "_day"] ?? rec[name] ?? 0), n = Number(rec[name + "_night"] ?? 0);
+  return `${round2(d)}+${round2(n)}`;
+}
+/* "Rakib 2, Nayeem 1.5" — who had something on a deleted day. */
+function _auditDayList(rec, valueOf) {
+  return Object.keys(rec || {}).filter(k => !/_(day|night)$/.test(k))
+    .map(k => [k, valueOf(rec, k)]).filter(([, v]) => Number(v) > 0)
+    .map(([k, v]) => `${auditName(k)} ${v}`);
+}
+
 /* One fetch for both lists below (and the month pop-ups). */
 async function refreshMealLists() {
   try { const all = await historyRows("meals", true); loadMealsRecent(all); loadManagerMealMonths(all); }
@@ -214,7 +230,11 @@ async function delMeal(id) {
   if (!requireManager("delMeal")) return;
   const row = (await historyRows("meals")).find(r => r.id === id);
   if (row && !(await ensureMonthOpen(row.date))) return;
-  showConfirm({ title: "Delete meal entry?", body: "This day's meal record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDelete("meals",id); toast("Deleted"); refreshMealLists(); }catch(e){ toast("Error","error"); } } }); }
+  showConfirm({ title: "Delete meal entry?", body: "This day's meal record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{
+    await dbDelete("meals",id);
+    const had = _auditDayList(row?.meals, (r, k) => mealMemberTotal(r, k));
+    await logAudit("delete", "meal", row?.date || id, `Deleted meals for ${row?.date || "a day"}${had.length ? " — " + had.join(", ") : ""}`, { meals: row?.meals || null });
+    toast("Deleted"); refreshMealLists(); }catch(e){ toast("Error","error"); } } }); }
 
 /* ═══════════════════════════════════════════
    BAZAR ENTRY
@@ -267,7 +287,10 @@ async function saveBazar() {
     const stored = await mustRead(getClient().from("bazar").select("bazar").eq("mess_id",messId()).eq("date",date).maybeSingle());
     const bazar = otherMembersEntries(stored?.bazar, members);
     members.forEach(m=>{ bazar[m.name]=parseFloat(document.getElementById("bz-"+m.id)?.value||0); });
-    await dbUpsertBazar(date,bazar); await logAudit("update","bazar",date,`Bazar saved for ${date}`); toast("Bazar saved","success"); refreshBazarLists(); }catch(e){ toast("Error: "+e.message,"error"); }
+    await dbUpsertBazar(date,bazar);
+    const diffs = auditDiffs(members.map(m => [auditName(m.name), auditTk(stored?.bazar?.[m.name]), auditTk(bazar[m.name])]));
+    if (diffs.length) await logAudit(stored ? "update" : "create", "bazar", date, auditLine(`Bazar ${date}`, diffs), { changes: diffs });
+    toast("Bazar saved","success"); refreshBazarLists(); }catch(e){ toast("Error: "+e.message,"error"); }
 }
 async function refreshBazarLists() {
   try { const all = await historyRows("bazar", true); loadBazarRecent(all); loadBazarMonths(all); }
@@ -499,4 +522,8 @@ async function delBazar(id) {
   if (!requireManager("delBazar")) return;
   const row = (await historyRows("bazar")).find(r => r.id === id);
   if (row && !(await ensureMonthOpen(row.date))) return;
-  showConfirm({ title: "Delete bazar entry?", body: "This day's bazar record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{ await dbDelete("bazar",id); toast("Deleted"); refreshBazarLists(); }catch(e){ toast("Error","error"); } } }); }
+  showConfirm({ title: "Delete bazar entry?", body: "This day's bazar record will be removed.", confirmLabel: "Delete", danger: true, onConfirm: async () => { try{
+    await dbDelete("bazar",id);
+    const had = _auditDayList(row?.bazar, (r, k) => auditTk(r[k]));
+    await logAudit("delete", "bazar", row?.date || id, `Deleted bazar for ${row?.date || "a day"}${had.length ? " — " + had.join(", ") : ""}`, { bazar: row?.bazar || null });
+    toast("Deleted"); refreshBazarLists(); }catch(e){ toast("Error","error"); } } }); }

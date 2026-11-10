@@ -6,7 +6,7 @@
 const AUDIT_CATS = [
   ["meal", "Meals"], ["bazar", "Bazar"], ["rent", "Rent"], ["utility", "Utility"], ["collect", "Payments"],
   ["fund", "Fund"], ["member", "Members"], ["announcement", "Announcements"], ["attendance", "Attendance"],
-  ["broadcast", "Broadcasts"], ["mess_rules", "Rules"],
+  ["broadcast", "Broadcasts"], ["mess_rules", "Rules"], ["month_lock", "Month close"],
 ];
 const _auditYmd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 

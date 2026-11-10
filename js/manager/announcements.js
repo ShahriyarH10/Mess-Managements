@@ -125,12 +125,22 @@ function deleteBroadcastMsg(id) {
   if (!requireManager("deleteBroadcastMsg")) return;
   showConfirm({ title: "Delete this notice?", body: "It disappears from every member's dashboard.", confirmLabel: "Delete", danger: true,
     onConfirm: async () => {
-      try { await getClient().from("broadcasts").delete().eq("id", id).eq("mess_id", messId()); toast("Notice deleted", "success"); await loadMessagesPage(true); }
+      try {
+        const { data: b } = await getClient().from("broadcasts").select("*").eq("id", id).eq("mess_id", messId()).maybeSingle();
+        await getClient().from("broadcasts").delete().eq("id", id).eq("mess_id", messId());
+        const msg = String(b?.message || "");
+        await logAudit("delete", "broadcast", "", `Deleted notice${msg ? `: "${msg.slice(0, 50)}${msg.length > 50 ? "…" : ""}"` : ""}`);
+        toast("Notice deleted", "success"); await loadMessagesPage(true); }
       catch(e) { toast("Error: " + e.message, "error"); }
     } });
 }
 async function toggleBroadcastPin(id, pinned) {
   if (!requireManager("toggleBroadcastPin")) return;
-  try { await getClient().from("broadcasts").update({ pinned }).eq("id", id).eq("mess_id", messId()); toast(pinned ? "Pinned" : "Unpinned", "success"); await loadMessagesPage(true); }
+  try {
+    await getClient().from("broadcasts").update({ pinned }).eq("id", id).eq("mess_id", messId());
+    const { data: b } = await getClient().from("broadcasts").select("message").eq("id", id).eq("mess_id", messId()).maybeSingle();
+    const msg = String(b?.message || "");
+    await logAudit("update", "broadcast", "", `${pinned ? "Pinned" : "Unpinned"} notice${msg ? `: "${msg.slice(0, 50)}${msg.length > 50 ? "…" : ""}"` : ""}`);
+    toast(pinned ? "Pinned" : "Unpinned", "success"); await loadMessagesPage(true); }
   catch(e) { toast("Error: " + e.message, "error"); }
 }

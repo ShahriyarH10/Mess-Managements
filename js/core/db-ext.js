@@ -17,6 +17,27 @@ async function logAudit(action, entity, entityId, summary, details = {}) {
   } catch (e) { console.warn("[Audit] Failed:", e.message); }
 }
 
+/* ── Audit summary helpers ─────────────────────────────────────────
+   members[] holds HTML-escaped names; summaries are shown as plain text
+   (escaped once by the Audit Log page), so decode before logging. */
+function auditName(n) {
+  const s = String(n ?? "");
+  return /&(amp|lt|gt|quot|#39);/.test(s)
+    ? s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+    : s;
+}
+const auditTk = (v) => "৳" + round2(Number(v || 0));
+
+/* rows: [label, old, new] → "label old → new" for every row that changed. */
+function auditDiffs(rows) {
+  return rows.filter(([, a, b]) => String(a) !== String(b)).map(([label, a, b]) => `${label} ${a} → ${b}`);
+}
+
+/* "<head>: a; b; c (+2 more)". The full list goes in details.changes. */
+function auditLine(head, diffs, max = 4) {
+  return `${head}: ${diffs.slice(0, max).join("; ")}${diffs.length > max ? ` (+${diffs.length - max} more)` : ""}`;
+}
+
 async function dbGetAuditLog(limit = 50, offset = 0, entityFilter = null) {
   let q = getClient().from("audit_log").select("*")
     .eq("mess_id", messId())

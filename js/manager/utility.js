@@ -143,6 +143,12 @@ async function _saveRent() {
     const others = (before?.entries || []).filter(e => !members.some(m => rentEntryFor([e], m)));
     const entries = [...listed, ...others];
     await dbUpsertRent(month,year,key,entries);
+    const diffs = [];
+    members.forEach(m => {
+      const a = rentEntryFor(before?.entries, m) || {}, b = rentEntryFor(listed, m) || {}, n = auditName(m.name);
+      diffs.push(...auditDiffs([[`${n} rent`, auditTk(a.rent), auditTk(b.rent)], [`${n} paid`, auditTk(a.paid), auditTk(b.paid)]]));
+    });
+    if (diffs.length) await logAudit(before ? "update" : "create", "rent", key, auditLine(`Room Rent ${monthLabelFromKey(key)}`, diffs), { changes: diffs });
     toast("Rent saved","success");
     loadRentHistory();
   }catch(e){ toast("Error: "+e.message,"error"); }

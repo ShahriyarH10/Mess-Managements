@@ -341,6 +341,7 @@ async function submitGivePayment() {
       }, `Wants to give ${fmtTk(value)} for ${MONTHS[ctx.month]} ${ctx.year} — please confirm`);
     } catch (_) { /* the request itself is saved; the manager still sees it in Collect */ }
     ctx.sent = payment;
+    await logAudit("create", "collect", ctx.key, `${auditName(ctx.member.name)} sent a payment request of ${auditTk(value)} for ${MONTHS[ctx.month]} ${ctx.year} · ${paymentReceiptNo(payment.receipt_no)}`);
     toast("Payment sent to the manager", "success");
     const r = ctx.row;
     const sp = computeSplit3(value, r.mealRem, r.utilRem, r.rentRem, r.prevDue);

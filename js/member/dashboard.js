@@ -938,6 +938,7 @@ async function doChangePassword(memberId) {
       if (error) throw error;
     }
 
+    await logAudit("update", "member", auditName(currentUser?.name), "Changed their own password");
     closeModal();
     toast("Password updated successfully", "success");
 

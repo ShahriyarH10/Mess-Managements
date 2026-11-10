@@ -155,6 +155,9 @@ async function saveUtilityGroup(type) {
   }
   try {
     await dbUpsertUtility(month, year, key, bills, rec?.payments || {});
+    const billKeys = type === "prepaid" ? [["elec", "Electricity"], ["gas", "Gas"], ["wifi", "Wi-Fi"]] : [["khala", "Khala"], ["other", "Other"]];
+    const diffs = auditDiffs(billKeys.map(([k, l]) => [l, auditTk(rec?.bills?.[k]), auditTk(bills[k])]));
+    if (diffs.length) await logAudit(rec ? "update" : "create", "utility", key, auditLine(`${type === "prepaid" ? "Prepaid" : "Postpaid"} bills ${monthLabelFromKey(key)}`, diffs), { changes: diffs });
     if (type === "postpaid") {
       const target = nextMonth(month, year);
       setPaymentMonth(target.month, target.year);
@@ -345,6 +348,8 @@ async function _saveUtilityPayments() {
   try {
     await dbUpsertUtility(month, year, key, rec?.bills || {}, payments);
     // Corrections only — no receipts here; cash is recorded in Collect Payment.
+    const diffs = auditDiffs(members.map(m => [`${auditName(m.name)} paid`, auditTk(old[m.name]?.paid), auditTk(payments[m.name].paid)]));
+    if (diffs.length) await logAudit("update", "utility", key, auditLine(`Utility payments ${monthLabelFromKey(key)}`, diffs), { changes: diffs });
     toast("Utility payments saved", "success");
     await loadUtilHistory();
   } catch (e) { toast("Error: " + e.message, "error"); }

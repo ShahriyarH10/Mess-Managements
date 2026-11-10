@@ -11,5 +11,6 @@ window.__probe = {
   members: () => members,
   formerMembers: () => formerMembers,
   collectCtx: () => _collectCtx,
+  mealDayVals: () => mealDayVals,
   messId: () => messId(),
 };

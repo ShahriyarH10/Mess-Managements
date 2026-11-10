@@ -125,7 +125,7 @@ async function applyCollectPayment(m, month, year, key, row, amount) {
     e.partial = wrote;
     throw e;
   }
-  await logAudit("update", "collect", key, `Confirmed payment ${amount} from ${m.name}`, split);
+  await logAudit("update", "collect", key, `Confirmed payment ${auditTk(amount)} from ${auditName(m.name)}`, split);
   return split;
 }
 
@@ -201,7 +201,7 @@ async function doRejectPaymentRequest(id) {
   try {
     const claimed = await dbClaimMemberPayment(id, "rejected", currentUser.name);
     if (!claimed) throw new Error("This payment was already confirmed or rejected.");
-    await logAudit("update", "collect", p.month_key, `Rejected payment ${p.amount} from ${paymentMemberName(p)}`);
+    await logAudit("update", "collect", p.month_key, `Rejected payment ${auditTk(p.amount)} from ${paymentMemberName(p)} · ${paymentReceiptNo(p.receipt_no)}`);
     try {
       await dbSaveNotification({
         type: "payment_rejected", date: today(),

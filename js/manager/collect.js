@@ -630,7 +630,7 @@ async function doReverseCollection(id, memberId) {
       }
     }
 
-    await logAudit("delete", "collect", ctx.key, `Reversed payment ${claimed.amount} from ${m.name}`, sp);
+    await logAudit("delete", "collect", ctx.key, `Reversed payment ${auditTk(claimed.amount)} from ${auditName(m.name)} · receipt ${paymentReceiptNo(claimed.receipt_no)}`, sp);
     toast(`Reversed ${fmtTk(Number(claimed.amount))} from ${_decodeEntities(m.name)}`, "success");
   } catch (e) {
     if (claimed && wrote) {
@@ -1111,6 +1111,14 @@ async function _saveReturnRow(memberId, carry) {
     if (carryTotal > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(carryTotal)}`);
     if (stillTotal > 0) parts.push(`Still to return: ${fmtTk(stillTotal)}`);
     toast("Return saved  " + (parts.join("  ·  ") || "Nothing to return"), "success");
+    if (cashTotal > 0 || carryTotal > 0) {
+      const what = [cashTotal > 0 && `returned ${auditTk(cashTotal)} cash`, carryTotal > 0 && `carried ${auditTk(carryTotal)} to ${MONTHS[nm.month]} ${nm.year}`,
+        stillTotal > 0 && `${auditTk(stillTotal)} still to return`].filter(Boolean).join(", ");
+      await logAudit("update", "collect", ctx.key, `Return Amount for ${auditName(m.name)}: ${what}`,
+        { cash: cashTotal, carried: carryTotal, still_to_return: stillTotal,
+          change: chgRes ? { cash: chgRes.cashNow, carried: chgRes.newCarry } : null,
+          negative_balance: credRes ? { cash: credRes.cashNow, carried: credRes.newCarry } : null });
+    }
 
     const nextMonthLabel = MONTHS[nm.month] + " " + nm.year;
     if (chgRes) {
@@ -1583,6 +1591,13 @@ async function _saveCollectRow(memberId) {
     } catch (e) {
       console.warn("[Receipts] not stored:", e.message);
       toast("Payment saved, but its receipt was not stored: " + e.message, "error");
+    }
+    {
+      const parts = [["Prev. due", allocPrevDue], ["Rent", allocRent], ["Utility", allocUtil], ["Meal", allocMeal], ["Change", change]]
+        .filter(([, v]) => v > 0).map(([l, v]) => `${l} ${auditTk(v)}`);
+      await logAudit("create", "collect", ctx.key,
+        `Collected ${auditTk(amt)} from ${auditName(m.name)}${parts.length ? " — " + parts.join(", ") : ""}${saved ? " · receipt " + paymentReceiptNo(saved.receipt_no) : ""}`,
+        { split: { allocMeal, allocUtil, allocRent, allocPrevDue, change }, receipt_id: saved?.id || null });
     }
 
     /* ── 5) Auto-open shareable receipt ─────────────────────────── */
