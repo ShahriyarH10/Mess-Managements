@@ -335,7 +335,7 @@
     }
     log(errors.length === 0, "no console errors during the Return Amount flow" + (errors.length ? " ← " + errors.join(" | ") : ""));
 
-    /* 6e. Receipts this month: reverse a wrongly entered payment — newest first, exact undo */
+    /* 6e. Receipts this month: reverse a wrongly entered payment — any order, exact undo */
     {
       const ctx = () => P().collectCtx();
       const rid = P().members().find(m => m.username === "demo_rakib").id, RN = "Rakib Hasan";
@@ -356,16 +356,32 @@
       await collect(100); const s1 = await snap();
       await sleep(20); await collect(250); const s2 = await snap();
       const [r2, r1] = mine();
-      log(!!D().getElementById("cp-receipts-card") && !!btn(r2.id, true) && !btn(r1.id, true),
-        "Receipts this month lists both; only the newest can be reversed");
-      W().reverseReceipt(r1.id); await sleep(150);
-      log(/newer receipt/i.test(D().getElementById("toast").textContent) && (await snap()) === s2,
-        "reversing the older one first is refused (newest first)");
+      const sum = (j) => JSON.parse(j).reduce((a, b) => a + b, 0);
+      log(!!D().getElementById("cp-receipts-card") && !!btn(r2.id, true) && !!btn(r1.id, true),
+        "Receipts this month lists both, and either can be reversed");
 
-      W().reverseReceipt(r2.id); await confirmOk();
-      await sleep(600);
-      log((await snap()) === s1 && mine().length === 1, `Reverse undoes only the wrong payment (${await snap()} vs ${s1})`);
+      // a wrong OLDER payment can be undone even though a newer one exists
       W().reverseReceipt(r1.id); await confirmOk(); await sleep(600);
+      log(Math.abs(sum(await snap()) - (sum(s2) - 100)) < 0.02 && mine().length === 1 && mine()[0].id === r2.id,
+        `reversing the older payment takes back only its ৳100 (${await snap()} from ${s2})`);
+
+      // a total lowered by hand below what the receipt added blocks it, with the reason shown
+      const sp2 = r2.split, field = sp2.allocUtil > 0 ? "util" : "rent";
+      const u1 = await util(); const pays = JSON.parse(JSON.stringify(u1?.payments || {}));
+      const rentRow = (await P().sb().from("rent").select("*").eq("mess_id", P().messId()).eq("month_key", ctx().key).maybeSingle()).data;
+      const entries = JSON.parse(JSON.stringify(rentRow?.entries || []));
+      const ent = entries.find(e => e.member_id === rid || e.name === RN);
+      const orig = field === "util" ? pays[RN].paid : ent.paid;
+      const lowerTo = (v) => field === "util"
+        ? W().dbUpsertUtility(ctx().month, ctx().year, ctx().key, u1?.bills || {}, { ...pays, [RN]: { ...pays[RN], paid: v } })
+        : W().dbUpsertRent(ctx().month, ctx().year, ctx().key, entries.map(e => e === ent ? { ...e, paid: v } : e));
+      await lowerTo(Math.max(0, (field === "util" ? sp2.allocUtil : sp2.allocRent) - 50));
+      await W().loadCollectMonth(); await sleep(200);
+      const why = W()._reverseCheck(ctx().receipts.find(p => p.id === r2.id), ctx().receipts, ctx().perMember[rid]).reason;
+      log(!btn(r2.id, true) && /lowered by hand/i.test(why) && D().getElementById("cp-receipts").textContent.includes(why.slice(0, 40)), "a receipt whose total was lowered by hand is blocked, reason shown on it (" + why.trim().slice(0, 80) + "…)");
+      await lowerTo(orig); await W().loadCollectMonth(); await sleep(200);
+
+      W().reverseReceipt(r2.id); await confirmOk(); await sleep(600);
       const st = ((await P().sb().from("member_payments").select("*").eq("member_id", rid)).data || []).map(p => p.status);
       log((await snap()) === s0 && st.length === 2 && st.every(x => x === "reversed"),
         `reversing the rest restores the original totals; both kept as Reversed (${st.join(",")})`);

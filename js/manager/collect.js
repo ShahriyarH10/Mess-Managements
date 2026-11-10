@@ -108,6 +108,7 @@ async function renderCollect(el) {
     .cp-rc-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
     .cp-rc-chip{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);display:inline-flex;align-items:center;gap:4px;}
     .cp-rc-actions{display:flex;gap:6px;}
+    .cp-rc-why{flex-basis:100%;order:3;font-size:11px;color:var(--warn);display:flex;gap:5px;align-items:flex-start;line-height:1.4;}
     .cp-rc-rev:hover{color:var(--red);border-color:var(--red);}
 
     /* ── How-it-works pills ── */
@@ -437,9 +438,10 @@ function returnAmountsFor(r) {
    The receipt's stored split is subtracted from utility_payments / rent and its
    change from pending_change; other payments are left untouched. The receipt is
    kept, marked "reversed", so the member still sees it.
-   Rules (_reverseCheck): newest first per member + month — a newer payment's
-   split was worked out on top of this one — and its change / negative balance
-   must not have been handed back or carried forward yet. */
+   Rules (_reverseCheck): any order is fine — each receipt only takes back its
+   own parts, and totals are plain sums — but every total it takes back from must
+   still hold at least that much (not lowered by hand since), and its change /
+   negative balance must not have been handed back or carried forward yet. */
 const _reverseBusy = new Set();
 
 /* How far this receipt pushed the member's balance below zero ("Negative balance
@@ -463,11 +465,10 @@ function _reverseCheck(p, list, r) {
   if (!p || p.status !== "confirmed") return { ok: false, reason: "Already reversed." };
   if (!p.split) return { ok: false, reason: "Saved before receipts stored their split — correct it on the Utility / Room Rent pages." };
   if (!r) return { ok: false, reason: "This member is no longer in the mess — correct it on the Utility / Room Rent pages." };
-  const t = new Date(p.created_at).getTime();
-  const newer = (list || []).filter(q => q.id !== p.id && q.status === "confirmed"
-      && q.member_id === p.member_id && q.month_key === p.month_key && new Date(q.created_at).getTime() > t)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  if (newer.length) return { ok: false, reason: `Reverse the newer receipt ${paymentReceiptNo(newer[0].receipt_no)} first — payments are undone newest first.` };
+  const short = _reverseShortfall(p.split, {
+    rent: r.rentPaid, util: r.utilPaid, meal: r.mealPaid, prev: r.prevDuePaid,
+  });
+  if (short) return { ok: false, reason: short };
   const { changeRemaining, owesRemaining } = returnAmountsFor(r);
   const change = Number(p.split.change || 0), neg = _receiptNegExcess(p);
   if (change > changeRemaining + 0.01)
@@ -475,6 +476,24 @@ function _reverseCheck(p, list, r) {
   if (neg > owesRemaining + 0.01)
     return { ok: false, reason: `Its ${fmtTk(neg)} negative balance was already handed back or carried forward.` };
   return { ok: true, reason: "" };
+}
+
+/* Every paid total a receipt takes back from must still hold at least its part,
+   or undoing it would push that total below zero (it was lowered by hand, e.g.
+   on the Room Rent / Utility page, after this payment). Resolves a reason or "". */
+function _reverseShortfall(sp, have) {
+  const parts = [
+    ["allocRent",    "rent",  "Rent paid",              "Room Rent page"],
+    ["allocUtil",    "util",  "Utility paid",           "Utility page"],
+    ["allocMeal",    "meal",  "Meal paid",              null],
+    ["allocPrevDue", "prev",  "Previous-due paid",      null],
+  ];
+  for (const [k, h, label, where] of parts) {
+    const need = round2(Number(sp?.[k] || 0)), got = round2(Number(have[h] || 0));
+    if (need > 0.01 && got < need - 0.01)
+      return `${label} is now ${fmtTk(got)}, less than the ${fmtTk(need)} this receipt added — it was lowered by hand${where ? " on the " + where : ""} after this payment. Raise it back by ${fmtTk(round2(need - got))} first, or leave this receipt as it is.`;
+  }
+  return "";
 }
 
 /* ✕ on a Return Amount card: the member's newest receipt this month, if it is the
@@ -555,6 +574,21 @@ async function doReverseCollection(id, memberId) {
     const fresh = await dbGetMemberPayments({ memberId, status: "confirmed", limit: 200 });
     const chk = _reverseCheck(before, fresh, r);
     if (!chk.ok) throw new Error(chk.reason);
+    // re-check the totals straight from the database — another manager may have edited them
+    const sp0 = before.split || {};
+    const u0  = await mustRead(getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
+    const pay0 = (u0?.payments || {})[m.name] || {};
+    let rentHave = 0;
+    if (Number(sp0.allocRent || 0) > 0) {
+      const r0 = await mustRead(getClient().from("rent")
+        .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
+      const e0 = rentEntryFor(r0?.entries || [], m);
+      if (!e0) throw new Error(`${_decodeEntities(m.name)} has no rent entry for ${monthLabelFromKey(ctx.key)} — add it on the Room Rent page first.`);
+      rentHave = Number(e0.paid || 0);
+    }
+    const short = _reverseShortfall(sp0, { rent: rentHave, util: pay0.paid, meal: pay0.meal_paid, prev: pay0.prev_due_paid });
+    if (short) throw new Error(short);
     claimed = await dbClaimReversal(id, currentUser.name);
     if (!claimed) throw new Error("This payment was already reversed.");
     const sp = claimed.split || {};
@@ -817,6 +851,7 @@ function buildReceiptsTable() {
             ${p.split ? "" : `<span class="cp-rc-meta">no split stored</span>`}
           </div>
         </div>
+        ${chk.ok ? "" : `<div class="cp-rc-why">${ic("info")} ${escapeHtml(chk.reason)}</div>`}
         <div class="cp-rc-actions">
           ${id ? `<button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${id}')">${ic("eye")} View</button>` : ""}
           ${id && chk.ok
@@ -832,7 +867,7 @@ function buildReceiptsTable() {
         <span style="font-weight:700;font-size:14px">${ic("receipt")} Receipts this month (${list.length})</span>
         <span style="font-size:12px;color:var(--text3)">Entered something wrong? Reverse it here, then enter the right payment.</span>
       </summary>
-      <div style="font-size:12px;color:var(--text3);margin:10px 0 4px">Reverse takes back exactly what that payment added to rent, utility, meal and previous due — other payments stay as they are. Payments are undone newest first; hover a greyed-out button to see why.</div>
+      <div style="font-size:12px;color:var(--text3);margin:10px 0 4px">Reverse takes back exactly what that payment added to rent, utility, meal and previous due — other payments stay as they are. If Reverse is greyed out, the reason is shown on that receipt.</div>
       ${rows}
     </details>`;
 }
