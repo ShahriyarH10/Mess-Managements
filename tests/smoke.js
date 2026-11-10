@@ -255,6 +255,74 @@
         `Remove duplicate: 1 counted + 1 marked duplicate, change back to ${changeI} (now ${await pendI()})`);
     }
 
+    /* 6d. Return Amount: a collection that leaves a "Negative balance owed" can be reversed
+           (earlier partial payments survive); Save records partial cash without carrying;
+           Carry fwd moves the rest to next month. */
+    {
+      const ctx = () => P().collectCtx();
+      const fid = P().members().find(m => m.username === "demo_mahfuz").id, FN = "Mahfuz Alam";
+      const util = async (key) => (await P().sb().from("utility_payments").select("*").eq("mess_id", P().messId()).eq("month_key", key).maybeSingle()).data;
+      const rentPaid = async () => Number(((await P().sb().from("rent").select("*").eq("mess_id", P().messId()).eq("month_key", ctx().key).maybeSingle()).data?.entries || [])
+        .find(e => e.member_id === fid || e.name === FN)?.paid || 0);
+      const snap = async () => { const u = await util(ctx().key); const p = (u?.payments || {})[FN] || {}; return { rent: await rentPaid(), util: Number(p.paid || 0), meal: Number(p.meal_paid || 0), pd: Number(p.prev_due_paid || 0) }; };
+      const near = (a, b) => Math.abs(a - b) < 0.02;
+      const collect = async (amt) => { D().getElementById("cp-amt-" + fid).value = String(amt); await W().saveCollectRow(fid); await sleep(200); W().closeModal(); };
+
+      // give Mahfuz a ৳500 meal surplus, so paying every open bucket leaves the mess owing ৳500
+      let r = ctx().perMember[fid];
+      const mealRem = r.mealCost - r.memberBazar - r.mealPaid;
+      const u0 = await util(ctx().key); const pays = { ...(u0?.payments || {}) };
+      pays[FN] = { ...(pays[FN] || {}), meal_paid: Math.round((Number(pays[FN]?.meal_paid || 0) + mealRem + 500) * 100) / 100 };
+      await W().dbUpsertUtility(ctx().month, ctx().year, ctx().key, u0?.bills || {}, pays);
+      await W().loadCollectMonth(); await sleep(150);
+
+      await collect(100);                                   // an earlier partial payment
+      const partial = await snap();
+      r = ctx().perMember[fid];
+      const open = Math.max(0, r.utilDue - r.utilPaid) + Math.max(0, r.rentDue - r.rentPaid) + (r.prevDue || 0);
+      await collect(Math.round(open * 100) / 100);           // fills rent + utility → ৳500 negative, no change
+      r = ctx().perMember[fid];
+      const amts = W().returnAmountsFor(r);
+      const xBtn = () => D().querySelector(`#retr-${fid} .cp-mcard-x`);
+      log(near(amts.owesRemaining, 500) && amts.changeRemaining < 0.01 && !!xBtn(),
+        `negative-balance card shows ✕ (owes ${amts.owesRemaining}, change ${amts.changeRemaining}, ✕ ${!!xBtn()})`);
+      xBtn().click(); await until(() => D().getElementById("confirm-ok-btn"), 4000); await sleep(150);
+      D().getElementById("confirm-ok-btn").click();
+      await until(() => !D().getElementById("retr-" + fid), 6000); await sleep(200);
+      const afterRev = await snap();
+      log(near(afterRev.rent, partial.rent) && near(afterRev.util, partial.util) && near(afterRev.pd, partial.pd) && !D().getElementById("retr-" + fid),
+        `reversing it restores the earlier partial payment exactly (rent ${afterRev.rent}/${partial.rent}, util ${afterRev.util}/${partial.util}, prev ${afterRev.pd}/${partial.pd})`);
+
+      // recreate the ৳500 negative, then return only ৳200 with Save
+      await collect(Math.round(open * 100) / 100);
+      D().getElementById("ret-amt-" + fid).value = "200";
+      await W().saveReturnRow(fid); await sleep(200); W().closeModal();
+      r = ctx().perMember[fid];
+      const nk = ctx().nextMonth.key;
+      const carried = Number(((await util(nk))?.bills?.mess_credit || {})[FN] || 0);
+      log(near(W().returnAmountsFor(r).owesRemaining, 300) && carried < 0.01 && !!D().getElementById("retr-" + fid) && !xBtn(),
+        `Save with ৳200 of ৳500 keeps ৳300 to return and carries nothing (left ${W().returnAmountsFor(r).owesRemaining}, carried ${carried}, ✕ hidden ${!xBtn()})`);
+
+      D().getElementById("ret-amt-" + fid).value = "";
+      await W().saveReturnRow(fid); await sleep(150);
+      log(near(W().returnAmountsFor(ctx().perMember[fid]).owesRemaining, 300), "Save with no amount changes nothing");
+
+      await W().carryReturnRow(fid); await sleep(200); W().closeModal();
+      const carried2 = Number(((await util(nk))?.bills?.mess_credit || {})[FN] || 0);
+      log(near(carried2, 300) && !D().getElementById("retr-" + fid), `Carry fwd moves the ৳300 left to next month (carried ${carried2})`);
+
+      // overpaid change from 6b (Nayeem): a partial Save only reduces pending change
+      const sid = P().members().find(m => m.username === "demo_nayeem").id;
+      const pend = async () => Number(((await util(ctx().key))?.bills?.pending_change || {})["Nayeem Khan"] || 0);
+      const chg0 = await pend(), cc0 = Number(((await util(nk))?.bills?.change_credit || {})["Nayeem Khan"] || 0);
+      D().getElementById("ret-amt-" + sid).value = "100";
+      await W().saveReturnRow(sid); await sleep(200); W().closeModal();
+      const cc1 = Number(((await util(nk))?.bills?.change_credit || {})["Nayeem Khan"] || 0);
+      log(chg0 > 100 && near(await pend(), chg0 - 100) && near(cc1, cc0),
+        `partial change return keeps the rest pending (pending ${chg0} → ${await pend()}, change credit ${cc0} → ${cc1})`);
+    }
+    log(errors.length === 0, "no console errors during the Return Amount flow" + (errors.length ? " ← " + errors.join(" | ") : ""));
+
     /* 7. login form works against demo accounts, reset + logout */
     W().doLogout(); await until(() => visible("landing-page"));
     log(visible("landing-page") && !P().user(), "logout → landing, session cleared (hash=" + W().location.hash + ", user=" + JSON.stringify(P().user()) + ", landing=" + visible("landing-page") + ")");

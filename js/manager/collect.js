@@ -241,7 +241,12 @@ async function loadCollectMonth() {
     };
   });
 
-  _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits };
+  // This month's confirmed receipts — decides which Return Amount cards can be reversed
+  let receipts = [];
+  try { receipts = (await dbGetMemberPayments({ status: "confirmed", limit: 1000 })).filter(p => p.month_key === key); }
+  catch (_) { /* receipts.sql not run yet — nothing to reverse */ }
+
+  _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits, receipts };
   buildCollectTable();
   buildReturnTable();
   await loadPendingPayments();
@@ -420,9 +425,33 @@ function returnAmountsFor(r) {
    The receipt is kept, marked "reversed", so the member still sees it. */
 const _reverseBusy = new Set();
 
-function _reversibleFor(list, key, change) {
-  return list.find(p => p.month_key === key && p.split
-    && Number(p.split.change || 0) > 0.01 && Number(p.split.change) <= change + 0.01);
+/* How far this receipt pushed the member's balance below zero ("Negative balance
+   owed") — money that went into rent / utility beyond what was actually due.
+   The "before" balance is rebuilt as still_due + allocated: still_due is set when
+   the money is applied, while a member's due_at_submit is from when they sent the
+   request and may be stale by the time a manager confirms it. Old receipts without
+   still_due fall back to due_at_submit. */
+function _receiptNegExcess(p) {
+  const sp = p.split || {};
+  const allocated = round2(Number(p.amount || 0) - Number(sp.change || 0));
+  const hasAfter  = p.still_due != null;
+  const before    = hasAfter ? round2(Number(p.still_due) + allocated) : Number(p.due_at_submit || 0);
+  const after     = hasAfter ? Number(p.still_due) : round2(before - allocated);
+  return round2(Math.max(0, Math.max(0, -after) - Math.max(0, -before)));
+}
+
+/* Newest confirmed receipt for this month whose excess (overpaid change and/or
+   negative balance) is still unresolved — nothing handed back or carried yet.
+   Reversing it subtracts exactly its own split, so rent / utility paid by other
+   receipts (partial payments) is left untouched. */
+function _reversibleFor(list, key, r) {
+  const { changeRemaining, owesRemaining } = returnAmountsFor(r);
+  return list.find(p => {
+    if (p.month_key !== key || p.member_id == null || !p.split) return false;
+    const change = Number(p.split.change || 0), neg = _receiptNegExcess(p);
+    if (change <= 0.01 && neg <= 0.01) return false;
+    return change <= changeRemaining + 0.01 && neg <= owesRemaining + 0.01;
+  });
 }
 
 async function reverseReturnCard(memberId) {
@@ -432,13 +461,18 @@ async function reverseReturnCard(memberId) {
   let p;
   try {
     const list = await dbGetMemberPayments({ memberId, status: "confirmed", limit: 100 });
-    p = _reversibleFor(list, ctx.key, round2(r.pendingChange || 0));
+    p = _reversibleFor(list, ctx.key, r);
   } catch (e) { toast("Could not load receipts: " + e.message, "error"); return; }
   if (!p) {
-    toast("No saved collection to reverse — this overpayment was recorded before receipts existed. Correct it on the Utility / Room Rent pages.", "error");
+    toast("No saved collection to reverse — this balance was not created by a stored receipt (or was already returned / carried). Correct it on the Utility / Room Rent pages.", "error");
     return;
   }
   const sp = p.split, name = _decodeEntities(m.name);
+  const neg = _receiptNegExcess(p), chg = Number(sp.change || 0);
+  const excess = [
+    chg > 0.01 && `the ${fmtTk(chg)} change`,
+    neg > 0.01 && `the ${fmtTk(neg)} negative balance`,
+  ].filter(Boolean).join(" and ");
   const parts = [
     sp.allocPrevDue > 0 && `Prev. due ${fmtTk(sp.allocPrevDue)}`,
     sp.allocRent    > 0 && `Rent ${fmtTk(sp.allocRent)}`,
@@ -449,7 +483,7 @@ async function reverseReturnCard(memberId) {
     title: `Reverse ${fmtTk(Number(p.amount))} from ${name}?`,
     body: `Receipt ${paymentReceiptNo(p.receipt_no)}, collected ${_payDate(p.created_at)}. `
       + (parts.length ? `This takes back what it paid: ${parts.join(", ")}. ` : "")
-      + `The ${fmtTk(sp.change)} change will no longer need returning. The receipt stays in ${name}'s My Receipts, marked Reversed.`,
+      + `Earlier payments are left as they are. ${excess.charAt(0).toUpperCase() + excess.slice(1)} will no longer need returning. The receipt stays in ${name}'s My Receipts, marked Reversed.`,
     confirmLabel: "Reverse payment",
     danger: true,
     onConfirm: () => doReverseCollection(p.id, memberId),
@@ -572,10 +606,8 @@ let _dupPairs = [];
 async function loadDuplicateReceipts() {
   const wrap = document.getElementById("cp-dupes");
   if (!wrap || !_collectCtx) return;
-  try {
-    const list = await dbGetMemberPayments({ status: "confirmed", limit: 1000 });
-    _dupPairs = findDuplicateReceipts(list.filter(p => p.month_key === _collectCtx.key));
-  } catch (_) { _dupPairs = []; }
+  try { _dupPairs = findDuplicateReceipts(_collectCtx.receipts || []); }
+  catch (_) { _dupPairs = []; }
   if (!_dupPairs.length) { wrap.innerHTML = ""; return; }
   wrap.innerHTML = `<div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb,var(--warn) 35%,transparent)">
     <div class="dk-card-title"><span style="color:var(--warn)">${ic("copy")} Duplicate receipts (${_dupPairs.length})</span></div>
@@ -721,8 +753,9 @@ function buildReturnTable() {
     {bg:'rgba(224,82,82,.15)',color:'var(--red)'},
   ];
 
-  const cards = rows.map(({ m, amts }, idx) => {
+  const cards = rows.map(({ m, r, amts }, idx) => {
     const { changeRemaining, owesRemaining, alreadyCarried, total } = amts;
+    const canReverse = !!_reversibleFor((_collectCtx.receipts || []).filter(p => p.member_id === m.id), _collectCtx.key, r);
     const av       = avatarColors[idx % avatarColors.length];
     const pct = v => (total > 0 ? Math.round((v / total) * 100) : 0);
 
@@ -744,7 +777,7 @@ function buildReturnTable() {
 
     return `
       <div class="cp-mcard cp-mcard-ret" id="retr-${m.id}">
-        ${changeRemaining > 0.01 ? `<button class="cp-mcard-x" data-on-click="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">${ic("x")}</button>` : ""}
+        ${canReverse ? `<button class="cp-mcard-x" data-on-click="reverseReturnCard('${m.id}')" title="Reverse this payment" aria-label="Reverse ${m.name}'s overpaid collection">${ic("x")}</button>` : ""}
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
@@ -761,7 +794,7 @@ function buildReturnTable() {
 
         <div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px">
           ${alreadyCarried > 0 ? `<span class="cp-carry-tag" title="Already moved to next month as account credit — shown for context">${ic("undo")} ${fmtTk(alreadyCarried)} already carried → ${MONTHS[nm.month]} ${nm.year}</span>` : ''}
-          <span id="ret-carry-${m.id}" class="cp-carry-tag">${ic("undo")} carry ${fmtTk(total)} → ${MONTHS[nm.month]} ${nm.year}</span>
+          <span id="ret-carry-${m.id}" class="cp-carry-tag">${ic("clock")} ${fmtTk(total)} still to return</span>
         </div>
 
         <div class="cp-input-row">
@@ -775,7 +808,9 @@ function buildReturnTable() {
               data-on-blur="this.closest('.cp-mcard').classList.remove('cp-mcard-active')"/>
           </div>
           <button class="btn cp-save-btn" style="background:var(--green-bg);border:1px solid var(--green);color:var(--green)"
-            data-on-click="saveReturnRow('${m.id}')">Save</button>
+            data-on-click="saveReturnRow('${m.id}')" title="Record the cash handed back — the rest stays here to return">Save</button>
+          <button class="btn btn-ghost cp-save-btn" data-on-click="carryReturnRow('${m.id}')"
+            title="Record any cash typed, then carry the rest to ${MONTHS[nm.month]} ${nm.year}">${ic("undo")} Carry fwd</button>
         </div>
       </div>`;
   }).join('');
@@ -783,7 +818,7 @@ function buildReturnTable() {
   wrap.innerHTML = `
     <div class="cp-cards-grid">${cards}</div>
     <div style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
-      ${ic("lightbulb")} Enter ৳0 and Save to carry the whole amount to ${MONTHS[nm.month]} ${nm.year} — it auto-deducts from utility dues.
+      ${ic("lightbulb")} <b>Save</b> records the cash you hand back — anything not returned stays here. <b>Carry fwd</b> moves what is left to ${MONTHS[nm.month]} ${nm.year}, where it auto-deducts from utility dues.
     </div>`;
 }
 
@@ -796,12 +831,12 @@ function onReturnAmtInput(memberId) {
 
   const raw      = parseFloat(document.getElementById("ret-amt-" + memberId)?.value || 0);
   const cashNow  = round2(Math.min(Math.max(0, raw), total));
-  const carryFwd = round2(total - cashNow);
+  const left     = round2(total - cashNow);
 
   const carryEl = document.getElementById("ret-carry-" + memberId);
   if (carryEl) {
-    carryEl.textContent = carryFwd > 0 ? "carry " + fmtTk(carryFwd) + " → next month" : "fully returned — nothing carried";
-    carryEl.classList.toggle("is-green", carryFwd <= 0);
+    carryEl.textContent = left > 0 ? fmtTk(left) + " still to return (or Carry fwd)" : "fully returned";
+    carryEl.classList.toggle("is-green", left <= 0);
   }
   const remEl = document.getElementById("ret-rem-" + memberId);
   if (remEl) remEl.textContent = cashNow > 0 ? fmtTk(cashNow) : fmtTk(total);
@@ -809,51 +844,55 @@ function onReturnAmtInput(memberId) {
 
 /* ── Portion writers — same DB effects the old Save buttons had, no UI ── */
 
-/* Overpaid change: clear this month's pending_change, carry the unpaid rest
-   into next month's bills.change_credit. */
-async function _applyChangePortion(ctx, r, m, giveRaw) {
+/* Overpaid change: take the cash handed back off this month's pending_change.
+   Only when `carry` is set does the unpaid rest move to next month's
+   bills.change_credit; otherwise it stays pending, still to return. */
+async function _applyChangePortion(ctx, r, m, giveRaw, carry = false) {
   const totalChange = round2(r.pendingChange || 0);
   const alreadyFwd  = round2(r.existingChangeCredit);
   // Only the fresh, unresolved overpayment is settled here; whatever was already
   // carried forward is added to, never replaced.
   const remaining   = round2(Math.max(0, totalChange));
   const cashNow     = round2(Math.min(Math.max(0, giveRaw), remaining));
-  const newCarry    = round2(remaining - cashNow);
+  const newCarry    = carry ? round2(remaining - cashNow) : 0;
+  const stillDue    = round2(remaining - cashNow - newCarry);
 
-  const nm = ctx.nextMonth;
-  const latestNext = await mustRead(getClient().from("utility_payments")
-    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle());
-  const nextBills    = { ...(latestNext?.bills    || {}) };
-  const nextPayments = { ...(latestNext?.payments || {}) };
-  const changeCredits = { ...(nextBills.change_credit || {}) };
-  const totalCarry = round2(alreadyFwd + newCarry);
-  if (totalCarry > 0.001) changeCredits[m.name] = totalCarry;
-  else delete changeCredits[m.name];
-  nextBills.change_credit = changeCredits;
-  await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+  if (newCarry > 0.001) {
+    const nm = ctx.nextMonth;
+    const latestNext = await mustRead(getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle());
+    const nextBills    = { ...(latestNext?.bills    || {}) };
+    const nextPayments = { ...(latestNext?.payments || {}) };
+    const changeCredits = { ...(nextBills.change_credit || {}) };
+    changeCredits[m.name] = round2(alreadyFwd + newCarry);
+    nextBills.change_credit = changeCredits;
+    await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+  }
 
   const curUtil = await mustRead(getClient().from("utility_payments")
     .select("*").eq("mess_id", messId()).eq("month_key", ctx.key).maybeSingle());
   const curBills    = { ...(curUtil?.bills || {}) };
   const curPayments = curUtil?.payments || {};
   const pendingMap  = { ...(curBills.pending_change || {}) };
-  delete pendingMap[m.name];
+  if (stillDue > 0.01) pendingMap[m.name] = stillDue; else delete pendingMap[m.name];
   if (Object.keys(pendingMap).length === 0) delete curBills.pending_change;
   else curBills.pending_change = pendingMap;
   await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
 
-  return { totalChange, cashNow, newCarry };
+  return { totalChange, cashNow, newCarry, stillDue };
 }
 
-/* Negative balance the mess owes: record cash as credit_paid this month,
-   carry the rest into next month's bills.mess_credit. */
-async function _applyCreditPortion(ctx, r, m, giveRaw) {
+/* Negative balance the mess owes: record cash as credit_paid this month.
+   Only when `carry` is set does the rest move to next month's bills.mess_credit;
+   otherwise it stays on the card, still to return. */
+async function _applyCreditPortion(ctx, r, m, giveRaw, carry = false) {
   // Net of old unpaid dues: a member still behind on prevDue is not owed money.
   const messOwes      = round2(Math.abs(Math.min(0, Number(r.netPayable || 0) + Number(r.prevDue || 0))));
   const alreadyFwd    = round2(r.existingCarryCredit);
   const remainingCred = round2(Math.max(0, messOwes - alreadyFwd));
   const cashNow       = round2(Math.min(Math.max(0, giveRaw), remainingCred));
-  const newCarry      = round2(remainingCred - cashNow);
+  const newCarry      = carry ? round2(remainingCred - cashNow) : 0;
+  const stillDue      = round2(remainingCred - cashNow - newCarry);
 
   if (cashNow > 0) {
     const curUtil = await mustRead(getClient().from("utility_payments")
@@ -866,27 +905,32 @@ async function _applyCreditPortion(ctx, r, m, giveRaw) {
     await dbUpsertUtility(ctx.month, ctx.year, ctx.key, curBills, curPayments);
   }
 
-  const nm = ctx.nextMonth;
-  const latestNext = await mustRead(getClient().from("utility_payments")
-    .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle());
-  const nextBills    = { ...(latestNext?.bills    || {}) };
-  const nextPayments = { ...(latestNext?.payments || {}) };
-  const existCredit = { ...(nextBills.mess_credit || {}) };
-  const totalCarry = round2(alreadyFwd + newCarry);
-  if (totalCarry > 0.001) existCredit[m.name] = totalCarry;
-  else delete existCredit[m.name];
-  nextBills.mess_credit = existCredit;
-  await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+  if (newCarry > 0.001) {
+    const nm = ctx.nextMonth;
+    const latestNext = await mustRead(getClient().from("utility_payments")
+      .select("*").eq("mess_id", messId()).eq("month_key", nm.key).maybeSingle());
+    const nextBills    = { ...(latestNext?.bills    || {}) };
+    const nextPayments = { ...(latestNext?.payments || {}) };
+    const existCredit = { ...(nextBills.mess_credit || {}) };
+    existCredit[m.name] = round2(alreadyFwd + newCarry);
+    nextBills.mess_credit = existCredit;
+    await dbUpsertUtility(nm.month, nm.year, nm.key, nextBills, nextPayments);
+  }
 
-  return { messOwes, cashNow, newCarry };
+  return { messOwes, cashNow, newCarry, stillDue };
 }
 
-/* One Save button: fill overpaid change first, then the negative balance. */
+/* Save: record the cash handed back (overpaid change first, then the negative
+   balance). Whatever is not returned stays in Return Amount — never carried
+   automatically. Carry fwd: same, then moves the rest to next month. */
 function saveReturnRow(memberId) {
-  return runOnce("return:" + memberId, `saveReturnRow('${memberId}')`, () => _saveReturnRow(memberId));
+  return runOnce("return:" + memberId, `saveReturnRow('${memberId}')`, () => _saveReturnRow(memberId, false));
 }
-async function _saveReturnRow(memberId) {
-  if (!requireManager('saveReturnRow')) return;
+function carryReturnRow(memberId) {
+  return runOnce("return:" + memberId, `carryReturnRow('${memberId}')`, () => _saveReturnRow(memberId, true));
+}
+async function _saveReturnRow(memberId, carry) {
+  if (!requireManager(carry ? 'carryReturnRow' : 'saveReturnRow')) return;
   if (!_collectCtx) return;
   const ctx = _collectCtx;
   if (!(await ensureMonthOpen(ctx.key))) return;
@@ -897,15 +941,19 @@ async function _saveReturnRow(memberId) {
   const { changeRemaining, owesRemaining } = returnAmountsFor(r);
   const raw = parseFloat(document.getElementById("ret-amt-" + memberId)?.value || 0);
   let cashLeft = round2(Math.max(0, raw));
+  if (!carry && cashLeft <= 0) {
+    toast("Enter the cash you are handing back — or use Carry fwd to move it to next month", "error");
+    return;
+  }
 
   try {
     let chgRes = null, credRes = null;
     if (changeRemaining > 0.01) {
-      chgRes = await _applyChangePortion(ctx, r, m, Math.min(cashLeft, changeRemaining));
+      chgRes = await _applyChangePortion(ctx, r, m, Math.min(cashLeft, changeRemaining), carry);
       cashLeft = round2(Math.max(0, cashLeft - chgRes.cashNow));
     }
     if (owesRemaining > 0.01) {
-      credRes = await _applyCreditPortion(ctx, r, m, Math.min(cashLeft, owesRemaining));
+      credRes = await _applyCreditPortion(ctx, r, m, Math.min(cashLeft, owesRemaining), carry);
       cashLeft = round2(Math.max(0, cashLeft - credRes.cashNow));
     }
 
@@ -916,20 +964,22 @@ async function _saveReturnRow(memberId) {
     const carryTotal = round2((chgRes?.newCarry || 0) + (credRes?.newCarry || 0));
     const parts = [];
     if (cashTotal  > 0) parts.push(`Cash returned: ${fmtTk(cashTotal)}`);
+    const stillTotal = round2((chgRes?.stillDue || 0) + (credRes?.stillDue || 0));
     if (carryTotal > 0) parts.push(`Carry to ${MONTHS[nm.month]} ${nm.year}: ${fmtTk(carryTotal)}`);
+    if (stillTotal > 0) parts.push(`Still to return: ${fmtTk(stillTotal)}`);
     toast("Return saved  " + (parts.join("  ·  ") || "Nothing to return"), "success");
 
     const nextMonthLabel = MONTHS[nm.month] + " " + nm.year;
     if (chgRes) {
       showChangeReceipt({
         member: m, monthLabel: monthLabelFromKey(ctx.key), nextMonthLabel,
-        totalChange: chgRes.totalChange, cashNow: chgRes.cashNow, newCarry: chgRes.newCarry,
+        totalChange: chgRes.totalChange, cashNow: chgRes.cashNow, newCarry: chgRes.newCarry, stillDue: chgRes.stillDue,
         timestamp: new Date(),
       });
     } else if (credRes) {
       showCreditReceipt({
         member: m, monthLabel: monthLabelFromKey(ctx.key), nextMonthLabel,
-        cashNow: credRes.cashNow, newCarry: credRes.newCarry, messOwes: credRes.messOwes,
+        cashNow: credRes.cashNow, newCarry: credRes.newCarry, messOwes: credRes.messOwes, stillDue: credRes.stillDue,
         timestamp: new Date(),
       });
     }
@@ -938,6 +988,12 @@ async function _saveReturnRow(memberId) {
   }
 }
 
+
+/* Status line for a change / credit receipt that is not fully settled. */
+function _retStatus(d, f) {
+  if (d.stillDue > 0.01) return `${ic("clock")} ${f(d.stillDue)} still to return` + (d.newCarry > 0 ? ` · ${f(d.newCarry)} carried` : "");
+  return `${ic("undo")} ${f(d.newCarry)} carried forward`;
+}
 
 /* ── Change receipt ── */
 function buildChangeReceiptText(d) {
@@ -958,8 +1014,11 @@ function buildChangeReceiptText(d) {
   lines.push(`─────────────────────`);
   if (d.cashNow  > 0) lines.push(`Cash returned now:  ${fmtTk(d.cashNow)}`);
   if (d.newCarry > 0) lines.push(`Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
+  if (d.stillDue > 0.01) lines.push(`Still to return:  ${fmtTk(d.stillDue)}`);
   lines.push(`─────────────────────`);
-  lines.push(d.newCarry > 0
+  lines.push(d.stillDue > 0.01
+    ? `Change still to return: ${fmtTk(d.stillDue)}`
+    : d.newCarry > 0
     ? `Remaining carried forward: ${fmtTk(d.newCarry)}`
     : `Change fully returned`);
   lines.push(``);
@@ -981,7 +1040,7 @@ function showChangeReceipt(d) {
     + "-" + String(d.timestamp.getHours()).padStart(2,"0")
     + String(d.timestamp.getMinutes()).padStart(2,"0");
 
-  const isFullyReturned = d.newCarry === 0;
+  const isFullyReturned = d.newCarry === 0 && !(d.stillDue > 0.01);
   const text   = buildChangeReceiptText(d);
   const phoneRaw = (d.member.phone || "").replace(/[^\d]/g, "");
   const phone  = phoneRaw.length === 11 && phoneRaw.startsWith("0") ? "880" + phoneRaw.slice(1) : phoneRaw;
@@ -1031,7 +1090,7 @@ function showChangeReceipt(d) {
       <div class="chg-head-name">${messName}</div>
       <div class="chg-head-sub">Change & Carry Forward Receipt</div>
       <span class="chg-badge ${isFullyReturned ? 'chg-badge-ok' : 'chg-badge-fwd'}">
-        ${isFullyReturned ? "" + ic("check") + " Fully Returned" : "" + ic("undo") + " Partially Carried"}
+        ${isFullyReturned ? "" + ic("check") + " Fully Returned" : (d.stillDue > 0.01 ? ic("clock") + " Partially Returned" : ic("undo") + " Partially Carried")}
       </span>
     </div>
 
@@ -1084,7 +1143,7 @@ function showChangeReceipt(d) {
     <div class="chg-net ${isFullyReturned ? 'chg-net-ok' : 'chg-net-fwd'}">
       <span>Change Status</span>
       <span style="color:${isFullyReturned ? 'var(--green)' : 'var(--blue)'}">
-        ${isFullyReturned ? "" + ic("check") + " Fully returned" : `${ic("undo")} ${fmtTk(d.newCarry)} carried forward`}
+        ${isFullyReturned ? "" + ic("check") + " Fully returned" : _retStatus(d, fmtTk)}
       </span>
     </div>
 
@@ -1148,7 +1207,7 @@ function printChangeReceipt() {
   const messName = currentMess?.name || "Mess";
   const dt = d.timestamp.toLocaleString("en-IN", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", hour12:true });
   const receiptNo = "CHG-" + d.timestamp.getFullYear() + String(d.timestamp.getMonth()+1).padStart(2,"0") + String(d.timestamp.getDate()).padStart(2,"0") + "-" + String(d.timestamp.getHours()).padStart(2,"0") + String(d.timestamp.getMinutes()).padStart(2,"0");
-  const isFullyReturned = d.newCarry === 0;
+  const isFullyReturned = d.newCarry === 0 && !(d.stillDue > 0.01);
   const fmtTkP = v => "৳" + Number(v).toLocaleString("en-IN", { minimumFractionDigits:0, maximumFractionDigits:2 });
 
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Change Receipt — ${d.member.name}</title>
@@ -1163,7 +1222,7 @@ function printChangeReceipt() {
   .foot{text-align:center;padding:12px 0 2px;border-top:2px dashed #ccc;margin-top:16px;}.foot-txt{font-size:10px;color:#aaa;letter-spacing:.4px;}
   @media print{body{padding:16px 14px;}@page{margin:10mm;size:A5;}}</style></head><body>
   <div class="head"><div class="head-icon">${ic("send")}</div><div class="head-name">${messName}</div><div class="head-sub">Change &amp; Carry Forward Receipt</div>
-  <span class="badge ${isFullyReturned ? 'badge-ok' : 'badge-fwd'}">${isFullyReturned ? "" + ic("check") + " Fully Returned" : "" + ic("undo") + " Partially Carried"}</span></div>
+  <span class="badge ${isFullyReturned ? 'badge-ok' : 'badge-fwd'}">${isFullyReturned ? "" + ic("check") + " Fully Returned" : (d.stillDue > 0.01 ? ic("clock") + " Partially Returned" : ic("undo") + " Partially Carried")}</span></div>
   <div class="meta">
     <div class="ml"><span class="ml-lbl">Receipt No.</span><span class="ml-val" style="font-family:monospace;font-size:11px">${receiptNo}</span></div>
     <div class="ml"><span class="ml-lbl">Date &amp; Time</span><span class="ml-val" style="font-size:11px">${dt}</span></div>
@@ -1175,7 +1234,7 @@ function printChangeReceipt() {
   ${d.cashNow > 0 ? `<div class="row"><div class="row-left"><span class="row-ico">${ic("cash")}</span><div><div class="row-lbl">Cash Returned Now</div><div class="row-sub">Handed back to ${d.member.name}</div></div></div><span class="row-val" style="color:#27ae60">${fmtTkP(d.cashNow)}</span></div>` : ""}
   ${d.newCarry > 0 ? `<div class="row" style="border:1px solid #aed6f1"><div class="row-left"><span class="row-ico">${ic("undo")}</span><div><div class="row-lbl">Carried to ${d.nextMonthLabel}</div><div class="row-sub">Reduces utility total due next month</div></div></div><span class="row-val" style="color:#2980b9">${fmtTkP(d.newCarry)}</span></div>` : ""}
   <hr class="divider">
-  <div class="net ${isFullyReturned ? 'net-ok' : 'net-fwd'}"><span>Change Status</span><span style="color:${isFullyReturned ? '#27ae60' : '#d4950a'}">${isFullyReturned ? "" + ic("check") + " Fully returned" : `${ic("undo")} ${fmtTkP(d.newCarry)} carried forward`}</span></div>
+  <div class="net ${isFullyReturned ? 'net-ok' : 'net-fwd'}"><span>Change Status</span><span style="color:${isFullyReturned ? '#27ae60' : '#d4950a'}">${isFullyReturned ? "" + ic("check") + " Fully returned" : _retStatus(d, fmtTkP)}</span></div>
   <div class="foot"><div class="foot-txt">— Generated by ${messName} Manager —</div></div>
   </body></html>`);
   w.document.close();
@@ -1371,6 +1430,12 @@ async function _saveCollectRow(memberId) {
         stillDue: newTotal,
       });
       _paymentCache.set(saved.id, saved);
+      // The month was reloaded before this receipt existed — add it so its
+      // Return Amount card can offer ✕ (reverse) straight away.
+      if (_collectCtx?.key === ctx.key) {
+        _collectCtx.receipts = [saved, ...(_collectCtx.receipts || [])];
+        buildReturnTable();
+      }
     } catch (e) {
       console.warn("[Receipts] not stored:", e.message);
       toast("Payment saved, but its receipt was not stored: " + e.message, "error");
@@ -1415,8 +1480,11 @@ function buildCreditReceiptText(d) {
   lines.push(`─────────────────────`);
   if (d.cashNow > 0)  lines.push(`Cash handed back now:  ${fmtTk(d.cashNow)}`);
   if (d.newCarry > 0) lines.push(`Carried to ${d.nextMonthLabel}:  ${fmtTk(d.newCarry)}`);
+  if (d.stillDue > 0.01) lines.push(`Still to return:  ${fmtTk(d.stillDue)}`);
   lines.push(`─────────────────────`);
-  lines.push(d.newCarry > 0
+  lines.push(d.stillDue > 0.01
+    ? `Credit still to return: ${fmtTk(d.stillDue)}`
+    : d.newCarry > 0
     ? `Remaining credit carried forward: ${fmtTk(d.newCarry)}`
     : `Credit fully settled`);
   lines.push(``);
@@ -1438,7 +1506,7 @@ function showCreditReceipt(d) {
     + "-" + String(d.timestamp.getHours()).padStart(2,"0")
     + String(d.timestamp.getMinutes()).padStart(2,"0");
 
-  const isFullySettled = d.newCarry === 0;
+  const isFullySettled = d.newCarry === 0 && !(d.stillDue > 0.01);
 
   const phoneRaw = (d.member.phone || "").replace(/[^\d]/g, "");
   const phone = phoneRaw.length === 11 && phoneRaw.startsWith("0")
@@ -1492,7 +1560,7 @@ function showCreditReceipt(d) {
       <div class="crdt-head-name">${messName}</div>
       <div class="crdt-head-sub">Credit Drawdown Receipt</div>
       <span class="crdt-badge ${isFullySettled ? 'crdt-badge-ok' : 'crdt-badge-fwd'}">
-        ${isFullySettled ? "" + ic("check") + " Fully Settled" : "" + ic("undo") + " Partially Carried"}
+        ${isFullySettled ? "" + ic("check") + " Fully Settled" : (d.stillDue > 0.01 ? ic("clock") + " Partially Returned" : ic("undo") + " Partially Carried")}
       </span>
     </div>
 
@@ -1563,7 +1631,7 @@ function showCreditReceipt(d) {
     <div class="crdt-net ${isFullySettled ? 'crdt-net-ok' : 'crdt-net-fwd'}">
       <span>Credit Status</span>
       <span style="color:${isFullySettled ? 'var(--green)' : 'var(--blue)'}">
-        ${isFullySettled ? "" + ic("check") + " Fully settled" : `${ic("undo")} ${fmtTk(d.newCarry)} carried forward`}
+        ${isFullySettled ? "" + ic("check") + " Fully settled" : _retStatus(d, fmtTk)}
       </span>
     </div>
 
@@ -1639,7 +1707,7 @@ function printCreditReceipt() {
     + "-" + String(d.timestamp.getHours()).padStart(2,"0")
     + String(d.timestamp.getMinutes()).padStart(2,"0");
 
-  const isFullySettled = d.newCarry === 0;
+  const isFullySettled = d.newCarry === 0 && !(d.stillDue > 0.01);
   const fmtTkP = (v) => "৳" + Number(v).toLocaleString("en-IN", {minimumFractionDigits:0, maximumFractionDigits:2});
 
   w.document.write(`<!DOCTYPE html>
@@ -1687,7 +1755,7 @@ function printCreditReceipt() {
     <div class="head-icon">${ic("bank")}</div>
     <div class="head-name">${messName}</div>
     <div class="head-sub">Credit Drawdown Receipt</div>
-    <span class="badge ${isFullySettled ? 'badge-ok' : 'badge-fwd'}">${isFullySettled ? "" + ic("check") + " Fully Settled" : "" + ic("undo") + " Partially Carried"}</span>
+    <span class="badge ${isFullySettled ? 'badge-ok' : 'badge-fwd'}">${isFullySettled ? "" + ic("check") + " Fully Settled" : (d.stillDue > 0.01 ? ic("clock") + " Partially Returned" : ic("undo") + " Partially Carried")}</span>
   </div>
 
   <div class="meta">
@@ -1736,7 +1804,7 @@ function printCreditReceipt() {
   <div class="net ${isFullySettled ? 'net-ok' : 'net-fwd'}">
     <span>Credit Status</span>
     <span style="color:${isFullySettled ? '#27ae60' : '#2980b9'}">
-      ${isFullySettled ? "" + ic("check") + " Fully settled" : `${ic("undo")} ${fmtTkP(d.newCarry)} carried forward`}
+      ${isFullySettled ? "" + ic("check") + " Fully settled" : _retStatus(d, fmtTkP)}
     </span>
   </div>
 
