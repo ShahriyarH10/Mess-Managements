@@ -162,14 +162,22 @@ begin
     return coalesce(new, old);
   end if;
   r := coalesce(new, old);
-  k := case when tg_table_name in ('meals','bazar') then to_char(r.date, 'YYYY-MM') else r.month_key end;
+  -- Separate branches: PL/pgSQL resolves every record field in an expression, so a
+  -- single CASE reading both r.date and r.month_key fails on every table.
+  if tg_table_name in ('meals','bazar') then
+    k := to_char(r.date, 'YYYY-MM');
+  else
+    k := r.month_key;
+  end if;
   if mm_month_locked(r.mess_id, k) then
     raise exception 'This month (%) is closed — ask the manager to unlock it', k using errcode = '42501';
   end if;
-  if tg_table_name = 'utility_payments' and (
-       (tg_op = 'UPDATE' and coalesce((old.bills->>'locked')::boolean, false) is distinct from coalesce((new.bills->>'locked')::boolean, false))
-    or (tg_op = 'INSERT' and coalesce((new.bills->>'locked')::boolean, false))) then
-    raise exception 'Only the manager can close or reopen a month' using errcode = '42501';
+  -- Nested, for the same reason: only utility_payments has a bills column.
+  if tg_table_name = 'utility_payments' then
+    if (tg_op = 'UPDATE' and coalesce((old.bills->>'locked')::boolean, false) is distinct from coalesce((new.bills->>'locked')::boolean, false))
+       or (tg_op = 'INSERT' and coalesce((new.bills->>'locked')::boolean, false)) then
+      raise exception 'Only the manager can close or reopen a month' using errcode = '42501';
+    end if;
   end if;
   return coalesce(new, old);
 end $$;
