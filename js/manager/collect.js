@@ -95,9 +95,21 @@ async function renderCollect(el) {
       <div id="cp-return-wrap"></div>
     </div>
 
+    <!-- Every confirmed receipt of this month — reverse a wrongly entered one -->
+    <div id="cp-receipts"></div>
+
   </div>
 
   <style>
+    /* ── Receipts this month ── */
+    .cp-rc-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);}
+    .cp-rc-main{flex:1;min-width:240px;font-size:13px;}
+    .cp-rc-meta{font-size:11px;color:var(--text3);margin-left:4px;}
+    .cp-rc-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
+    .cp-rc-chip{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);display:inline-flex;align-items:center;gap:4px;}
+    .cp-rc-actions{display:flex;gap:6px;}
+    .cp-rc-rev:hover{color:var(--red);border-color:var(--red);}
+
     /* ── How-it-works pills ── */
     .cp-pill{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);flex:1;min-width:180px;}
     /* how-to steps are instructions, not statuses: all neutral, brand-numbered */
@@ -249,6 +261,7 @@ async function loadCollectMonth() {
   _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits, receipts };
   buildCollectTable();
   buildReturnTable();
+  buildReceiptsTable();
   await loadPendingPayments();
   await loadDuplicateReceipts();
 }
@@ -417,12 +430,16 @@ function returnAmountsFor(r) {
   };
 }
 
-/* ── ✕ on a Return Amount card: reverse the collection that overpaid ───────
-   The overpaid change is still in bills.pending_change (saving the card is what
-   clears it), so nothing has been handed back yet. The newest confirmed receipt
-   for this member + month with change is undone exactly: its stored split is
-   subtracted from utility_payments / rent and its change from pending_change.
-   The receipt is kept, marked "reversed", so the member still sees it. */
+/* ── Reversing a receipt ───────────────────────────────────────────────────
+   Two entry points share one exact undo (doReverseCollection):
+     • ✕ on a Return Amount card — the payment that overpaid;
+     • Reverse in "Receipts this month" — any wrongly entered payment.
+   The receipt's stored split is subtracted from utility_payments / rent and its
+   change from pending_change; other payments are left untouched. The receipt is
+   kept, marked "reversed", so the member still sees it.
+   Rules (_reverseCheck): newest first per member + month — a newer payment's
+   split was worked out on top of this one — and its change / negative balance
+   must not have been handed back or carried forward yet. */
 const _reverseBusy = new Set();
 
 /* How far this receipt pushed the member's balance below zero ("Negative balance
@@ -440,18 +457,35 @@ function _receiptNegExcess(p) {
   return round2(Math.max(0, Math.max(0, -after) - Math.max(0, -before)));
 }
 
-/* Newest confirmed receipt for this month whose excess (overpaid change and/or
-   negative balance) is still unresolved — nothing handed back or carried yet.
-   Reversing it subtracts exactly its own split, so rent / utility paid by other
-   receipts (partial payments) is left untouched. */
-function _reversibleFor(list, key, r) {
+/* Can receipt p be reversed now? `list` = this mess's confirmed receipts (any
+   order), r = the member's Collect row for p's month. Resolves { ok, reason }. */
+function _reverseCheck(p, list, r) {
+  if (!p || p.status !== "confirmed") return { ok: false, reason: "Already reversed." };
+  if (!p.split) return { ok: false, reason: "Saved before receipts stored their split — correct it on the Utility / Room Rent pages." };
+  if (!r) return { ok: false, reason: "This member is no longer in the mess — correct it on the Utility / Room Rent pages." };
+  const t = new Date(p.created_at).getTime();
+  const newer = (list || []).filter(q => q.id !== p.id && q.status === "confirmed"
+      && q.member_id === p.member_id && q.month_key === p.month_key && new Date(q.created_at).getTime() > t)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (newer.length) return { ok: false, reason: `Reverse the newer receipt ${paymentReceiptNo(newer[0].receipt_no)} first — payments are undone newest first.` };
   const { changeRemaining, owesRemaining } = returnAmountsFor(r);
-  return list.find(p => {
-    if (p.month_key !== key || p.member_id == null || !p.split) return false;
-    const change = Number(p.split.change || 0), neg = _receiptNegExcess(p);
-    if (change <= 0.01 && neg <= 0.01) return false;
-    return change <= changeRemaining + 0.01 && neg <= owesRemaining + 0.01;
-  });
+  const change = Number(p.split.change || 0), neg = _receiptNegExcess(p);
+  if (change > changeRemaining + 0.01)
+    return { ok: false, reason: `Its ${fmtTk(change)} change was already handed back or carried forward.` };
+  if (neg > owesRemaining + 0.01)
+    return { ok: false, reason: `Its ${fmtTk(neg)} negative balance was already handed back or carried forward.` };
+  return { ok: true, reason: "" };
+}
+
+/* ✕ on a Return Amount card: the member's newest receipt this month, if it is the
+   one that overpaid (change and/or negative balance) and can still be undone. */
+function _reversibleFor(list, key, r) {
+  const own = list.filter(p => p.month_key === key && p.status === "confirmed")
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const p = own[0];
+  if (!p?.split) return null;
+  if (Number(p.split.change || 0) <= 0.01 && _receiptNegExcess(p) <= 0.01) return null;
+  return _reverseCheck(p, own, r).ok ? p : null;
 }
 
 async function reverseReturnCard(memberId) {
@@ -467,6 +501,22 @@ async function reverseReturnCard(memberId) {
     toast("No saved collection to reverse — this balance was not created by a stored receipt (or was already returned / carried). Correct it on the Utility / Room Rent pages.", "error");
     return;
   }
+  _confirmReverse(p, m);
+}
+
+/* Reverse button in "Receipts this month" — any confirmed receipt of this month. */
+function reverseReceipt(id) {
+  if (!requireManager("reverseReceipt")) return;
+  const ctx = _collectCtx, list = ctx?.receipts || [];
+  const p = list.find(x => x.id === id);
+  const m = p && members.find(x => x.id === p.member_id);
+  const chk = _reverseCheck(p, list, m && ctx.perMember[m.id]);
+  if (!chk.ok) { toast(chk.reason, "error"); return; }
+  _confirmReverse(p, m);
+}
+
+function _confirmReverse(p, m) {
+  const memberId = m.id;
   const sp = p.split, name = _decodeEntities(m.name);
   const neg = _receiptNegExcess(p), chg = Number(sp.change || 0);
   const excess = [
@@ -483,7 +533,9 @@ async function reverseReturnCard(memberId) {
     title: `Reverse ${fmtTk(Number(p.amount))} from ${name}?`,
     body: `Receipt ${paymentReceiptNo(p.receipt_no)}, collected ${_payDate(p.created_at)}. `
       + (parts.length ? `This takes back what it paid: ${parts.join(", ")}. ` : "")
-      + `Earlier payments are left as they are. ${excess.charAt(0).toUpperCase() + excess.slice(1)} will no longer need returning. The receipt stays in ${name}'s My Receipts, marked Reversed.`,
+      + `Earlier payments are left as they are. `
+      + (excess ? `${excess.charAt(0).toUpperCase() + excess.slice(1)} will no longer need returning. ` : "")
+      + `The receipt stays in ${name}'s My Receipts, marked Reversed. Enter the correct payment again afterwards if needed.`,
     confirmLabel: "Reverse payment",
     danger: true,
     onConfirm: () => doReverseCollection(p.id, memberId),
@@ -499,7 +551,11 @@ async function doReverseCollection(id, memberId) {
   try {
     if (await isMonthLocked(ctx.key)) throw new Error(`${monthLabelFromKey(ctx.key)} is locked — unlock it first.`);
     before  = await dbGetMemberPayment(id);
-    claimed = before && await dbClaimReversal(id, currentUser.name);
+    if (!before || before.month_key !== ctx.key) throw new Error("Receipt not found for this month — reload and try again.");
+    const fresh = await dbGetMemberPayments({ memberId, status: "confirmed", limit: 200 });
+    const chk = _reverseCheck(before, fresh, r);
+    if (!chk.ok) throw new Error(chk.reason);
+    claimed = await dbClaimReversal(id, currentUser.name);
     if (!claimed) throw new Error("This payment was already reversed.");
     const sp = claimed.split || {};
     const allocMeal = Number(sp.allocMeal || 0), allocUtil = Number(sp.allocUtil || 0),
@@ -727,6 +783,58 @@ async function _doRemoveDuplicate({ m, a, b, takeBack, unsure }) {
   } finally {
     try { await loadCollectMonth(); } catch (_) { /* toast already reported the outcome */ }
   }
+}
+
+/* ═════════════════════════════════════════════════════════════════
+   Receipts this month — every confirmed payment, newest first, with
+   View and Reverse. Reverse undoes exactly that payment (see _reverseCheck
+   for when it is allowed); the member then sees it as "Reversed".
+   ═════════════════════════════════════════════════════════════════ */
+function buildReceiptsTable() {
+  const wrap = document.getElementById("cp-receipts");
+  if (!wrap || !_collectCtx) return;
+  const ctx  = _collectCtx;
+  const list = (ctx.receipts || []).filter(p => p.status === "confirmed")
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (!list.length) { wrap.innerHTML = ""; return; }
+  _cachePayments(list);
+  const wasOpen = !!document.getElementById("cp-receipts-card")?.open;
+
+  const chip = (v, icon, lbl) => Number(v) > 0.01 ? `<span class="cp-rc-chip">${ic(icon)} ${lbl} ${fmtTk(Number(v))}</span>` : "";
+  const rows = list.map(p => {
+    const m   = members.find(x => x.id === p.member_id);
+    const chk = _reverseCheck(p, list, m && ctx.perMember[m.id]);
+    const sp  = p.split || {};
+    const neg = p.split ? _receiptNegExcess(p) : 0;
+    const id  = _safeId(p.id);
+    return `
+      <div class="cp-rc-row">
+        <div class="cp-rc-main">
+          <div><b>${escapeHtml(paymentMemberName(p))}</b> · ${fmtTk(Number(p.amount))}
+            <span class="cp-rc-meta">${paymentReceiptNo(p.receipt_no)} · ${escapeHtml(_payDate(p.created_at))} · ${escapeHtml(paymentGeneratedBy(p))}</span></div>
+          <div class="cp-rc-chips">
+            ${chip(sp.allocPrevDue, "rewind", "Prev")}${chip(sp.allocRent, "home", "Rent")}${chip(sp.allocUtil, "zap", "Util")}${chip(sp.allocMeal, "meal", "Meal")}${chip(sp.change, "send", "Change")}${chip(neg, "bank", "Owed back")}
+            ${p.split ? "" : `<span class="cp-rc-meta">no split stored</span>`}
+          </div>
+        </div>
+        <div class="cp-rc-actions">
+          ${id ? `<button class="btn btn-ghost btn-sm" data-on-click="showPaymentReceipt('${id}')">${ic("eye")} View</button>` : ""}
+          ${id && chk.ok
+            ? `<button class="btn btn-ghost btn-sm cp-rc-rev" data-on-click="reverseReceipt('${id}')">${ic("undo")} Reverse</button>`
+            : `<button class="btn btn-ghost btn-sm" disabled title="${escapeHtml(chk.reason)}">${ic("undo")} Reverse</button>`}
+        </div>
+      </div>`;
+  }).join("");
+
+  wrap.innerHTML = `
+    <details class="card" style="margin-top:14px" id="cp-receipts-card"${wasOpen ? " open" : ""}>
+      <summary style="cursor:pointer;display:flex;align-items:center;gap:10px;list-style:none">
+        <span style="font-weight:700;font-size:14px">${ic("receipt")} Receipts this month (${list.length})</span>
+        <span style="font-size:12px;color:var(--text3)">Entered something wrong? Reverse it here, then enter the right payment.</span>
+      </summary>
+      <div style="font-size:12px;color:var(--text3);margin:10px 0 4px">Reverse takes back exactly what that payment added to rent, utility, meal and previous due — other payments stay as they are. Payments are undone newest first; hover a greyed-out button to see why.</div>
+      ${rows}
+    </details>`;
 }
 
 function buildReturnTable() {
@@ -1435,6 +1543,7 @@ async function _saveCollectRow(memberId) {
       if (_collectCtx?.key === ctx.key) {
         _collectCtx.receipts = [saved, ...(_collectCtx.receipts || [])];
         buildReturnTable();
+        buildReceiptsTable();
       }
     } catch (e) {
       console.warn("[Receipts] not stored:", e.message);

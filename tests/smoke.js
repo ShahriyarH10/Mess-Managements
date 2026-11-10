@@ -323,6 +323,50 @@
     }
     log(errors.length === 0, "no console errors during the Return Amount flow" + (errors.length ? " ← " + errors.join(" | ") : ""));
 
+    /* 6e. Receipts this month: reverse a wrongly entered payment — newest first, exact undo */
+    {
+      const ctx = () => P().collectCtx();
+      const rid = P().members().find(m => m.username === "demo_rakib").id, RN = "Rakib Hasan";
+      const util = async () => (await P().sb().from("utility_payments").select("*").eq("mess_id", P().messId()).eq("month_key", ctx().key).maybeSingle()).data;
+      const snap = async () => {
+        const p = ((await util())?.payments || {})[RN] || {};
+        const rent = ((await P().sb().from("rent").select("*").eq("mess_id", P().messId()).eq("month_key", ctx().key).maybeSingle()).data?.entries || [])
+          .find(e => e.member_id === rid || e.name === RN);
+        return JSON.stringify([Number(rent?.paid || 0), Number(p.paid || 0), Number(p.meal_paid || 0), Number(p.prev_due_paid || 0)]);
+      };
+      const collect = async (amt) => { D().getElementById("cp-amt-" + rid).value = String(amt); await W().saveCollectRow(rid); await sleep(200); W().closeModal(); };
+      const mine = () => (ctx().receipts || []).filter(p => p.member_id === rid && p.status === "confirmed")
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const btn = (id, on) => D().querySelector(`#cp-receipts [data-on-click="reverseReceipt('${id}')"]`) && on;
+      const confirmOk = async () => { await until(() => D().getElementById("confirm-ok-btn"), 4000); await sleep(150); D().getElementById("confirm-ok-btn").click(); };
+
+      const s0 = await snap();
+      await collect(100); const s1 = await snap();
+      await sleep(20); await collect(250); const s2 = await snap();
+      const [r2, r1] = mine();
+      log(!!D().getElementById("cp-receipts-card") && !!btn(r2.id, true) && !btn(r1.id, true),
+        "Receipts this month lists both; only the newest can be reversed");
+      W().reverseReceipt(r1.id); await sleep(150);
+      log(/newer receipt/i.test(D().getElementById("toast").textContent) && (await snap()) === s2,
+        "reversing the older one first is refused (newest first)");
+
+      W().reverseReceipt(r2.id); await confirmOk();
+      await sleep(600);
+      log((await snap()) === s1 && mine().length === 1, `Reverse undoes only the wrong payment (${await snap()} vs ${s1})`);
+      W().reverseReceipt(r1.id); await confirmOk(); await sleep(600);
+      const st = ((await P().sb().from("member_payments").select("*").eq("member_id", rid)).data || []).map(p => p.status);
+      log((await snap()) === s0 && st.length === 2 && st.every(x => x === "reversed"),
+        `reversing the rest restores the original totals; both kept as Reversed (${st.join(",")})`);
+
+      // 6d left Mahfuz's last payment with its negative balance partly returned + carried → not reversible
+      const fid = P().members().find(m => m.username === "demo_mahfuz").id;
+      const fl = (ctx().receipts || []).filter(p => p.member_id === fid && p.status === "confirmed")
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const chk = W()._reverseCheck(fl[0], ctx().receipts, ctx().perMember[fid]);
+      log(!chk.ok && /handed back or carried/i.test(chk.reason), "a payment whose excess was already returned / carried cannot be reversed (" + chk.reason + ")");
+    }
+    log(errors.length === 0, "no console errors during the Receipts flow" + (errors.length ? " ← " + errors.join(" | ") : ""));
+
     /* 7. login form works against demo accounts, reset + logout */
     W().doLogout(); await until(() => visible("landing-page"));
     log(visible("landing-page") && !P().user(), "logout → landing, session cleared (hash=" + W().location.hash + ", user=" + JSON.stringify(P().user()) + ", landing=" + visible("landing-page") + ")");
