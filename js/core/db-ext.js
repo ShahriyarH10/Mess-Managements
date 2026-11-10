@@ -127,8 +127,10 @@ async function dbCreateMemberPayment(row) {
 }
 
 /* A payment that is already credited, stored as a confirmed receipt:
-   a manager's Collect Payment / Room Rent / Utility entry (source "manager"), or a
-   member's own Utility/Rent entry (source "member", credited without confirmation). */
+   a manager's Collect Payment entry (source "manager"), or a member's own
+   Utility/Rent entry (source "member", credited without confirmation).
+   The manager's Room Rent / Utility pages are for correcting totals and create
+   no receipts. */
 async function dbCreateManagerReceipt(row) { return dbCreateRecordedReceipt({ ...row, source: "manager" }); }
 
 async function dbCreateRecordedReceipt(row) {

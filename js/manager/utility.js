@@ -10,7 +10,7 @@ function renderRent(el) {
   const yearOpts = Array.from({length:8},(_,i)=>curY-3+i)
     .map(y=>`<option${y===curY?" selected":""}>${y}</option>`).join("");
   el.innerHTML=`<div class="topbar">
-    <div><div class="page-title">Room Rent</div><div class="page-sub">Set each member's rent and record what they've paid</div></div>
+    <div><div class="page-title">Room Rent</div><div class="page-sub">Set each member's rent and correct paid totals — record cash in Collect Payment to give a receipt</div></div>
     <div class="topbar-actions"><div class="ut-pick">
       <select class="input" id="rent-month" data-on-change="loadRentMonth()">${MONTHS.map((m,i)=>`<option value="${i}"${i===n.getMonth()?" selected":""}>${m}</option>`).join("")}</select>
       <select class="input" id="rent-year" data-on-change="loadRentMonth()">${yearOpts}</select>
@@ -136,18 +136,14 @@ async function _saveRent() {
     notes:  cleanText(document.getElementById("rn-"+m.id)?.value||""),
   }));
   try{
-    // what was paid before this save, so each increase becomes a receipt
+    // Room Rent is where totals are corrected — it records no receipts (cash goes
+    // through Collect Payment, which does). Read only to keep former members' entries.
     const before = await mustRead(getClient().from("rent").select("entries").eq("mess_id", messId()).eq("month_key", key).maybeSingle());
-    const prevPaid = m => Number(rentEntryFor(before?.entries, m)?.paid || 0);
     // the form lists current members only: keep everyone else's entries (former members) as they are
     const others = (before?.entries || []).filter(e => !members.some(m => rentEntryFor([e], m)));
     const entries = [...listed, ...others];
     await dbUpsertRent(month,year,key,entries);
     toast("Rent saved","success");
-    for (const m of members) {
-      const added = round2(Number(rentEntryFor(listed, m)?.paid || 0) - prevPaid(m));
-      if (added > 0.01) await recordCreditedReceipt({ member: m, month, year, amount: added, source: "manager", split: { allocRent: added } });
-    }
     loadRentHistory();
   }catch(e){ toast("Error: "+e.message,"error"); }
 }

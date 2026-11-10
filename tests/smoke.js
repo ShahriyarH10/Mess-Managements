@@ -120,6 +120,18 @@
     await openHash("#/demo/app/rent"); await settle();
     click('[data-on-click="saveRent()"]'); await sleep(400);
     log(/saved/i.test(D().getElementById("toast").textContent), "saveRent() → '" + D().getElementById("toast").textContent + "'");
+
+    // Room Rent / Utility are for correcting totals: raising "paid" there must not create receipts
+    {
+      const rcpts = async () => ((await P().sb().from("member_payments").select("*").eq("mess_id", P().messId())).data || []).length;
+      const n0 = await rcpts(), mid = P().members()[0].id;
+      const rp = D().getElementById("rp-" + mid); rp.value = String(Number(rp.value || 0) + 500);
+      await W().saveRent(); await sleep(300);
+      await openHash("#/demo/app/utility"); await settle();
+      const up = D().getElementById("up-" + mid);
+      if (up) { up.value = String(Number(up.value || 0) + 300); await W().saveUtilityPayments(); await sleep(300); }
+      log(!!up && (await rcpts()) === n0, `raising paid on Room Rent / Utility creates no receipt (${n0} → ${await rcpts()}, utility field ${!!up})`);
+    }
     await openHash("#/demo/app/messages"); await settle();
     D().getElementById("bc-msg").value = "Smoke test notice";
     click('[data-on-click="sendBroadcast()"]'); await sleep(500);

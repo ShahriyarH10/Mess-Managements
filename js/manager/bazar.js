@@ -20,7 +20,7 @@ async function renderUtility(el) {
   <div class="topbar">
     <div>
       <div class="page-title">Utility Entry</div>
-      <div class="page-sub">Enter the month's bills, then track what each member has paid</div>
+      <div class="page-sub">Enter the month's bills and correct paid totals — record cash in Collect Payment to give a receipt</div>
     </div>
   </div>
   <div class="content dk">
@@ -344,11 +344,8 @@ async function _saveUtilityPayments() {
   });
   try {
     await dbUpsertUtility(month, year, key, rec?.bills || {}, payments);
+    // Corrections only — no receipts here; cash is recorded in Collect Payment.
     toast("Utility payments saved", "success");
-    for (const m of members) {
-      const added = round2(Number(payments[m.name].paid || 0) - Number(old[m.name]?.paid || 0));
-      if (added > 0.01) await recordCreditedReceipt({ member: m, month, year, amount: added, source: "manager", split: { allocUtil: added } });
-    }
     await loadUtilHistory();
   } catch (e) { toast("Error: " + e.message, "error"); }
 }

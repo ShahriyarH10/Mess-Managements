@@ -36,7 +36,7 @@ function _rcptAfter(p) {
   return `<span style="color:var(--text3);font-size:11px">After this payment: ${txt}</span>`;
 }
 
-/* Store a receipt for money a page has ALREADY credited (Room Rent, Utility, the member's
+/* Store a receipt for money a page has ALREADY credited (the member's own
    Utility/Rent page). Never throws — the payment itself is saved either way.
    split: { allocRent } or { allocUtil }. */
 async function recordCreditedReceipt({ member, month, year, amount, split, source, dueBefore }) {
