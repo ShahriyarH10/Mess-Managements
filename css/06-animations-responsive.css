@@ -108,7 +108,7 @@
      scroll horizontally on phones instead of squashing cells unreadable */
   .att-cal-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px;}
   .att-cal-grid{min-width:540px;}
-  .att-cal-cell{min-height:64px!important;padding:4px 4px 4px!important;}
+  .att-cal-cell{min-height:80px;padding:5px 5px 6px;border-radius:10px;}
 
   /* Bazar Calendar modal — same horizontal-scroll approach */
   .bz-cal-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -16px;padding:0 16px;}

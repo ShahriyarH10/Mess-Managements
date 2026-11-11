@@ -158,29 +158,9 @@ async function loadAbsenceCalendar() {
       });
 
       const totalAbsent  = allOff.length + dayOff.length + nightOff.length;
-      // Heat intensity: more absences → deeper red tint on cell background
-      const heatOpacity  = totalAbsent > 0 ? Math.min(0.08 + (totalAbsent / members.length) * 0.18, 0.28) : 0;
-      const heatStyle    = totalAbsent > 0 ? `background:rgba(239,68,68,${heatOpacity});` : "";
-
-      // Cell state styling
-      let cellBg, cellBorder, cellExtraStyle = "";
-      if (isToday) {
-        cellBg = "var(--accent-bg)";
-        cellBorder = "2px solid var(--accent)";
-      } else if (totalAbsent > 0) {
-        cellBg = `var(--bg2)`;
-        cellBorder = "1px solid rgba(239,68,68,0.35)";
-        cellExtraStyle = heatStyle;
-      } else if (isPast && hasData) {
-        cellBg = "var(--bg2)";
-        cellBorder = "1px solid rgba(34,197,94,0.3)";
-        cellExtraStyle = "background:rgba(34,197,94,0.05);";
-      } else {
-        cellBg = "var(--bg2)";
-        cellBorder = "1px solid var(--border)";
-      }
-
-      const dayNumColor = isToday ? "var(--accent)" : isPast ? "var(--text3)" : "var(--text)";
+      // Heat intensity: more absences → deeper red tint over the glass
+      const heat = totalAbsent > 0 ? Math.min(0.08 + (totalAbsent / members.length) * 0.18, 0.28) : 0;
+      const cellState = isToday ? "is-today" : totalAbsent > 0 ? "is-absent" : isPast && hasData ? "is-ok" : isPast ? "is-past" : "";
 
       function avatarDot(entry, borderColor, bgTint) {
         const m = entry.member;
@@ -197,10 +177,10 @@ async function loadAbsenceCalendar() {
       let statusBar = "";
       if (totalAbsent > 0) {
         const absentPct = Math.round((totalAbsent / members.length) * 100);
-        statusBar = `<div style="height:3px;border-radius:2px;margin:-1px -1px 4px -1px;background:linear-gradient(90deg,
+        statusBar = `<div class="att-cal-bar" style="background:linear-gradient(90deg,
           rgba(239,68,68,.8) ${absentPct}%, rgba(34,197,94,.4) ${absentPct}%)"></div>`;
       } else if (isPast && hasData) {
-        statusBar = `<div style="height:3px;border-radius:2px;margin:-1px -1px 4px -1px;background:rgba(34,197,94,.6)"></div>`;
+        statusBar = `<div class="att-cal-bar" style="background:rgba(34,197,94,.6)"></div>`;
       }
 
       // Content area: absence avatars OR status text
@@ -231,17 +211,15 @@ async function loadAbsenceCalendar() {
 
       // Absence count badge (shown when there are absences)
       const badge = totalAbsent > 0
-        ? `<div style="position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border-radius:10px;font-size:8px;font-weight:700;padding:1px 5px;line-height:14px">${totalAbsent}</div>`
+        ? `<span class="att-cal-badge" title="${totalAbsent} off">${totalAbsent}</span>`
         : "";
 
       cells.push(`
-        <div class="att-cal-cell" style="position:relative;${cellExtraStyle}border:${cellBorder};border-radius:8px;padding:5px 5px 5px;min-height:82px;cursor:default;transition:border-color .15s,box-shadow .15s;overflow:hidden"
-             data-on-mouseover="this.style.borderColor='var(--accent)';this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'"
-             data-on-mouseout="this.style.borderColor='${isToday ? "var(--accent)" : totalAbsent > 0 ? "rgba(239,68,68,.35)" : isPast && hasData ? "rgba(34,197,94,.3)" : "var(--border)"}';this.style.boxShadow='none'">
+        <div class="att-cal-cell ${cellState}"${heat ? ` style="--heat:${heat.toFixed(3)}"` : ""}>
+          <span class="att-cal-num" aria-hidden="true">${d}</span>
           ${statusBar}
-          <div style="font-size:11px;font-weight:700;color:${dayNumColor};line-height:1">${d}</div>
-          ${badge}
-          ${content}
+          <div class="att-cal-head"><span class="att-cal-date">${d}</span>${badge}</div>
+          <div class="att-cal-body">${content}</div>
         </div>`);
     }
 
@@ -300,7 +278,7 @@ async function loadAbsenceCalendar() {
         ${legend}
 
         <div class="att-cal-scroll">
-          <div class="att-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+          <div class="att-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
             ${dowHeaders}
             ${cells.join("")}
           </div>
