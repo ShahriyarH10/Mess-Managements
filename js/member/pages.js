@@ -163,9 +163,9 @@ async function renderMyMeals(el) {
               const d = i + 1, v = myDay[d] || 0, off = offDays[d];
               const date = `${key}-${String(d).padStart(2, "0")}`;
               const a = v ? (0.3 + (v / myMax) * 0.7).toFixed(2) : 0;
-              return `<button class="dk-day${d === now.getDate() ? " dk-today-cell" : ""}${d > gone && !off ? " dk-future" : ""}${off ? " ma-off" : ""}"
+              return `<button class="dk-day glass-cell${d === now.getDate() ? " dk-today-cell is-today" : ""}${d > gone && !off ? " dk-future" : ""}${off ? " ma-off" : ""}"
                 ${v ? `style="--a:${a}"` : ""} title="${MONTHS[mo]} ${d}: ${v} meal${v === 1 ? "" : "s"}${off ? " · " + off + " off" : ""}"
-                data-on-click="${setDate(date)}"><span>${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">${ic("x")}</b>` : ""}</button>`;
+                data-on-click="${setDate(date)}"><span class="glass-num" aria-hidden="true">${d}</span><span class="sr-only">${d}</span>${v ? `<b>${v}</b>` : off ? `<b class="ma-x">${ic("x")}</b>` : ""}</button>`;
             }).join("")}
           </div>
         </div>

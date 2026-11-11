@@ -924,29 +924,7 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 
 .att-cal-bar{position:relative;z-index:1;height:3px;border-radius:2px;margin:-2px -2px 5px;}
 .att-cal-head{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:4px;min-height:15px;}
-.att-cal-date{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);} /* screen readers only */
 .att-cal-body{position:relative;z-index:1;}
-
-/* Big frosted-glass numeral filling the whole box, behind the content.
-   Sized from the cell width so two digits always fit. */
-.att-cal-num{
-  position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;
-  pointer-events:none;user-select:none;
-  font-family:var(--font-serif);font-size:56px;font-size:clamp(40px,64cqi,92px);line-height:1;
-  letter-spacing:-.04em;font-variant-numeric:tabular-nums;
-  color:rgba(255,255,255,.08);
-  background:linear-gradient(160deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.10) 45%,rgba(255,255,255,.03) 100%);
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
-  -webkit-text-stroke:1px rgba(255,255,255,.22);
-  filter:drop-shadow(0 4px 10px rgba(0,0,0,.35));
-  transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s ease;
-}
-.att-cal-cell:hover .att-cal-num{transform:scale(1.07);}
-.att-cal-cell.is-today .att-cal-num{
-  background-image:linear-gradient(160deg,color-mix(in srgb,var(--accent) 70%,transparent) 0%,color-mix(in srgb,var(--accent) 25%,transparent) 55%,color-mix(in srgb,var(--accent) 8%,transparent) 100%);
-  -webkit-text-stroke-color:color-mix(in srgb,var(--accent) 55%,transparent);
-}
-.att-cal-cell.is-absent .att-cal-num{-webkit-text-stroke-color:rgba(255,190,190,.22);}
 
 .att-cal-badge{
   margin-left:auto;flex-shrink:0;margin-top:2px;font-size:9px;font-weight:700;line-height:15px;padding:0 6px;border-radius:10px;color:#fff;
@@ -956,9 +934,169 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 }
 [data-theme="light"] .att-cal-cell{box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 3px rgba(0,0,0,.06);}
 [data-theme="light"] .att-cal-cell::before{background:linear-gradient(180deg,rgba(255,255,255,.55),transparent);}
-[data-theme="light"] .att-cal-num{
+@media (prefers-reduced-motion:reduce){.att-cal-cell{transition:none;}.att-cal-cell:hover{transform:none;}}
+
+/* ── Glass day numeral (shared by Attendance, Meal and Bazar calendars) ──
+   .glass-cell = the day box; .glass-num = big frosted date filling it, behind the content.
+   Sized from the box width (capped by --gn-max for short boxes) so two digits always fit. */
+.glass-cell{position:relative;container-type:inline-size;overflow:hidden;isolation:isolate;}
+.glass-cell>:not(.glass-num){position:relative;z-index:1;}
+.glass-num{
+  position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;user-select:none;
+  font-family:var(--font-serif);font-weight:400;font-size:48px;font-size:clamp(var(--gn-min,22px),64cqi,var(--gn-max,92px));line-height:1;
+  letter-spacing:-.04em;font-variant-numeric:tabular-nums;
+  color:rgba(255,255,255,.08);
+  background:linear-gradient(160deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.10) 45%,rgba(255,255,255,.03) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  -webkit-text-stroke:1px rgba(255,255,255,.22);
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.35));
+  transition:transform .35s cubic-bezier(.2,.8,.2,1);
+}
+.glass-cell:hover>.glass-num{transform:scale(1.07);}
+.glass-cell.is-today>.glass-num{
+  background-image:linear-gradient(160deg,color-mix(in srgb,var(--accent) 70%,transparent) 0%,color-mix(in srgb,var(--accent) 25%,transparent) 55%,color-mix(in srgb,var(--accent) 8%,transparent) 100%);
+  -webkit-text-stroke-color:color-mix(in srgb,var(--accent) 55%,transparent);
+}
+.att-cal-cell.is-absent>.glass-num{-webkit-text-stroke-color:rgba(255,190,190,.22);}
+[data-theme="light"] .glass-num{
   background-image:linear-gradient(160deg,rgba(0,0,0,.22) 0%,rgba(0,0,0,.10) 50%,rgba(0,0,0,.04) 100%);
   -webkit-text-stroke:1px rgba(0,0,0,.16);
   filter:drop-shadow(0 1px 0 rgba(255,255,255,.95)) drop-shadow(0 4px 8px rgba(0,0,0,.06));}
-[data-theme="light"] .att-cal-cell.is-today .att-cal-num{-webkit-text-stroke-color:color-mix(in srgb,var(--accent) 60%,transparent);}
-@media (prefers-reduced-motion:reduce){.att-cal-cell,.att-cal-num{transition:none;}.att-cal-cell:hover,.att-cal-cell:hover .att-cal-num{transform:none;}}
+[data-theme="light"] .glass-cell.is-today>.glass-num{-webkit-text-stroke-color:color-mix(in srgb,var(--accent) 60%,transparent);}
+@media (prefers-reduced-motion:reduce){.glass-num{transition:none;}.glass-cell:hover>.glass-num{transform:none;}}
+.sr-only{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+
+/* Meal calendar (month pop-ups): glass tiles, total centred over the numeral */
+.meal-day.glass-cell{--gn-max:46px;--gn-min:26px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:5px 4px 7px;min-height:84px;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--bg3) 75%,transparent),color-mix(in srgb,var(--bg2) 45%,transparent));
+  border-color:var(--border2);border-radius:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .25s;}
+.meal-day.glass-cell.has-meal{background:
+  linear-gradient(rgba(76,175,130,.12),rgba(76,175,130,.12)),
+  linear-gradient(150deg,color-mix(in srgb,var(--bg3) 75%,transparent),color-mix(in srgb,var(--bg2) 45%,transparent));
+  border-color:rgba(76,175,130,.38);}
+.meal-day.glass-cell:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 18px rgba(0,0,0,.18);}
+/* numeral in the upper part, counts along the bottom, so both stay readable */
+.meal-day.glass-cell>.glass-num{align-items:flex-start;padding-top:6px;}
+.meal-day.glass-cell .meal-day-total{font-size:17px;margin:0 0 2px;text-shadow:0 1px 6px rgba(0,0,0,.35);}
+.meal-day.glass-cell .meal-day-meta{color:var(--text2);}
+.meal-day.glass-cell:not(.has-meal) .meal-day-total{display:none;}
+[data-theme="light"] .meal-day.glass-cell{box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 3px rgba(0,0,0,.05);}
+[data-theme="light"] .meal-day.glass-cell .meal-day-total{text-shadow:0 1px 0 rgba(255,255,255,.9);}
+.mc-compact .meal-day.glass-cell{--gn-max:32px;--gn-min:22px;min-height:66px;padding:4px 3px 5px;border-radius:8px;}
+.mc-compact .meal-day.glass-cell>.glass-num{padding-top:4px;}
+.mc-compact .meal-day.glass-cell .meal-day-total{font-size:13px;margin:0;}
+.mc-compact .meal-day.glass-cell:not(.has-meal) .meal-day-meta{display:none;}
+
+/* Bazar calendar (month pop-up) */
+.bz-cal-cell.glass-cell{--gn-max:52px;border-radius:10px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .25s;}
+.bz-cal-cell.glass-cell.has-bazar:hover{transform:translateY(-2px);border-color:var(--accent)!important;box-shadow:0 8px 18px rgba(0,0,0,.22);}
+/* Dashboard calendars (Meal activity, My meals): glass tiles, count along the bottom */
+.dk-day.glass-cell{--gn-max:30px;--gn-min:18px;height:auto;min-height:50px;justify-content:flex-end;padding:0 0 4px;border-radius:9px;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--bg3) 80%,transparent),color-mix(in srgb,var(--bg2) 50%,transparent));
+  box-shadow:inset 0 0 0 1px var(--border2),inset 0 1px 0 rgba(255,255,255,.06);}
+.dk-day.glass-cell>.glass-num{position:absolute;font-size:clamp(var(--gn-min),64cqi,var(--gn-max));line-height:1;color:rgba(255,255,255,.08);opacity:1;align-items:flex-start;padding-top:3px;}
+.dk-day.glass-cell::before{z-index:0;border-radius:inherit;}
+.dk-day.glass-cell b{font-size:12px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.4);}
+.dk-day.glass-cell.dk-today-cell{box-shadow:inset 0 0 0 2px var(--accent);}
+.ma-cal .dk-day.glass-cell.ma-off{box-shadow:inset 0 0 0 1.5px rgba(224,82,82,.6);background:var(--red-bg);}
+[data-theme="light"] .dk-day.glass-cell b{text-shadow:0 1px 0 rgba(255,255,255,.9);}
+/* Meal counts: plain amber. Bazar amounts: plain (no glow) */
+.dk-day.glass-cell b:not(.ma-x){color:#fcd34d!important;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,.6);}
+.dk-day.glass-cell b{font-size:13px;}
+.bz-cal-cell .bz-amt{color:#f0fdf4!important;font-size:12px!important;text-shadow:0 1px 2px rgba(0,0,0,.45);}
+:root{--bz-ink:#f5f5f4;}
+[data-theme="light"]{--bz-ink:#1c1917;}
+/* member split bars on a bazar day: outlined so each colour stays clear on the green */
+.bz-pip{height:5px;min-width:5px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.35);}
+[data-theme="light"] .bz-pip{box-shadow:0 0 0 1px rgba(255,255,255,.85);}
+[data-theme="light"] .dk-day.glass-cell b:not(.ma-x){color:#a16207!important;text-shadow:0 0 3px rgba(255,255,255,.95),0 1px 0 rgba(255,255,255,.9);}
+.dk-day.glass-cell b.ma-x{color:var(--red)!important;text-shadow:none;}
+
+/* Meal month pop-ups: violet total + sun/moon chips for the day/night split
+   (blue = day, gold = night, same as the split bar above each calendar) */
+.meal-day.glass-cell.has-meal .meal-day-total{color:var(--c-meal)!important;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,.55);}
+[data-theme="light"] .meal-day.glass-cell.has-meal .meal-day-total{text-shadow:0 1px 0 rgba(255,255,255,.9);}
+/* Liquid tanks: each meal box splits into a blue DAY tank (left) and a gold NIGHT tank (right).
+   Each tank's liquid level = that meal's count; the sun/moon + number float inside the liquid. */
+.meal-day.glass-cell.has-meal{border-color:var(--border2);background:
+  linear-gradient(150deg,color-mix(in srgb,var(--bg3) 75%,transparent),color-mix(in srgb,var(--bg2) 45%,transparent));}
+.glass-cell>.meal-tank{position:absolute;z-index:0;top:0;bottom:0;width:50%;overflow:hidden;pointer-events:none;
+  --lq-top:rgba(255,255,255,.5);--lq-mid:rgba(255,255,255,.3);--lq-bot:rgba(255,255,255,.2);}
+.meal-tank.is-day{left:0;--lq-top:rgba(147,197,253,.75);--lq-mid:rgba(91,155,213,.5);--lq-bot:rgba(37,99,235,.42);--lq-hi:rgba(219,234,254,.6);}
+.meal-tank.is-night{right:0;box-shadow:inset 1px 0 0 rgba(255,255,255,.08);
+  --lq-top:rgba(253,224,138,.75);--lq-mid:rgba(212,168,83,.5);--lq-bot:rgba(180,120,20,.42);--lq-hi:rgba(254,243,199,.6);}
+.meal-liquid{position:absolute;left:0;right:0;bottom:0;height:calc(var(--fill,.5) * 100%);
+  animation:mlRise 1.3s cubic-bezier(.2,.9,.25,1) backwards;animation-delay:calc(var(--fx-i,0) * 12ms + 150ms);}
+.meal-tank.is-night .meal-liquid{animation-delay:calc(var(--fx-i,0) * 12ms + 300ms);}
+.meal-liquid i{position:absolute;left:0;bottom:0;width:200%;height:calc(100% + 6px);
+  -webkit-mask:var(--ml-wave) 0 0/50% 6px repeat-x,linear-gradient(#000,#000) 0 6px/100% calc(100% - 6px) no-repeat;
+          mask:var(--ml-wave) 0 0/50% 6px repeat-x,linear-gradient(#000,#000) 0 6px/100% calc(100% - 6px) no-repeat;
+  background:linear-gradient(180deg,var(--lq-top) 0%,var(--lq-mid) 35%,var(--lq-bot) 100%);
+  animation:mlWave 3.2s linear infinite;animation-delay:var(--wd,0s);}
+.meal-liquid i:nth-child(2){height:calc(100% + 3px);opacity:.5;
+  background:linear-gradient(180deg,var(--lq-hi),transparent 70%);
+  animation-duration:4.8s;animation-direction:reverse;}
+.meal-liquid::before,.meal-liquid::after{content:"";position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.95),rgba(255,255,255,.3) 60%,transparent 70%);
+  opacity:0;animation:mlBubble 3.2s ease-in infinite;animation-delay:calc(var(--wd,0s) * -2);}
+.meal-liquid::before{left:30%;}
+.meal-liquid::after{left:68%;width:3px;height:3px;animation-duration:4.1s;animation-delay:calc(var(--wd,0s) * -3 + 1.2s);}
+:root{--ml-wave:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'%3E%3Cpath d='M0 6 C 12.5 0 37.5 0 50 6 S 87.5 12 100 6 V10 H0Z'/%3E%3C/svg%3E");}
+@keyframes mlWave{to{transform:translateX(-50%);}}
+@keyframes mlRise{from{height:0;}}
+@keyframes mlBubble{0%{transform:translateY(0) scale(.6);opacity:0;}15%{opacity:.9;}85%{opacity:.7;}100%{transform:translateY(calc(var(--fill,.5) * -60px));opacity:0;}}
+.meal-day.glass-cell.has-meal:hover .meal-liquid i{animation-duration:1.6s;}
+.meal-day.glass-cell.has-meal:hover .meal-liquid i:nth-child(2){animation-duration:2.4s;}
+
+/* sun/moon + count floating in the middle of each tank's liquid */
+.glass-cell>.tank-label{position:absolute;z-index:2;width:50%;display:flex;flex-direction:column;align-items:center;gap:1px;
+  bottom:calc(var(--fill,0) * 50%);transform:translateY(50%);font-size:11px;line-height:1;font-weight:800;
+  animation:mlLabel 1.3s cubic-bezier(.2,.9,.25,1) backwards;animation-delay:calc(var(--fx-i,0) * 12ms + 150ms);}
+.tank-label.is-day{left:0;color:#eff6ff;}
+.tank-label.is-night{right:0;color:#fffbeb;}
+.tank-label .ic{width:12px;height:12px;margin:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
+.tank-label b{text-shadow:0 1px 3px rgba(0,0,0,.65);}
+.tank-label.is-empty{bottom:5px;transform:none;opacity:.45;color:var(--text3);font-weight:600;}
+.tank-label.is-empty .ic,.tank-label.is-empty b{filter:none;text-shadow:none;}
+@keyframes mlLabel{from{bottom:0;transform:translateY(0);opacity:0;}}
+
+/* total = small violet badge in the top-right corner */
+.meal-day.glass-cell.has-meal{justify-content:flex-start;}
+.meal-day.glass-cell.has-meal .meal-day-total{position:absolute;top:4px;right:4px;z-index:3;margin:0;
+  font-size:10px!important;line-height:1;padding:2px 5px;border-radius:999px;
+  color:#ede9fe!important;background:rgba(124,92,230,.8);box-shadow:0 1px 4px rgba(0,0,0,.3);text-shadow:none;}
+
+[data-theme="light"] .meal-tank.is-day{--lq-top:rgba(147,197,253,.85);--lq-mid:rgba(96,165,250,.55);--lq-bot:rgba(59,130,246,.45);}
+[data-theme="light"] .meal-tank.is-night{--lq-top:rgba(253,224,138,.9);--lq-mid:rgba(245,190,70,.55);--lq-bot:rgba(217,150,30,.45);box-shadow:inset 1px 0 0 rgba(0,0,0,.06);}
+[data-theme="light"] .tank-label.is-day{color:#1e3a8a;}
+[data-theme="light"] .tank-label.is-night{color:#78350f;}
+[data-theme="light"] .tank-label .ic{filter:none;}
+[data-theme="light"] .tank-label b{text-shadow:0 0 3px rgba(255,255,255,.95);}
+[data-theme="light"] .meal-day.glass-cell.has-meal .meal-day-total{color:#fff!important;background:#7c5ce6;}
+.mc-compact .tank-label{font-size:10px;}
+.mc-compact .tank-label .ic{width:10px;height:10px;}
+@media (prefers-reduced-motion:reduce){.meal-liquid,.meal-liquid i,.glass-cell>.tank-label{animation:none!important;}.meal-liquid::before,.meal-liquid::after{display:none;}}
+.meal-dn{display:flex;gap:3px;justify-content:center;align-items:center;max-width:100%;}
+.meal-dn-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 5px;border-radius:999px;font-size:10px;line-height:1;
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
+.meal-dn-chip b{font-weight:700;}
+.meal-dn-chip .ic{width:10px;height:10px;margin:0;flex-shrink:0;}
+.meal-dn-chip.is-day{color:#8ec5ff;background:rgba(91,155,213,.22);box-shadow:inset 0 0 0 1px rgba(91,155,213,.45);}
+.meal-dn-chip.is-night{color:#f2cf7e;background:rgba(212,168,83,.2);box-shadow:inset 0 0 0 1px rgba(212,168,83,.45);}
+.meal-dn-chip.is-off{color:var(--text3);background:transparent;box-shadow:inset 0 0 0 1px var(--border2);opacity:.6;}
+.meal-dn-chip.is-off .ic{opacity:.7;}
+[data-theme="light"] .meal-dn-chip.is-day{color:#1d5fa8;background:rgba(91,155,213,.2);}
+[data-theme="light"] .meal-dn-chip.is-night{color:#8a6414;background:rgba(212,168,83,.25);}
+[data-theme="light"] .meal-dn-chip.is-off{color:var(--text3);background:transparent;}
+
+.mc-compact .meal-dn{gap:2px;}
+.mc-compact .meal-dn-chip{padding:1.5px 3px;font-size:8.5px;font-size:clamp(8px,14cqi,10.5px);gap:1px;}
+.mc-compact .meal-dn-chip .ic{width:1em;height:1em;}
+.mc-compact .meal-day.glass-cell .meal-day-total{font-size:clamp(13px,22cqi,16px);}
+[data-theme="light"] .bz-cal-cell .bz-amt{color:#064e3b!important;text-shadow:none;}
+@media (prefers-reduced-motion:reduce){.meal-day.glass-cell,.bz-cal-cell.glass-cell{transition:none;}.meal-day.glass-cell:hover,.bz-cal-cell.glass-cell:hover{transform:none;}}

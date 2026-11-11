@@ -241,8 +241,8 @@ async function renderDashboard(el) {
           ${Array.from({ length: daysInMonth }, (_, i) => {
             const d = i + 1, v = round2(dayMealMap[d] || 0), future = d > daysGone;
             const a = v ? (0.22 + (v / maxDayMeal) * 0.78).toFixed(2) : 0;
-            return `<div class="dk-day${d === todayDay ? " dk-today-cell" : ""}${future ? " dk-future" : ""}" title="${MONTHS[month]} ${d}: ${v} meals"
-              ${v ? `style="--a:${a}"` : ""}><span>${d}</span>${v ? `<b>${v}</b>` : ""}</div>`;
+            return `<div class="dk-day glass-cell${d === todayDay ? " dk-today-cell is-today" : ""}${future ? " dk-future" : ""}" title="${MONTHS[month]} ${d}: ${v} meals"
+              ${v ? `style="--a:${a}"` : ""}><span class="glass-num" aria-hidden="true">${d}</span><span class="sr-only">${d}</span>${v ? `<b>${v}</b>` : ""}</div>`;
           }).join("")}
         </div>
       </div>

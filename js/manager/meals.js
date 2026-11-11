@@ -329,6 +329,25 @@ function loadBazarMonths(all) {
     { onClick: "openBazarMonth", money: true, id: "mh-bazar", emptyText: "No bazar months yet" });
 }
 
+/* One unique colour per member for the bazar calendar + day detail.
+   Deliberately avoids every colour the app already uses for a job: brand gold, warn orange,
+   meal violet, bazar teal, rent pink, utility sky, slate, and status green/red/blue.
+   What's left: lemon, magenta, indigo, sienna, crimson, a neutral "ink" (white in dark mode,
+   black in light mode), plum and olive-gold. Past 8 members, extra shades are generated
+   inside those same free hue bands. */
+const BAZAR_MEMBER_COLOURS = ["#facc15", "#d946ef", "#4f46e5", "#a0522d", "#be123c", "var(--bz-ink)", "#7e22ce", "#a16207"];
+function bazarMemberColours() {
+  const bands = [52, 292, 238, 18, 350, 308, 230, 46]; // free hues (degrees)
+  const out = {};
+  members.forEach((m, i) => {
+    if (i < BAZAR_MEMBER_COLOURS.length) { out[m.name] = BAZAR_MEMBER_COLOURS[i]; return; }
+    const k = i - BAZAR_MEMBER_COLOURS.length;
+    const h = bands[k % bands.length], l = [70, 40, 58][Math.floor(k / bands.length) % 3];
+    out[m.name] = `hsl(${h} 80% ${l}%)`;
+  });
+  return out;
+}
+
 async function openBazarMonth(key) {
   const all  = await historyRows("bazar");
   const year  = parseInt(key.split("-")[0]);
@@ -367,9 +386,7 @@ async function openBazarMonth(key) {
   const firstDow = new Date(year, monthIdx, 1).getDay();
 
   // Member colour palette (cycles)
-  const MEMBER_COLOURS = ["#d4a853","#5b9bd5","#27ae60","#e67e22","#9b59b6","#e74c3c","#1abc9c","#e91e63"];
-  const memberColour = {};
-  members.forEach((m, i) => { memberColour[m.name] = MEMBER_COLOURS[i % MEMBER_COLOURS.length]; });
+  const memberColour = bazarMemberColours();
 
   // Build calendar cell HTML
   function buildCalCell(dayNum) {
@@ -381,10 +398,6 @@ async function openBazarMonth(key) {
     const intensity = hasBazar ? Math.max(0.18, dayTotal / maxDay) : 0;
     // Solid green-tinted background; text must always be the app's normal text, NOT green
     const bg     = hasBazar ? `rgba(39,174,96,${intensity.toFixed(2)})` : "var(--bg3)";
-    // High intensity (>0.55) → background is bright enough to need dark text; otherwise keep light text
-    const numColor   = hasBazar
-      ? (intensity > 0.55 ? "#0f1a14" : "var(--text)")
-      : "var(--text3)";
     // Amount: white/near-white on green bg — never green-on-green
     const amtColor   = hasBazar
       ? (intensity > 0.55 ? "#0f1a14" : "#e0f7ef")
@@ -395,33 +408,16 @@ async function openBazarMonth(key) {
     // Stacked pips per member
     const pips = hasBazar ? members
       .filter(m => (dayMap[m.name] || 0) > 0)
-      .map(m => `<div title="${m.name}: ${fmtTk(dayMap[m.name])}" style="
-        height:4px;border-radius:2px;
-        background:${memberColour[m.name]};
-        flex:${dayMap[m.name]};
-        min-width:4px;
-        opacity:0.9;
-      "></div>`).join("") : "";
+      .map(m => `<div class="bz-pip" title="${m.name}: ${fmtTk(dayMap[m.name])}" style="background:${memberColour[m.name]};flex:${dayMap[m.name]}"></div>`).join("") : "";
 
     return `
-      <div class="bz-cal-cell" data-on-click="openBazarDayDetail('${key}','${d}')"
+      <div class="bz-cal-cell glass-cell${hasBazar ? " has-bazar" : ""}" data-on-click="openBazarDayDetail('${key}','${d}')"
         title="${hasBazar ? 'Day total: '+fmtTk(dayTotal) : 'No bazar'}"
-        style="
-          background:${bg};
-          border-radius:8px;
-          padding:6px 5px 5px;
-          cursor:${hasBazar?'pointer':'default'};
-          min-height:58px;
-          display:flex;flex-direction:column;gap:3px;
-          border:1px solid ${borderCol};
-          transition:transform .1s,box-shadow .1s;
-          position:relative;
-        "
-        data-on-mouseover="${hasBazar?`this.style.transform='scale(1.04)';this.style.boxShadow='0 4px 14px rgba(0,0,0,.25)'`:''}"
-        data-on-mouseout="${hasBazar?`this.style.transform='scale(1)';this.style.boxShadow='none'`:''}">
-        <div style="font-size:11px;font-weight:700;color:${numColor};line-height:1">${dayNum}</div>
+        style="background:${bg};padding:6px 5px 5px;cursor:${hasBazar?'pointer':'default'};min-height:58px;
+          display:flex;flex-direction:column;gap:3px;border:1px solid ${borderCol};">
+        <span class="glass-num" aria-hidden="true">${dayNum}</span><span class="sr-only">Day ${dayNum}</span>
         ${hasBazar
-          ? `<div style="font-size:10px;font-weight:700;color:${amtColor};margin-top:1px;line-height:1">${fmtTk(dayTotal)}</div>
+          ? `<div class="bz-amt" style="font-size:10px;font-weight:700;color:${amtColor};margin-top:1px;line-height:1">${fmtTk(dayTotal)}</div>
              <div style="display:flex;gap:2px;margin-top:auto;flex-wrap:wrap">${pips}</div>`
           : `<div style="font-size:9px;color:var(--text3);margin-top:auto">—</div>`}
       </div>`;
@@ -498,9 +494,7 @@ async function openBazarDayDetail(monthKey, dayStr) {
   const monthIdx = parseInt(monthKey.split("-")[1]) - 1;
   const dateLabel = `${parseInt(dayStr)} ${MONTHS[monthIdx]} ${year}`;
 
-  const MEMBER_COLOURS = ["#d4a853","#5b9bd5","#27ae60","#e67e22","#9b59b6","#e74c3c","#1abc9c","#e91e63"];
-  const memberColour = {};
-  members.forEach((m, i) => { memberColour[m.name] = MEMBER_COLOURS[i % MEMBER_COLOURS.length]; });
+  const memberColour = bazarMemberColours();
 
   const modal = document.getElementById("modal-content");
   modal.innerHTML = `

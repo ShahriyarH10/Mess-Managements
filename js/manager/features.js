@@ -215,10 +215,10 @@ async function loadAbsenceCalendar() {
         : "";
 
       cells.push(`
-        <div class="att-cal-cell ${cellState}"${heat ? ` style="--heat:${heat.toFixed(3)}"` : ""}>
-          <span class="att-cal-num" aria-hidden="true">${d}</span>
+        <div class="att-cal-cell glass-cell ${cellState}"${heat ? ` style="--heat:${heat.toFixed(3)}"` : ""}>
+          <span class="glass-num" aria-hidden="true">${d}</span>
           ${statusBar}
-          <div class="att-cal-head"><span class="att-cal-date">${d}</span>${badge}</div>
+          <div class="att-cal-head"><span class="sr-only">${d}</span>${badge}</div>
           <div class="att-cal-body">${content}</div>
         </div>`);
     }

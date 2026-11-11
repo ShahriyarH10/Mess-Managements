@@ -827,14 +827,22 @@ function buildMemberMealCalendar(memberName, allMeals, key) {
     byDate[String(r.date).slice(8, 10)] = mealPartsFromObj(r.meals || {}, memberName);
   });
   let total = 0, active = 0, dayTotal = 0, nightTotal = 0;
+  // Liquid tank levels: the biggest single day/night count of the month fills its tank ~70% (date stays visible above)
+  const maxPart = Math.max(1, ...Object.values(byDate).flatMap(e => [e.day || 0, e.night || 0]));
+  const lvl = v => v > 0 ? (0.26 + 0.44 * Math.min(1, v / maxPart)).toFixed(2) : 0;
+  const tank = (kind, icon, v, delay) => `
+      <span class="meal-tank is-${kind}${v > 0 ? "" : " is-empty"}" style="--fill:${lvl(v)};--wd:${delay}s" aria-hidden="true">${v > 0 ? `<span class="meal-liquid"><i></i><i></i></span>` : ""}</span>
+      <span class="tank-label is-${kind}${v > 0 ? "" : " is-empty"}" style="--fill:${lvl(v)}">${ic(icon)}<b>${v}</b></span>`;
   const cells = Array.from({ length: days }, (_, i) => {
     const day   = String(i + 1).padStart(2, "0");
     const entry = byDate[day] || { day: 0, night: 0, total: 0 };
     if (entry.total > 0) { active++; total += entry.total; dayTotal += entry.day; nightTotal += entry.night; }
-    return `<div class="meal-day ${entry.total > 0 ? "has-meal" : ""}">
-      <div class="meal-day-num">${i + 1}</div>
+    const wd = ((i % 7) * -0.37).toFixed(2);
+    return `<div class="meal-day glass-cell ${entry.total > 0 ? "has-meal" : ""}"${entry.total > 0 ? ` title="Day ${entry.day} · Night ${entry.night}"` : ""}>
+      ${entry.total > 0 ? tank("day", "sun", entry.day, wd) + tank("night", "moon", entry.night, (wd - 1.1).toFixed(2)) : ""}
+      <span class="glass-num" aria-hidden="true">${i + 1}</span><span class="sr-only">Day ${i + 1}${entry.total > 0 ? `: day ${entry.day}, night ${entry.night}` : ""}</span>
       <div class="meal-day-total">${entry.total > 0 ? entry.total : "—"}</div>
-      ${entry.total > 0 ? `<div class="meal-day-meta">D ${entry.day} · N ${entry.night}</div>` : `<div class="meal-day-meta">No meal</div>`}
+      ${entry.total > 0 ? "" : `<div class="meal-day-meta">No meal</div>`}
     </div>`;
   }).join("");
   return { html: `<div class="meal-calendar">${cells}</div>`, total: round2(total), active, dayTotal: round2(dayTotal), nightTotal: round2(nightTotal) };
@@ -873,7 +881,8 @@ async function openManagerMealMonth(key) {
       <div class="stat-card"><div class="stat-label">Members</div><div class="stat-value">${members.length}</div></div>
       <div class="stat-card"><div class="stat-label">Most active days</div><div class="stat-value">${grandDays}</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+    <!-- 2 members per row (1 on narrow screens) -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(max(280px,calc(50% - 7px)),1fr));gap:14px">
       ${perMember.map((p, i) => {
         const col = avatarCol(i);
         const dim = p.total === 0;

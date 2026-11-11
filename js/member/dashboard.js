@@ -297,8 +297,8 @@ async function renderMyDashboard(el) {
           ${Array.from({ length: daysInMonth }, (_, i) => {
             const d = i + 1, v = myDayMeals[d] || 0;
             const a = v ? (0.3 + (v / myMaxDay) * 0.7).toFixed(2) : 0;
-            return `<div class="dk-day${d === todayDay2 ? " dk-today-cell" : ""}${d > daysGone ? " dk-future" : ""}" title="${MONTHS[month]} ${d}: ${v} meals"
-              ${v ? `style="--a:${a}"` : ""}><span>${d}</span>${v ? `<b>${v}</b>` : ""}</div>`;
+            return `<div class="dk-day glass-cell${d === todayDay2 ? " dk-today-cell is-today" : ""}${d > daysGone ? " dk-future" : ""}" title="${MONTHS[month]} ${d}: ${v} meals"
+              ${v ? `style="--a:${a}"` : ""}><span class="glass-num" aria-hidden="true">${d}</span><span class="sr-only">${d}</span>${v ? `<b>${v}</b>` : ""}</div>`;
           }).join("")}
         </div>
       </div>
