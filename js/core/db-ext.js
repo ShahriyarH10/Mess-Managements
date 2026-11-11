@@ -65,6 +65,17 @@ async function dbSetAttendance(memberId, date, dayMeal, nightMeal) {
   if (error) throw error;
 }
 
+/* A meal count > 0 means that meal is back on: clear a stale day-off flag.
+   att = the member's attendance row for the date (or null). Never turns a meal off. */
+async function dbSyncAttendanceOn(memberId, date, att, day, night) {
+  if (!att) return false;
+  const dayBack   = att.day_meal   === false && Number(day)   > 0;
+  const nightBack = att.night_meal === false && Number(night) > 0;
+  if (!dayBack && !nightBack) return false;
+  await dbSetAttendance(memberId, date, att.day_meal !== false || dayBack, att.night_meal !== false || nightBack);
+  return true;
+}
+
 /* ── Mess Rules ──────────────────────────── */
 async function dbGetMessRules() {
   const { data, error } = await getClient().from("mess_rules")

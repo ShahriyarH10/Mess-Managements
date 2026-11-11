@@ -194,6 +194,15 @@ async function saveMeals() {
     await dbUpsertMeals(date,meals);
     const diffs = auditDiffs(members.map(m => [auditName(m.name), _mealDN(stored?.meals, m.name), _mealDN(meals, m.name)]));
     if (diffs.length) await logAudit(stored ? "update" : "create", "meal", date, auditLine(`Meals ${date} (day+night)`, diffs), { changes: diffs });
+    // A meal given a count is back on — clear its day-off flag so it stops showing red
+    const attRows = await dbGetAttendance(date);
+    await Promise.all(members.map(m => dbSyncAttendanceOn(m.id, date,
+      attRows.find(a => a.member_id === m.id), mealDayVals[m.id], mealNightVals[m.id])));
+    members.forEach(m => {
+      if ((mealDayVals[m.id] || 0) > 0)   delete window._absentDay[m.id];
+      if ((mealNightVals[m.id] || 0) > 0) delete window._absentNight[m.id];
+    });
+    buildMealGrid();
     toast("Meals saved","success"); refreshMealLists(); } catch(e){ toast("Save failed: "+e.message,"error"); }
 }
 /* "day+night" of one member in a meals record, for audit diffs. */

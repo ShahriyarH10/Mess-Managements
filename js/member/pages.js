@@ -277,6 +277,10 @@ async function saveMyMealEntry() {
     });
 
     await dbUpsertMeals(date, merged);
+    // A meal given a count is back on — clear its day-off flag
+    const { data: att } = await getClient().from("meal_attendance").select("day_meal,night_meal")
+      .eq("mess_id", messId()).eq("member_id", member.id).eq("date", date).maybeSingle();
+    await dbSyncAttendanceOn(member.id, date, att, day, night);
     if (oldDN !== `${day}+${night}`)
       await logAudit("update", "meal", date, `${auditName(member.name)}'s own meals ${date} (day+night): ${oldDN} → ${day}+${night}${note ? " — " + note : ""}`);
 
