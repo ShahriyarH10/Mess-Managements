@@ -1014,7 +1014,7 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 /* member split bars on a bazar day: outlined so each colour stays clear on the green */
 .bz-pip{height:5px;min-width:5px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.35);}
 [data-theme="light"] .bz-pip{box-shadow:0 0 0 1px rgba(255,255,255,.85);}
-[data-theme="light"] .dk-day.glass-cell b:not(.ma-x){color:#a16207!important;text-shadow:0 0 3px rgba(255,255,255,.95),0 1px 0 rgba(255,255,255,.9);}
+[data-theme="light"] .dk-day.glass-cell b:not(.ma-x){color:#3b0f8c!important;text-shadow:none;}
 .dk-day.glass-cell b.ma-x{color:var(--red)!important;text-shadow:none;}
 
 /* Meal month pop-ups: violet total + sun/moon chips for the day/night split
@@ -1080,6 +1080,26 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 [data-theme="light"] .meal-day.glass-cell.has-meal .meal-day-total{color:#fff!important;background:#7c5ce6;}
 .mc-compact .tank-label{font-size:10px;}
 .mc-compact .tank-label .ic{width:10px;height:10px;}
+/* All Members pop-up: on hover, the background date's outline glows and a band of light
+   runs around it. .gn-glow is an exact copy of .glass-num (same class = same position/size),
+   drawn as outline only; a rotating conic mask lets just a moving slice of it show. */
+@property --gn-a{syntax:"<angle>";inherits:false;initial-value:0deg;}
+.glass-cell>.glass-num.gn-glow{z-index:1;background:none;-webkit-text-fill-color:transparent;
+  -webkit-text-stroke:1.6px #f5f3ff;opacity:0;transition:opacity .3s ease;
+  filter:drop-shadow(0 0 2px #c4b5fd) drop-shadow(0 0 5px #a78bfa);
+  -webkit-mask:conic-gradient(from var(--gn-a) at 50% calc(var(--gn-top,6px) + .45em),transparent 0deg,transparent 200deg,#000 300deg,#000 340deg,transparent 360deg);
+          mask:conic-gradient(from var(--gn-a) at 50% calc(var(--gn-top,6px) + .45em),transparent 0deg,transparent 200deg,#000 300deg,#000 340deg,transparent 360deg);}
+.mc-compact .meal-day.glass-cell{--gn-top:4px;}
+/* the whole outline lights up softly... */
+.meal-day.glass-cell:has(>.gn-glow):hover>.glass-num:not(.gn-glow){transform:none;-webkit-text-stroke-color:rgba(196,181,253,.85);
+  filter:drop-shadow(0 0 2px rgba(167,139,250,.8));animation:gnPulse 1.6s ease-in-out infinite alternate;}
+/* ...and the bright band travels round it */
+.meal-day.glass-cell:hover>.glass-num.gn-glow{opacity:1;transform:none;animation:gnSpin 1.8s linear infinite;}
+@keyframes gnSpin{to{--gn-a:360deg;}}
+@keyframes gnPulse{from{opacity:.75;}to{opacity:1;}}
+[data-theme="light"] .glass-cell>.glass-num.gn-glow{-webkit-text-stroke-color:#7c3aed;filter:drop-shadow(0 0 2px rgba(167,139,250,.9)) drop-shadow(0 0 6px rgba(139,92,246,.6));}
+[data-theme="light"] .meal-day.glass-cell:has(>.gn-glow):hover>.glass-num:not(.gn-glow){-webkit-text-stroke-color:rgba(124,92,230,.7);filter:drop-shadow(0 0 3px rgba(167,139,250,.6));}
+@media (prefers-reduced-motion:reduce){.meal-day.glass-cell:hover>.glass-num{animation:none!important;}}
 @media (prefers-reduced-motion:reduce){.meal-liquid,.meal-liquid i,.glass-cell>.tank-label{animation:none!important;}.meal-liquid::before,.meal-liquid::after{display:none;}}
 .meal-dn{display:flex;gap:3px;justify-content:center;align-items:center;max-width:100%;}
 .meal-dn-chip{display:inline-flex;align-items:center;gap:2px;padding:2px 5px;border-radius:999px;font-size:10px;line-height:1;

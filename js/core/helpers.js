@@ -818,7 +818,7 @@ function toggleMonthHistory(id, btn) {
   if (btn) btn.textContent = open ? "Show fewer" : `Show ${n} older month${n === 1 ? "" : "s"}`;
 }
 
-function buildMemberMealCalendar(memberName, allMeals, key) {
+function buildMemberMealCalendar(memberName, allMeals, key, opts = {}) {
   const year  = yearFromKey(key);
   const month = monthIndexFromKey(key);
   const days  = new Date(year, month + 1, 0).getDate();
@@ -840,7 +840,7 @@ function buildMemberMealCalendar(memberName, allMeals, key) {
     const wd = ((i % 7) * -0.37).toFixed(2);
     return `<div class="meal-day glass-cell ${entry.total > 0 ? "has-meal" : ""}"${entry.total > 0 ? ` title="Day ${entry.day} · Night ${entry.night}"` : ""}>
       ${entry.total > 0 ? tank("day", "sun", entry.day, wd) + tank("night", "moon", entry.night, (wd - 1.1).toFixed(2)) : ""}
-      <span class="glass-num" aria-hidden="true">${i + 1}</span><span class="sr-only">Day ${i + 1}${entry.total > 0 ? `: day ${entry.day}, night ${entry.night}` : ""}</span>
+      <span class="glass-num" aria-hidden="true">${i + 1}</span>${opts.trace ? `<span class="glass-num gn-glow" aria-hidden="true">${i + 1}</span>` : ""}<span class="sr-only">Day ${i + 1}${entry.total > 0 ? `: day ${entry.day}, night ${entry.night}` : ""}</span>
       <div class="meal-day-total">${entry.total > 0 ? entry.total : "—"}</div>
       ${entry.total > 0 ? "" : `<div class="meal-day-meta">No meal</div>`}
     </div>`;
@@ -869,7 +869,7 @@ async function openManagerMealMonth(key) {
   // only this month's rows: each member's calendar would otherwise re-scan the whole table
   const allMeals = (await historyRows("meals")).filter(r => String(r.date || "").startsWith(key));
   const monthLabel = monthLabelFromKey(key);
-  const perMember = members.map(m => { const cal = buildMemberMealCalendar(m.name, allMeals, key); return { name: m.name, ...cal }; });
+  const perMember = members.map(m => { const cal = buildMemberMealCalendar(m.name, allMeals, key, { trace: true }); return { name: m.name, ...cal }; });
   const grandMeals = round2(perMember.reduce((s, p) => s + p.total, 0));
   const grandDays  = perMember.reduce((s, p) => Math.max(s, p.active), 0);
   const modal = document.getElementById("modal-content");
