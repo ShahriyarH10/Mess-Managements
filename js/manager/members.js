@@ -83,14 +83,15 @@ function renderFormerMembers() {
   if (!formerMembers.length) { wrap.innerHTML = ""; return; }
   wrap.innerHTML = `<div class="card" style="margin-top:14px">
     <div class="card-title">Former members (${formerMembers.length})</div>
-    <div style="font-size:12px;color:var(--text3);margin:-4px 0 10px">Archived members can't sign in. Their meals, bazar, payments and receipts are kept — restore someone who rejoins to get their full history back.</div>
+    <div style="font-size:12px;color:var(--text3);margin:-4px 0 10px">Archived members can't sign in. Their meals, bazar, payments and receipts are kept — use <b>View history</b> to see the months they stayed. Only restore someone who actually moves back in: restoring counts them in every month's bill split again.</div>
     <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Room</th><th>Left on</th><th></th></tr></thead>
     <tbody>${formerMembers.map(m => `<tr>
       <td><b>${m.name}</b></td>
       <td style="font-family:monospace;color:var(--text3)">@${m.username}</td>
       <td>${m.room || "—"}</td>
       <td style="color:var(--text2)">${m.left_at || "—"}</td>
-      <td><button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="restoreMember(this.dataset.mid)">${ic("undo")} Restore</button></td>
+      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="viewFormerHistory(this.dataset.mid)">${ic("clock")} View history</button>
+        <button class="btn btn-ghost btn-sm" data-mid="${m.id}" data-on-click="restoreMember(this.dataset.mid)">${ic("undo")} Restore</button></td>
     </tr>`).join("")}</tbody></table></div>
   </div>`;
 }

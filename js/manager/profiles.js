@@ -553,6 +553,28 @@ async function selectProfile(id) {
   showProfileDetail(id,allM,allB,allR,allU||[],rentRes,curUtilRes.data,prevUtilRes.data,curM,curY);
 }
 
+/* Read-only history of a former (archived) member — opened from Members → Former members.
+   Stats cover all time; the settlement shown is the one billing their last month here
+   (the month after they left), since that's the last thing they could owe. */
+async function viewFormerHistory(id) {
+  if (!requireManager("viewFormerHistory")) return;
+  const m = (formerMembers || []).find(x => x.id === id); if (!m) return;
+  const left = String(m.left_at || today()).slice(0, 7);
+  const nxt  = nextMonth(monthIndexFromKey(left), yearFromKey(left));
+  const curM = nxt.month, curY = nxt.year, key = nxt.key;
+  const prevKey = left;
+  try {
+    const [allM,allB,allR,{data:allU},rentRes,curUtilRes,prevUtilRes] = await Promise.all([
+      dbGetAll("meals"), dbGetAll("bazar"), dbGetAll("rent"),
+      getClient().from("utility_payments").select("*").eq("mess_id",messId()),
+      dbGetMonth("rent", key),
+      getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle(),
+      getClient().from("utility_payments").select("*").eq("mess_id",messId()).eq("month_key",prevKey).maybeSingle(),
+    ]);
+    showProfileDetail(id,allM,allB,allR,allU||[],rentRes,curUtilRes.data,prevUtilRes.data,curM,curY,{ former: true });
+  } catch (e) { toast("Couldn't load history: " + e.message, "error"); }
+}
+
 /* Net payable for one settlement month, including dues carried from earlier months. */
 function monthlyNetFor(member, allM, allB, allR, allU, key) {
   const rentRec = allR.find(r => r.month_key === key) || null;
@@ -562,16 +584,17 @@ function monthlyNetFor(member, allM, allB, allR, allU, key) {
   return round2(p.netPayable + calcPrevDueForMember(member, allM, allB, allR, allU, key));
 }
 
-function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,prevUtilRec,curM,curY) {
-  const member=members.find(m=>m.id===id); if(!member) return;
-  selectedProfileId = id;
-  const period=document.getElementById("prof-period")?.value||"1";
+function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,prevUtilRec,curM,curY,opts={}) {
+  const former = !!opts.former;
+  const member = former ? memberById(id) : members.find(m=>m.id===id); if(!member) return;
+  if (!former) selectedProfileId = id;   // a former member's history isn't re-opened by the Profiles page
+  const period = former ? "all" : (document.getElementById("prof-period")?.value||"1");
   const {meals,bazar,rent,utility}=getFilteredData(allM,allB,allR,period,allU);
   // filteredUtility: period-scoped subset for stat totals (ud/up in getMemberStats)
   // utility (full allU) stays for postpaid prev-month lookup
   const filteredUtility = getFilteredUtilityOnly(allU, period);
   const s=getMemberStats(member,meals,bazar,rent,utility,filteredUtility);
-  const col=avatarCol(members.indexOf(member));
+  const col=avatarCol(Math.max(0, members.indexOf(member)));
 
   // Meal pay/get uses the selected month: bazar credit + meal_paid − meal cost
   const mealNet  = getPrevMonthMealBalance(member, allM, allB, curM, curY, currentUtilRec);
@@ -604,21 +627,24 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
 
   const isMultiMonth = (period !== "1" && period !== "last");
   const settlKey2 = monthKey(curM || thisMonth().month, curY || thisMonth().year);
-  const multiMonthBanner = isMultiMonth ? `
+  const multiMonthBanner = former ? `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px">
+      ${ic("info")} <span><b>Former member</b> — left on <b>${escapeHtml(member.left_at || "—")}</b>. Stats cover every month they stayed. Net payable shows the settlement for their last month (${monthLabelFromKey(currentKeyForOwe)}). View only.</span>
+    </div>` : isMultiMonth ? `
     <div style="background:var(--accent-bg);border:1px solid rgba(212,168,83,.25);border-radius:var(--radius-sm);padding:9px 13px;margin-bottom:14px;font-size:12px;color:var(--accent);display:flex;align-items:center;gap:8px">
       ${ic("info")} <span>Stats cover <b>${period === "all" ? "all time" : "last " + period + " months"}</b>. 
       Net payable and "What I Owe" are always pinned to the <b>latest settlement month (${monthLabelFromKey(settlKey2)})</b>.</span>
     </div>` : "";
   // History always spans every month (not just the selected period)
   const allTime = getMemberStats(member, allM, allB, allR, allU, null);
-  const histKeys = Object.keys(allTime.byMonth).sort().slice(-8);
+  const histKeys = Object.keys(allTime.byMonth).sort().slice(former ? -12 : -8);
   const histMax = Math.max(1, ...histKeys.map(k => allTime.byMonth[k]?.meals || 0));
   const net = round2(monthlyNetFor(member, allM, allB, allR, allU, currentKeyForOwe));
   const pays = net > 0.01, gets = net < -0.01;
   const chipB = (label, b) => `<span class="pf-chip ${b.cls === "net-neg" ? "bad" : "ok"}"><span>${label}</span><b>${b.html}</b></span>`;
   const tile = (icon, label, value, sub, bar) => `<div class="pf-tile"><div class="dk-head"><span class="dk-ico">${icon}</span><span class="dk-label">${label}</span></div>
     <div class="stat-value pf-val">${value}</div><div class="dk-sub">${sub}</div>${bar != null ? `<div class="dk-bar pf-share"><i style="width:${bar}%"></i></div>` : ""}</div>`;
-  const recentRows = Object.keys(allTime.byMonth).sort().slice(-6).reverse().map(k => {
+  const recentRows = Object.keys(allTime.byMonth).sort().slice(former ? -24 : -6).reverse().map(k => {
     const d = allTime.byMonth[k] || {}, n = monthlyNetFor(member, allM, allB, allR, allU, k);
     const cell = n > 0.01 ? `<b class="net-neg">Pay ${fmtTk(n)}</b>` : n < -0.01 ? `<b class="net-pos">Get ${fmtTk(Math.abs(n))}</b>` : `<b class="net-pos">${ic("check")}</b>`;
     return `<tr><td style="white-space:nowrap"><b>${MONTHS[parseInt(k.slice(5)) - 1].slice(0, 3)} ${k.slice(0, 4)}</b></td><td>${round2(d.meals || 0)}</td><td>${fmtTk(d.bazar || 0)}</td><td style="color:var(--green)">${fmtTk(round2((d.rentPaid || 0) + (d.utilityPaid || 0)))}</td><td style="text-align:right">${cell}</td></tr>`;
@@ -631,7 +657,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
         <div class="avatar pf-av" style="background:${col.bg};color:${col.fg}">${avFace(member.id, member.name)}</div>
         <div class="pf-who">
           <div class="pf-name">${member.name}</div>
-          <div class="pf-meta">Room ${member.room || "—"} · @${member.username || "—"} · joined ${member.joined || "—"}${member.phone ? " · " + member.phone : ""}</div>
+          <div class="pf-meta">Room ${member.room || "—"} · @${member.username || "—"} · joined ${member.joined || "—"}${former ? " · left " + escapeHtml(member.left_at || "—") : ""}${member.phone ? " · " + member.phone : ""}</div>
           <div class="pf-chips">${chipB("Meals", mealBadge)}${chipB("Rent", rentBadge)}${chipB("Utility", utilBadge)}</div>
         </div>
       </div>
@@ -639,7 +665,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
         <div class="mb-hero-lbl">Net payable · ${monthLabelFromKey(currentKeyForOwe)}</div>
         <div class="pf-net-amt" style="color:${pays ? "var(--red)" : "var(--green)"}">${pays ? "Pays " : gets ? "Gets " : "" + ic("check") + " Settled"}${pays || gets ? fmtTk(Math.abs(net)) : ""}</div>
         <div class="pf-net-btns">
-          ${pays ? `<button class="btn btn-primary btn-sm" data-on-click="closeModal();navigate('collect')">${ic("cash")} Collect</button>` : ""}
+          ${pays && !former ? `<button class="btn btn-primary btn-sm" data-on-click="closeModal();navigate('collect')">${ic("cash")} Collect</button>` : ""}
           <button class="btn btn-ghost btn-sm" data-on-click="closeModal()">Close</button>
         </div>
       </div>
@@ -662,7 +688,7 @@ function showProfileDetail(id,allM,allB,allR,allU,currentRentRec,currentUtilRec,
           </div>` : `<div class="empty">No history yet</div>`}
         </div>
         <div class="card">
-          <div class="dk-card-title"><span>Recent months</span></div>
+          <div class="dk-card-title"><span>${former ? "Months stayed" : "Recent months"}</span></div>
           <div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Meals</th><th>Bazar</th><th>Paid</th><th style="text-align:right">Net</th></tr></thead>
           <tbody>${recentRows || `<tr><td colspan="5" class="empty">No data</td></tr>`}</tbody></table></div>
         </div>
