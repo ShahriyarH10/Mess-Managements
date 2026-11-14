@@ -506,7 +506,7 @@ async function renderMyPayments(el) {
   const rentDue   = Number(rentEntry.rent || 0), rentPaid = Number(rentEntry.paid || 0);
   const rentLeft  = round2(Math.max(0, rentDue - rentPaid));
   const utilTotal = utilTotalFromBills(utilBy[key]?.bills || {}, UTIL_PREPAID_KEYS) + utilTotalFromBills(utilBy[prev.key]?.bills || {}, UTIL_POSTPAID_KEYS);
-  const utilShare = members.length ? round2(utilTotal / members.length) : 0;
+  const utilShare = members.length ? utilShareFor(key, utilBy[key], utilBy[prev.key], member) : 0;
   const utilPaid  = round2(Number(((utilBy[key]?.payments || {})[member.name] || {}).paid || 0));
   const utilLeft  = round2(Math.max(0, utilShare - utilPaid));
   const totalLeft = round2(rentLeft + utilLeft);
@@ -738,7 +738,7 @@ async function _saveMyPaymentEntry() {
       );
 
       const myShare = members.length > 0
-        ? round2((currentPrepaid + previousPostpaid) / members.length)
+        ? utilShareFor(key, curUtilRec, prevUtilRec, member)
         : 0;
 
       const existingPayments = curUtilRec?.payments || {};
@@ -860,7 +860,8 @@ async function loadMyMonthLog() {
   const currentUtilRec   = utilByKey[settlementKey] || null;
   const previousUtilRec  = utilByKey[sourceKey]     || null;
 
-  const payData = members.map(m => {
+  const roster = settlementRoster(settlementKey);
+  const payData = roster.map(m => {
     const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
     p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, allRent, allUtil, settlementKey);
     p.netWithPrevDue = round2(p.netPayable + p.prevDue);
@@ -879,7 +880,7 @@ async function loadMyMonthLog() {
   const khalaTotal   = Number(previousUtilRec?.bills?.khala || 0);
   const otherTotal   = Number(previousUtilRec?.bills?.other || 0);
   const postpaidTotal = round2(khalaTotal + otherTotal);
-  const prepaidShare  = members.length > 0 ? round2(prepaidTotal / members.length) : 0;
+  const prepaidShare  = round2(prepaidTotal / shareCount(settlementKey));
 
   const grandNetPayable = round2(payData.reduce((s, p) => s + p.netWithPrevDue, 0));
   const totalRent       = round2(payData.reduce((s, p) => s + p.roomRent, 0));
@@ -929,7 +930,7 @@ async function loadMyMonthLog() {
         <div class="stat-card">
           <div class="stat-label">${ic("zap")} Prepaid per member</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(prepaidShare)}</div>
-          <div class="stat-sub">${prepaidTotal} ÷ ${members.length} members</div>
+          <div class="stat-sub">${prepaidTotal} ÷ ${shareCount(settlementKey)} members</div>
         </div>
       </div>
     </div>
@@ -999,7 +1000,7 @@ async function loadMyMonthLog() {
                 <td>${fmtTk(p.otherShare)}</td>
                 <td style="color:var(--blue)">
                   ${fmtTk(p.prepaidUtility)}
-                  <div style="font-size:10px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${members.length}</div>
+                  <div style="font-size:10px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${p.prepaidCount}</div>
                 </td>
                 <td>${fmtTk(p.roomRent)}</td>
                 <td style="color:var(--green)">${fmtTk(p.memberBazar)}</td>

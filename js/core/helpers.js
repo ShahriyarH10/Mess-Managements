@@ -352,6 +352,55 @@ function utilShareFromRecord(record, keys) {
   return members.length > 0 ? round2(utilTotalFromBills(record?.bills || {}, keys) / members.length) : 0;
 }
 
+/* ── Who shares a month's bills ──────────────────────────────────────
+   A member shares month M's split bills if they had joined by the end of M
+   and hadn't left before M began. No joined date = always there; no left_at =
+   still here. Former (archived) members count for the months they lived in,
+   so the people who move out / move in mid-year each pay only for their own
+   months: a leaver's last month of meals + khala is still billed in the next
+   settlement, and a newcomer never shares bills from before they joined. */
+function memberActiveInMonth(m, key) {
+  if (!m || !key) return false;
+  const joined = String(m.joined || "").slice(0, 10);
+  const left   = String(m.left_at || "").slice(0, 10);
+  if (joined && joined > key + "-31") return false;   // YYYY-MM-DD compares as text
+  if (left && left < key + "-01") return false;
+  return true;
+}
+
+function membersInMonth(key) {
+  return members.concat(formerMembers || []).filter(m => memberActiveInMonth(m, key));
+}
+
+/* Head-count a month's bills are divided by (never 0) */
+function shareCount(key) {
+  return membersInMonth(key).length || 1;
+}
+
+/* Everyone with something in settlement `key`: lived here in the settlement
+   month (rent, prepaid) or in the month before it (meals, khala, other). */
+function settlementRoster(key) {
+  const src = previousMonthFromKey(key).key;
+  return members.concat(formerMembers || [])
+    .filter(m => memberActiveInMonth(m, key) || memberActiveInMonth(m, src));
+}
+
+function memberById(id) {
+  return members.find(m => m.id === id) || (formerMembers || []).find(m => m.id === id);
+}
+
+/* Utility share for settlement `key`: prepaid (this month) ÷ who lived here this
+   month + postpaid (last month) ÷ who lived here last month. Pass `member` to
+   get that member's own share (0 for a month they weren't here). */
+function utilShareFor(key, currentRec, previousRec, member) {
+  const src  = previousMonthFromKey(key).key;
+  const pre  = (!member || memberActiveInMonth(member, key))
+    ? utilTotalFromBills(currentRec?.bills || {}, UTIL_PREPAID_KEYS) / shareCount(key) : 0;
+  const post = (!member || memberActiveInMonth(member, src))
+    ? utilTotalFromBills(previousRec?.bills || {}, UTIL_POSTPAID_KEYS) / shareCount(src) : 0;
+  return round2(pre + post);
+}
+
 /* Month navigation */
 function previousMonth(month, year) {
   month = Number(month); year = Number(year);
@@ -389,7 +438,9 @@ function calcSettlementTotals(allMeals, allBazar, sourceKey) {
   const mealRows  = (allMeals  || []).filter(r => String(r.date || "").startsWith(sourceKey));
   const bazarRows = (allBazar  || []).filter(r => String(r.date || "").startsWith(sourceKey));
   const memberMeals = {}, memberBazar = {};
-  members.forEach(m => { memberMeals[m.name] = 0; memberBazar[m.name] = 0; });
+  // former members too: someone who moved out still pays for their last month's meals
+  const everyone = members.concat(typeof formerMembers !== "undefined" ? formerMembers : []);
+  everyone.forEach(m => { memberMeals[m.name] = 0; memberBazar[m.name] = 0; });
   let totalMeals = 0, totalBazar = 0;
 
   mealRows.forEach(row => {
@@ -421,7 +472,7 @@ function calcSettlementTotals(allMeals, allBazar, sourceKey) {
     } else {
       keys.forEach(k => { keyMealTotals[k] = Number(mObj[k]) || 0; });
     }
-    members.forEach(m => {
+    everyone.forEach(m => {
       // 1. Exact name match
       let v = keyMealTotals[m.name];
       // 2. Case-insensitive match
@@ -443,7 +494,7 @@ function calcSettlementTotals(allMeals, allBazar, sourceKey) {
   bazarRows.forEach(row => {
     const bObj = row.bazar || {};
     Object.values(bObj).forEach(v => { totalBazar += Number(v) || 0; });
-    members.forEach(m => {
+    everyone.forEach(m => {
       const v = Number(bObj[m.name] || 0);
       memberBazar[m.name] = round2(memberBazar[m.name] + v);
     });
@@ -503,13 +554,17 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
   const rentEntry   = rentEntryFor(currentRentRec?.entries, member) || {};
   const roomRent    = Number(rentEntry.rent || 0);
   const roomRentPaid= Number(rentEntry.paid || 0);
-  const memberCount = members.length || 1;
+  // Each half of the utility bill is split among who lived here THAT month
+  const prepaidCount  = shareCount(settlementKey);
+  const postpaidCount = shareCount(sourceKey);
+  const inPrepaid  = memberActiveInMonth(member, settlementKey);
+  const inPostpaid = memberActiveInMonth(member, sourceKey);
   const prepaidTotal    = utilTotalFromBills(currentUtilRec?.bills || {}, UTIL_PREPAID_KEYS);
-  const prepaidUtility  = round2(prepaidTotal / memberCount);
+  const prepaidUtility  = inPrepaid ? round2(prepaidTotal / prepaidCount) : 0;
   const khalaTotal  = Number(previousUtilRec?.bills?.khala || 0);
   const otherTotal  = Number(previousUtilRec?.bills?.other || 0);
-  const khalaShare  = round2(khalaTotal / memberCount);
-  const otherShare  = round2(otherTotal / memberCount);
+  const khalaShare  = inPostpaid ? round2(khalaTotal / postpaidCount) : 0;
+  const otherShare  = inPostpaid ? round2(otherTotal / postpaidCount) : 0;
   const postpaidUtility = round2(khalaShare + otherShare);
   const utilPayment = (currentUtilRec?.payments || {})[member.name] || {};
   const utilityPaid = Number(utilPayment.paid || 0);
@@ -532,6 +587,7 @@ function calcMemberSettlement(member, allMeals, allBazar, currentRentRec, curren
     totalMeals: totals.totalMeals, totalBazar: totals.totalBazar, mealRate: totals.mealRate,
     memberMeals, memberBazar, mealCost, roomRent, roomRentPaid,
     prepaidTotal, prepaidUtility, khalaTotal, otherTotal, khalaShare, otherShare, postpaidUtility,
+    prepaidCount, postpaidCount, isFormer: !!member.left_at,
     utilityPaid, utilityStatus: utilPayment.status || "unpaid", rentStatus: rentEntry.status || "unpaid",
     mealBalance, messCredit, mealPaid, creditPaid, totalPay, netPayable,
   };

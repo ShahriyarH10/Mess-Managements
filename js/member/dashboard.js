@@ -400,7 +400,7 @@ function showMySettlementBreakdown() {
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px">
       <div>
         <div style="font-weight:600">${ic("cook")} Khala bill</div>
-        <div style="font-size:11px;color:var(--text3)">${fmtTk(p.khalaTotal)} ÷ ${members.length} members</div>
+        <div style="font-size:11px;color:var(--text3)">${fmtTk(p.khalaTotal)} ÷ ${p.postpaidCount} members</div>
         ${p.utilityStatus === "paid" ? '<div style="font-size:10px;color:var(--green)">' + ic("checkCircle", "ic-green") + ' Covered by utility payment</div>' : p.utilityStatus === "partial" ? '<div style="font-size:10px;color:var(--amber)">' + ic("alert", "ic-amber") + ' Partially paid</div>' : '<div style="font-size:10px;color:var(--text3)">' + ic("hourglass") + ' Not paid yet</div>'}
       </div>
       <div style="font-weight:700;color:${p.utilityStatus === 'paid' ? 'var(--green)' : 'var(--red)'}">+ ${fmtTk(p.khalaShare)} ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
@@ -409,7 +409,7 @@ function showMySettlementBreakdown() {
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px">
       <div>
         <div style="font-weight:600">${ic("box")} Other cost</div>
-        <div style="font-size:11px;color:var(--text3)">${fmtTk(p.otherTotal)} ÷ ${members.length} members</div>
+        <div style="font-size:11px;color:var(--text3)">${fmtTk(p.otherTotal)} ÷ ${p.postpaidCount} members</div>
         ${p.utilityStatus === "paid" ? '<div style="font-size:10px;color:var(--green)">' + ic("checkCircle", "ic-green") + ' Covered by utility payment</div>' : p.utilityStatus === "partial" ? '<div style="font-size:10px;color:var(--amber)">' + ic("alert", "ic-amber") + ' Partially paid</div>' : '<div style="font-size:10px;color:var(--text3)">' + ic("hourglass") + ' Not paid yet</div>'}
       </div>
       <div style="font-weight:700;color:${p.utilityStatus === 'paid' ? 'var(--green)' : 'var(--red)'}">+ ${fmtTk(p.otherShare)} ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : ''}</div>
@@ -431,7 +431,7 @@ function showMySettlementBreakdown() {
     <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg3);border-radius:6px;margin-bottom:5px">
       <div>
         <div style="font-weight:600">${ic("zap")} Utility share (Elec+Gas+WiFi)</div>
-        <div style="font-size:11px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${members.length} members</div>
+        <div style="font-size:11px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${p.prepaidCount} members</div>
         ${p.utilityStatus === "paid" ? '<div style="font-size:10px;color:var(--green)">' + ic("checkCircle", "ic-green") + ' Covered by utility payment</div>' : p.utilityStatus === "partial" ? '<div style="font-size:10px;color:var(--amber)">' + ic("alert", "ic-amber") + ' Partially paid</div>' : '<div style="font-size:10px;color:var(--text3)">' + ic("hourglass") + ' Not paid yet</div>'}
       </div>
       <div style="font-weight:700;color:${p.utilityStatus === 'paid' ? 'var(--green)' : 'var(--red)'}">+ ${fmtTk(p.prepaidUtility)} ${p.utilityStatus === 'paid' ? '' + ic("check") + '' : ''}</div>

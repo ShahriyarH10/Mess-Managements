@@ -261,8 +261,9 @@ function memberModalHTML(m) {
   <div class="field"><label>Room</label><input type="text" class="input" id="mm-room" value="${escapeHtml(m?.room||"")}" placeholder="Room 3A"/></div>
   <div class="grid-2">
     <div class="field"><label>Phone</label><input type="text" class="input" id="mm-phone" value="${escapeHtml(m?.phone||"")}" placeholder="017xxxxxxxx"/></div>
-    <div class="field"><label>Joined date</label><input type="date" class="input" id="mm-joined" value="${m?.joined||""}"/></div>
+    <div class="field"><label>Joined date</label><input type="date" class="input" id="mm-joined" value="${m ? (m.joined||"") : today()}"/></div>
   </div>
+  <div style="font-size:11px;color:var(--text3);margin:-6px 0 10px">Joined date = first day they live here. They share bills (khala, other, utilities) only from that month on — e.g. set 1 Jan for someone moving in for January.</div>
   <div class="field"><label>Meal default — Day</label><input type="number" class="input" id="mm-meal-day" min="0" max="4" step="0.5" value="${m?.meal_default_day ?? 1}" placeholder="1"/></div>`;
 }
 
@@ -411,6 +412,12 @@ async function openLeavingFlow(id) {
       ${ic("check")} Balance is clear — safe to remove.
     </div>`}
 
+    <div class="field">
+      <label>Last day living here</label>
+      <input type="date" class="input" id="leave-date" value="${today()}"/>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">They stop sharing bills after this month. Their last month's meals and khala/other share still show up in next month's settlement (Monthly Log and Collect Payment, marked "left"), so you can collect it then.</div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" data-on-click="closeModal()">Cancel</button>
       <button class="btn btn-danger" data-on-click="archiveMember('${m.id}')">${net !== 0 ? "Remove anyway" : "Remove member"}</button>
@@ -422,6 +429,8 @@ async function archiveMember(id) {
   if (!requireManager("archiveMember")) return;
   const m = members.find(x => x.id === id); if (!m) return;
   if (m.role === "manager") { toast("Transfer the manager role before removing this member", "error"); return; }
+  const leftAt = document.getElementById("leave-date")?.value || today();
+  if (m.joined && leftAt < String(m.joined).slice(0, 10)) { toast("Last day can't be before their joined date", "error"); return; }
   closeModal();
   const name = _decodeName(m.name);            // showConfirm escapes its text itself
   showConfirm({
@@ -431,8 +440,8 @@ async function archiveMember(id) {
     danger: true,
     onConfirm: async () => {
       try {
-        await dbArchiveMember(id);
-        await logAudit("update", "member", m.name, `Member "${m.name}" removed (archived — records kept)`);
+        await dbArchiveMember(id, leftAt);
+        await logAudit("update", "member", m.name, `Member "${m.name}" removed (archived — records kept), last day ${leftAt}`);
         members = await dbGetMembers(); buildInitialsMap(members); toast(name + ' removed — records kept'); renderMembersTable(); renderRolesList(); _renderTransferList();
       } catch(e) { toast('Error: ' + e.message, 'error'); }
     }

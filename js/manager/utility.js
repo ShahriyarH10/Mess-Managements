@@ -37,7 +37,7 @@ async function loadRentMonth() {
   const key=monthKey(year,month);
   const {data:rec}=await getClient().from("rent").select("*").eq("mess_id",messId()).eq("month_key",key).maybeSingle();
   const wrap=document.getElementById("rent-rows"); if(!wrap) return;
-  wrap.innerHTML=`<div class="ut-row rent-row ut-row-head"><span>Member</span><span>Rent</span><span>Paid</span><span>Status</span><span>Note</span></div>`+members.map((m,i)=>{
+  wrap.innerHTML=`<div class="ut-row rent-row ut-row-head"><span>Member</span><span>Rent</span><span>Paid</span><span>Status</span><span>Note</span></div>`+members.filter(m=>memberActiveInMonth(m,key)).map((m,i)=>{
     const e=rentEntryFor(rec?.entries, m)||{};
     const due=Number(e.rent||m.rent||0);
     const paid=Number(e.paid||0);
@@ -127,7 +127,9 @@ async function _saveRent() {
   const year=parseInt(document.getElementById("rent-year")?.value||new Date().getFullYear());
   const key=monthKey(year,month);
   if (await isMonthLocked(key)) { toast(monthLabelFromKey(key) + " is locked — unlock it first", "error"); return; }
-  const listed=members.map(m=>({
+  // only who lived here that month (joined / left dates) — see memberActiveInMonth
+  const shown=members.filter(m=>memberActiveInMonth(m,key));
+  const listed=shown.map(m=>({
     member_id: m.id,
     name:   m.name,
     rent:   parseFloat(document.getElementById("rd-"+m.id)?.value||0),
@@ -140,11 +142,11 @@ async function _saveRent() {
     // through Collect Payment, which does). Read only to keep former members' entries.
     const before = await mustRead(getClient().from("rent").select("entries").eq("mess_id", messId()).eq("month_key", key).maybeSingle());
     // the form lists current members only: keep everyone else's entries (former members) as they are
-    const others = (before?.entries || []).filter(e => !members.some(m => rentEntryFor([e], m)));
+    const others = (before?.entries || []).filter(e => !shown.some(m => rentEntryFor([e], m)));
     const entries = [...listed, ...others];
     await dbUpsertRent(month,year,key,entries);
     const diffs = [];
-    members.forEach(m => {
+    shown.forEach(m => {
       const a = rentEntryFor(before?.entries, m) || {}, b = rentEntryFor(listed, m) || {}, n = auditName(m.name);
       diffs.push(...auditDiffs([[`${n} rent`, auditTk(a.rent), auditTk(b.rent)], [`${n} paid`, auditTk(a.paid), auditTk(b.paid)]]));
     });

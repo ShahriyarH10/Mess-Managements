@@ -118,8 +118,9 @@ function updUtilityPreview() {
     khala: parseFloat(document.getElementById("ut-khala")?.value || 0),
     other: parseFloat(document.getElementById("ut-other")?.value || 0),
   }, UTIL_POSTPAID_KEYS);
-  const preShare  = members.length > 0 ? round2(preTotal  / members.length) : 0;
-  const postShare = members.length > 0 ? round2(postTotal / members.length) : 0;
+  // Split among who lives here in each bill's own month (see shareCount)
+  const preShare  = members.length > 0 ? round2(preTotal  / shareCount(getUtilityGroupKey("prepaid").key))  : 0;
+  const postShare = members.length > 0 ? round2(postTotal / shareCount(getUtilityGroupKey("postpaid").key)) : 0;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmtTk(v); };
   set("ut-pre-total",  preTotal);  set("ut-pre-share",  preShare);
   set("ut-post-total", postTotal); set("ut-post-share", postShare);
@@ -175,6 +176,7 @@ async function saveUtilityGroup(type) {
    Manager enters how much a member paid → remaining shown instantly
    ───────────────────────────────────────────────────────────────────────── */
 let _utPerHead = 0; // module-level so oninput can access it
+let _utShareCtx = null; // month + bills, for each member's own share (joined / left mid-year)
 
 function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
   _utPerHead = perHead;
@@ -196,7 +198,8 @@ function buildUtilPaymentTable(perHead, payments = {}, messCredit = {}) {
         const credit  = round2(Number(messCredit[m.name] || 0));
         const paid    = Number(p.paid || 0);
         // Carry-forward reduces what the member owes, not what they paid
-        const effectiveDue = round2(Math.max(0, perHead - credit));
+        const ownShare = _utShareCtx ? utilShareFor(_utShareCtx.key, _utShareCtx.currentUtilRec, _utShareCtx.previousUtilRec, m) : perHead;
+        const effectiveDue = round2(Math.max(0, ownShare - credit));
         const status  = p.status || "unpaid";
         const col     = avatarCol(i);
         return `
@@ -284,7 +287,8 @@ async function loadUtilityPayments() {
   const currentPrepaid   = utilTotalFromBills(currentUtilRec?.bills  || {}, UTIL_PREPAID_KEYS);
   const previousPostpaid = utilTotalFromBills(previousUtilRec?.bills || {}, UTIL_POSTPAID_KEYS);
   const totalPayable     = round2(currentPrepaid + previousPostpaid);
-  const perHead          = members.length > 0 ? round2(totalPayable / members.length) : 0;
+  const perHead          = members.length > 0 ? utilShareFor(key, currentUtilRec, previousUtilRec) : 0;
+  _utShareCtx = { key, currentUtilRec, previousUtilRec };
 
   // Update summary bar static values
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmtTk(v); };
@@ -374,7 +378,7 @@ async function loadUtilHistory() {
         const prepaid   = utilTotalFromBills(r.bills || {},          UTIL_PREPAID_KEYS);
         const postpaid  = utilTotalFromBills(prevRec?.bills || {},   UTIL_POSTPAID_KEYS);
         const total     = round2(prepaid + postpaid);
-        const perHead   = members.length > 0 ? round2(total / members.length) : 0;
+        const perHead   = members.length > 0 ? utilShareFor(r.month_key, r, prevRec) : 0;
         const payments  = r.payments || {};
         const collected = round2(Object.values(payments).reduce((s, p) => s + Number(p.paid || 0), 0));
         const rate      = total > 0 ? Math.min(100, Math.round((collected / total) * 100)) : 0;

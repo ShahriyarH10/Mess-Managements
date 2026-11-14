@@ -75,6 +75,8 @@ async function loadLog() {
   const settlementKey = monthKey(year, month);
   const prev          = previousMonth(month, year);
   const sourceKey     = prev.key;
+  // Current members + anyone who left recently but still owes for their last month
+  const roster        = settlementRoster(settlementKey);
 
   const logContent = document.getElementById("log-content");
   logContent.innerHTML = '<div class="loading"><div class="spinner"></div>Generating settlement report…</div>';
@@ -94,7 +96,7 @@ async function loadLog() {
   const currentUtilRec   = utilByKey[settlementKey] || null;
   const previousUtilRec  = utilByKey[sourceKey]     || null;
 
-  const payData = members.map(m => {
+  const payData = roster.map(m => {
     const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
     p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, allRent, allUtil, settlementKey);
     p.netWithPrevDue = round2(p.netPayable + p.prevDue);
@@ -113,7 +115,7 @@ async function loadLog() {
   const khalaTotal   = Number(previousUtilRec?.bills?.khala || 0);
   const otherTotal   = Number(previousUtilRec?.bills?.other || 0);
   const postpaidTotal = round2(khalaTotal + otherTotal);
-  const prepaidShare  = members.length > 0 ? round2(prepaidTotal / members.length) : 0;
+  const prepaidShare  = round2(prepaidTotal / shareCount(settlementKey));
 
   const mealRows  = allMeals.filter(r => String(r.date || "").startsWith(sourceKey)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const bazarRows = allBazar.filter(r => String(r.date || "").startsWith(sourceKey)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -166,7 +168,7 @@ async function loadLog() {
         <div class="stat-card">
           <div class="stat-label">${ic("zap")} Prepaid per member</div>
           <div class="stat-value" style="font-size:17px">${fmtTk(prepaidShare)}</div>
-          <div class="stat-sub">${prepaidTotal} ÷ ${members.length} members</div>
+          <div class="stat-sub">${prepaidTotal} ÷ ${shareCount(settlementKey)} members</div>
         </div>
       </div>
     </div>
@@ -218,7 +220,7 @@ async function loadLog() {
             ${payData.map(p => `
               <tr>
                 <td>
-                  <b>${p.memberName}</b>
+                  <b>${p.memberName}</b>${p.isFormer ? ' <span class="badge" style="font-size:9px" title="Moved out — billed for the months they lived here">left</span>' : ''}
                   <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">
                     <span class="badge ${p.rentStatus === 'paid' ? 'badge-green' : p.rentStatus === 'partial' ? 'badge-amber' : 'badge-red'}" style="font-size:9px">
                       rent ${p.rentStatus === 'paid' ? '' + ic("check") + '' : p.rentStatus === 'partial' ? '~' : '' + ic("x") + ''}
@@ -237,7 +239,7 @@ async function loadLog() {
                 <td>${fmtTk(p.otherShare)}</td>
                 <td style="color:var(--blue)">
                   ${fmtTk(p.prepaidUtility)}
-                  <div style="font-size:10px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${members.length}</div>
+                  <div style="font-size:10px;color:var(--text3)">${fmtTk(p.prepaidTotal)} ÷ ${p.prepaidCount}</div>
                 </td>
                 <td>${fmtTk(p.roomRent)}</td>
                 <td style="color:var(--green)">${fmtTk(p.memberBazar)}</td>
@@ -313,7 +315,7 @@ async function loadLog() {
             <thead>
               <tr>
                 <th>Date</th>
-                ${members.map(m => `<th>${m.name}</th>`).join("")}
+                ${roster.map(m => `<th>${m.name}</th>`).join("")}
                 <th>Total</th>
               </tr>
             </thead>
@@ -321,20 +323,20 @@ async function loadLog() {
               ${mealRows.length
                 ? mealRows.map(r => {
                     let total = 0;
-                    const cells = members.map(m => {
+                    const cells = roster.map(m => {
                       const v = mealMemberTotal(r.meals || {}, m.name);
                       total += v;
                       return `<td class="${v > 0 ? "net-pos" : ""}">${v > 0 ? v : "—"}</td>`;
                     }).join("");
                     return `<tr><td>${String(r.date).slice(8)}</td>${cells}<td><b>${round2(total)}</b></td></tr>`;
                   }).join("")
-                : `<tr><td colspan="${members.length + 2}" class="empty">No meal entries</td></tr>`
+                : `<tr><td colspan="${roster.length + 2}" class="empty">No meal entries</td></tr>`
               }
             </tbody>
             <tfoot>
               <tr>
                 <td>Total</td>
-                ${members.map(m => {
+                ${roster.map(m => {
                   const p = payData.find(x => x.memberName === m.name);
                   return `<td>${p?.memberMeals || 0}</td>`;
                 }).join("")}
@@ -352,7 +354,7 @@ async function loadLog() {
             <thead>
               <tr>
                 <th>Date</th>
-                ${members.map(m => `<th>${m.name}</th>`).join("")}
+                ${roster.map(m => `<th>${m.name}</th>`).join("")}
                 <th>Total</th>
               </tr>
             </thead>
@@ -363,21 +365,21 @@ async function loadLog() {
                     return `
                       <tr>
                         <td>${String(r.date).slice(8)}</td>
-                        ${members.map(m => {
+                        ${roster.map(m => {
                           const v = Number((r.bazar || {})[m.name] || 0);
                           return `<td class="${v > 0 ? "net-pos" : ""}">${v > 0 ? fmtTk(v) : "—"}</td>`;
                         }).join("")}
                         <td><b>${fmtTk(total)}</b></td>
                       </tr>`;
                   }).join("")
-                : `<tr><td colspan="${members.length + 2}" class="empty">No bazar entries</td></tr>`
+                : `<tr><td colspan="${roster.length + 2}" class="empty">No bazar entries</td></tr>`
               }
             </tbody>
             ${bazarRows.length ? `
               <tfoot>
                 <tr>
                   <td>Total</td>
-                  ${members.map(m => {
+                  ${roster.map(m => {
                     const p = payData.find(x => x.memberName === m.name);
                     return `<td>${fmtTk(p?.memberBazar || 0)}</td>`;
                   }).join("")}
@@ -403,10 +405,10 @@ function showSettlementBreakdown(idx) {
 
   const rows = [
     { label: `${ic("meal")} Meal cost`, sub: `${p.memberMeals} meals × ${fmtTk(p.mealRate)} rate`, val: p.mealCost, color: "var(--red)", section: "postpaid" },
-    { label: `${ic("cook")} Khala share`, sub: `${fmtTk(p.khalaTotal)} ÷ ${members.length} members`, val: p.khalaShare, color: "var(--red)", section: "postpaid" },
-    { label: `${ic("box")} Other share`, sub: `${fmtTk(p.otherTotal)} ÷ ${members.length} members`, val: p.otherShare, color: "var(--red)", section: "postpaid" },
+    { label: `${ic("cook")} Khala share`, sub: `${fmtTk(p.khalaTotal)} ÷ ${p.postpaidCount} members`, val: p.khalaShare, color: "var(--red)", section: "postpaid" },
+    { label: `${ic("box")} Other share`, sub: `${fmtTk(p.otherTotal)} ÷ ${p.postpaidCount} members`, val: p.otherShare, color: "var(--red)", section: "postpaid" },
     { label: `${ic("home")} Room rent`, sub: `${curLabel}`, val: p.roomRent, color: "var(--red)", section: "prepaid" },
-    { label: `${ic("zap")} Utility share`, sub: `${fmtTk(p.prepaidTotal)} ÷ ${members.length} (Elec+Gas+WiFi)`, val: p.prepaidUtility, color: "var(--red)", section: "prepaid" },
+    { label: `${ic("zap")} Utility share`, sub: `${fmtTk(p.prepaidTotal)} ÷ ${p.prepaidCount} (Elec+Gas+WiFi)`, val: p.prepaidUtility, color: "var(--red)", section: "prepaid" },
   ];
 
   const grossTotal = round2(rows.reduce((s, r) => s + r.val, 0));
@@ -557,6 +559,8 @@ async function doExportReport() {
   const settlementKey = monthKey(year, month);
   const prev          = previousMonth(month, year);
   const sourceKey     = prev.key;
+  // Current members + anyone who left recently but still owes for their last month
+  const roster        = settlementRoster(settlementKey);
 
   const btn = document.activeElement;
   if (btn) { btn.disabled = true; btn.textContent = "Preparing..."; }
@@ -575,7 +579,7 @@ async function doExportReport() {
     const currentUtilRec  = utilByKey[settlementKey] || null;
     const previousUtilRec = utilByKey[sourceKey]     || null;
 
-    const payData = members.map(m => {
+    const payData = roster.map(m => {
       const p = calcMemberSettlement(m, allMeals, allBazar, currentRentRec, currentUtilRec, previousUtilRec, settlementKey);
       p.prevDue = calcPrevDueForMember(m, allMeals, allBazar, allRent, allUtil, settlementKey);
       p.netWithPrevDue = round2(p.netPayable + p.prevDue);
@@ -592,7 +596,7 @@ async function doExportReport() {
     const khalaTotal    = Number(previousUtilRec?.bills?.khala || 0);
     const otherTotal    = Number(previousUtilRec?.bills?.other || 0);
     const postpaidTotal = round2(khalaTotal + otherTotal);
-    const prepaidShare  = members.length > 0 ? round2(prepaidTotal / members.length) : 0;
+    const prepaidShare  = round2(prepaidTotal / shareCount(settlementKey));
     const grandNet      = round2(payData.reduce((s,p) => s + p.netWithPrevDue, 0));
     const totalMealCost = round2(payData.reduce((s,p) => s + p.mealCost, 0));
     const totalRent     = round2(payData.reduce((s,p) => s + p.roomRent, 0));
@@ -623,7 +627,7 @@ async function doExportReport() {
       const utilTxt  = p.utilityStatus === "paid" ? "&#10003;" : p.utilityStatus === "partial" ? "~" : "&#10007;";
       return `<tr>
         <td>
-          <b>${eh(p.memberName)}</b>
+          <b>${eh(p.memberName)}</b>${p.isFormer ? ' <span style="font-size:9px;color:#888">(left)</span>' : ''}
           <div style="display:flex;gap:4px;margin-top:3px">
             <span style="font-size:9px;padding:1px 6px;border-radius:10px;background:${rentBg};color:${rentCol};border:1px solid ${rentCol}">rent ${rentTxt}</span>
             <span style="font-size:9px;padding:1px 6px;border-radius:10px;background:${utilBg};color:${utilCol};border:1px solid ${utilCol}">util ${utilTxt}</span>
@@ -638,7 +642,7 @@ async function doExportReport() {
         <td class="num">${fP(p.otherShare)}</td>
         <td class="num">
           ${fP(p.prepaidUtility)}
-          <div class="sub">${fP(p.prepaidTotal)} &divide; ${members.length}</div>
+          <div class="sub">${fP(p.prepaidTotal)} &divide; ${p.prepaidCount}</div>
         </td>
         <td class="num">${fP(p.roomRent)}</td>
         <td class="num green">${fP(p.memberBazar)}</td>
@@ -703,14 +707,14 @@ async function doExportReport() {
             <div class="card-row"><span>Meals consumed</span><span class="card-val">${p.memberMeals} meals</span></div>
             <div class="card-row"><span>Meal rate</span><span class="card-val">${fP(p.mealRate)} / meal</span></div>
             <div class="card-row"><span>Meal cost (${p.memberMeals} &times; ${fP(p.mealRate)})</span><span class="card-val red">${fP(p.mealCost)}</span></div>
-            ${p.khalaShare > 0 ? `<div class="card-row"><span>Khala share (${fP(p.khalaTotal)} &divide; ${members.length})</span><span class="card-val red">${fP(p.khalaShare)}</span></div>` : ""}
-            ${p.otherShare > 0 ? `<div class="card-row"><span>Other share (${fP(p.otherTotal)} &divide; ${members.length})</span><span class="card-val red">${fP(p.otherShare)}</span></div>` : ""}
+            ${p.khalaShare > 0 ? `<div class="card-row"><span>Khala share (${fP(p.khalaTotal)} &divide; ${p.postpaidCount})</span><span class="card-val red">${fP(p.khalaShare)}</span></div>` : ""}
+            ${p.otherShare > 0 ? `<div class="card-row"><span>Other share (${fP(p.otherTotal)} &divide; ${p.postpaidCount})</span><span class="card-val red">${fP(p.otherShare)}</span></div>` : ""}
           </div>
 
           <div class="card-col">
             <div class="card-section-lbl" style="color:#2980b9">&#9679; Prepaid — ${MONTHS[month]} ${year}</div>
             <div class="card-row"><span>Room rent</span><span class="card-val blue">${fP(p.roomRent)}</span></div>
-            ${p.prepaidUtility > 0 ? `<div class="card-row"><span>Utility share (${fP(p.prepaidTotal)} &divide; ${members.length})</span><span class="card-val blue">${fP(p.prepaidUtility)}</span></div>` : ""}
+            ${p.prepaidUtility > 0 ? `<div class="card-row"><span>Utility share (${fP(p.prepaidTotal)} &divide; ${p.prepaidCount})</span><span class="card-val blue">${fP(p.prepaidUtility)}</span></div>` : ""}
             <div class="card-row total-row"><span><b>Total charges</b></span><span class="card-val"><b>${fP(p.totalPay)}</b></span></div>
 
             <div class="card-section-lbl" style="color:#27ae60;margin-top:10px">&#10003; Credits</div>
@@ -839,7 +843,7 @@ async function doExportReport() {
     <div class="ml"><span class="ml-lbl">Document No.</span><span class="ml-val" style="font-family:monospace">${receiptNo}</span></div>
     <div class="ml"><span class="ml-lbl">Generated</span><span class="ml-val">${genDate}</span></div>
     <div class="ml"><span class="ml-lbl">Manager</span><span class="ml-val">${eh(managerName)}</span></div>
-    <div class="ml"><span class="ml-lbl">Members</span><span class="ml-val">${members.length} members</span></div>
+    <div class="ml"><span class="ml-lbl">Members</span><span class="ml-val">${roster.length} members</span></div>
   </div>
 
   <div class="stat-row">
@@ -869,7 +873,7 @@ async function doExportReport() {
     <div class="stat plain">
       <div class="stat-lbl">Prepaid per member</div>
       <div class="stat-val">${fP(prepaidShare)}</div>
-      <div class="stat-sub">${fP(prepaidTotal)} &divide; ${members.length} members</div>
+      <div class="stat-sub">${fP(prepaidTotal)} &divide; ${shareCount(settlementKey)} members</div>
     </div>
   </div>
 

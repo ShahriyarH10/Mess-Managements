@@ -130,7 +130,7 @@ function getMemberStats(member,meals,bazar,rent,utility=[],filteredUtility=null)
     const prevKey  = previousMonthFromKey(r.month_key).key;
     const prepaid  = utilTotalFromBills(r.bills || {},                     UTIL_PREPAID_KEYS);
     const postpaid = utilTotalFromBills(utilByKey[prevKey]?.bills || {},   UTIL_POSTPAID_KEYS);
-    const perHead  = members.length>0 ? round2((prepaid + postpaid) / members.length) : 0;
+    const perHead  = members.length>0 ? utilShareFor(r.month_key, r, utilByKey[prevKey], member) : 0;
     const p        = (r.payments || {})[member.name] || {};
     ud += perHead; up += Number(p.paid || 0);
     em(r.month_key); byM[r.month_key].utilityPaid += Number(p.paid || 0);
@@ -188,10 +188,8 @@ function getPrevMonthMealBalance(member, allM, allB, curM, curY, currentUtilRec)
 function getUtilityBalance(member, currentUtilRec, previousUtilRec) {
   // Total utility due = current month prepaid (Elec+Gas+WiFi) + previous month postpaid (Khala+Other)
   // Both are settled together under the current month payment record.
-  const memberCount   = members.length || 1;
-  const prepaidTotal  = utilTotalFromBills(currentUtilRec?.bills  || {}, UTIL_PREPAID_KEYS);
-  const postpaidTotal = utilTotalFromBills(previousUtilRec?.bills || {}, UTIL_POSTPAID_KEYS);
-  const totalDue      = round2((prepaidTotal + postpaidTotal) / memberCount);
+  const curKey        = currentUtilRec?.month_key || monthKey(thisMonth().year, thisMonth().month);
+  const totalDue      = utilShareFor(curKey, currentUtilRec, previousUtilRec, member);
   const actualPaid    = Number((currentUtilRec?.payments || {})[member.name]?.paid || 0);
   return round2(actualPaid - totalDue);
 }
@@ -278,7 +276,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           ${ic("cook")} Khala bill
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${fmtTk(Number(khalaTotal))} ÷ ${members.length} members
+            ${fmtTk(Number(khalaTotal))} ÷ ${p.postpaidCount} members
           </span>
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
@@ -291,7 +289,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           ${ic("box")} Other cost
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${fmtTk(Number(otherTotal))} ÷ ${members.length} members
+            ${fmtTk(Number(otherTotal))} ÷ ${p.postpaidCount} members
           </span>
           <span style="font-size:10px;color:${utilStatusColor};display:block">${utilStatusLabel}</span>
         </span>
@@ -325,7 +323,7 @@ function buildWhatIOweHTML(
         <span class="my-stat-key">
           ${ic("zap")} Utility share (Elec+Gas+WiFi)
           <span style="font-size:10px;color:var(--text3);display:block">
-            ${fmtTk(prepaidTotal)} ÷ ${members.length} members
+            ${fmtTk(prepaidTotal)} ÷ ${p.prepaidCount} members
           </span>
           <span style="font-size:10px;color:var(--text3);display:block">
             Elec ${fmtTk(elecAmt)} + Gas ${fmtTk(gasAmt)} + WiFi ${fmtTk(wifiAmt)}

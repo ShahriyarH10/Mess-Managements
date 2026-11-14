@@ -224,8 +224,10 @@ async function loadCollectMonth() {
   // Pending change (overpayment not yet resolved) stored in CURRENT month's bills
   const pendingChangeBills    = utilRec?.bills?.pending_change     || {};
 
+  // Current members + anyone who moved out recently and still owes for their last month
+  const roster = settlementRoster(key);
   const perMember = {};
-  members.forEach(m => {
+  roster.forEach(m => {
     const p = calcMemberSettlement(m, allMeals, allBazar, rentRec, utilRec, utilRecPrev, key);
 
     // Carry-forward: outstanding net due, walked back through every unpaid
@@ -259,7 +261,7 @@ async function loadCollectMonth() {
   try { receipts = (await dbGetMemberPayments({ status: "confirmed", limit: 1000 })).filter(p => p.month_key === key); }
   catch (_) { /* receipts.sql not run yet — nothing to reverse */ }
 
-  _collectCtx = { month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits, receipts };
+  _collectCtx = { roster, month, year, key, prevKey, nextMonth: next, utilRec, utilRecNext, rentRec, perMember, existingCredits, existingChangeCredits, receipts };
   buildCollectTable();
   buildReturnTable();
   buildReceiptsTable();
@@ -270,12 +272,13 @@ async function loadCollectMonth() {
 function buildCollectTable() {
   const wrap = document.getElementById("cp-table-wrap");
   if (!wrap) return;
-  if (!members.length) { wrap.innerHTML = '<div class="empty">No members in this mess</div>'; return; }
+  const roster = _collectCtx.roster || members;
+  if (!roster.length) { wrap.innerHTML = '<div class="empty">No members in this mess</div>'; return; }
 
   // Show members whose net (this month + any old unpaid dues) is positive.
   // A meal surplus that more than covers their dues moves them to the
   // "Return Amount" section instead — never both.
-  const owing = members.filter(m => {
+  const owing = roster.filter(m => {
     const r = _collectCtx.perMember[m.id];
     return r && round2(Number(r.netPayable || 0) + Number(r.prevDue || 0)) > 0.01;
   });
@@ -322,7 +325,7 @@ function buildCollectTable() {
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
-            <div class="cp-mcard-name">${m.name}</div>
+            <div class="cp-mcard-name">${m.name}${m.left_at ? ' <span class="badge" style="font-size:9px" title="Moved out — settling their last month">left</span>' : ''}</div>
             ${r.messCredit > 0 ? `<span class="cp-carry-tag is-green" title="Carry-forward credit from a previous month, reducing this month's total">${ic("undo")} −${fmtTk(r.messCredit)} carried-forward credit</span>` : ''}
           </div>
           <div class="cp-mcard-total">
@@ -509,7 +512,7 @@ function _reversibleFor(list, key, r) {
 
 async function reverseReturnCard(memberId) {
   if (!requireManager("reverseReturnCard")) return;
-  const ctx = _collectCtx, r = ctx?.perMember[memberId], m = members.find(x => x.id === memberId);
+  const ctx = _collectCtx, r = ctx?.perMember[memberId], m = memberById(memberId);
   if (!r || !m) return;
   let p;
   try {
@@ -528,7 +531,7 @@ function reverseReceipt(id) {
   if (!requireManager("reverseReceipt")) return;
   const ctx = _collectCtx, list = ctx?.receipts || [];
   const p = list.find(x => x.id === id);
-  const m = p && members.find(x => x.id === p.member_id);
+  const m = p && memberById(p.member_id);
   const chk = _reverseCheck(p, list, m && ctx.perMember[m.id]);
   if (!chk.ok) { toast(chk.reason, "error"); return; }
   _confirmReverse(p, m);
@@ -563,7 +566,7 @@ function _confirmReverse(p, m) {
 
 async function doReverseCollection(id, memberId) {
   if (!requireManager("doReverseCollection") || _reverseBusy.has(id)) return;
-  const ctx = _collectCtx, r = ctx?.perMember[memberId], m = members.find(x => x.id === memberId);
+  const ctx = _collectCtx, r = ctx?.perMember[memberId], m = memberById(memberId);
   if (!r || !m) return;
   _reverseBusy.add(id);
   let before = null, claimed = null, wrote = false;
@@ -716,7 +719,7 @@ async function loadDuplicateReceipts() {
 /* What removing this copy would change — every number is checked, nothing guessed. */
 async function _duplicatePlan(pair) {
   const { original: a, dup: b } = pair;
-  const m = members.find(x => x.id === b.member_id) || formerMembers.find(x => x.id === b.member_id);
+  const m = memberById(b.member_id);
   if (!m) throw new Error("Member not found.");
   const [util, rent, list] = await Promise.all([
     mustRead(getClient().from("utility_payments").select("*").eq("mess_id", messId()).eq("month_key", b.month_key).maybeSingle()),
@@ -836,7 +839,7 @@ function buildReceiptsTable() {
 
   const chip = (v, icon, lbl) => Number(v) > 0.01 ? `<span class="cp-rc-chip">${ic(icon)} ${lbl} ${fmtTk(Number(v))}</span>` : "";
   const rows = list.map(p => {
-    const m   = members.find(x => x.id === p.member_id);
+    const m   = memberById(p.member_id);
     const chk = _reverseCheck(p, list, m && ctx.perMember[m.id]);
     const sp  = p.split || {};
     const neg = p.split ? _receiptNegExcess(p) : 0;
@@ -877,7 +880,7 @@ function buildReturnTable() {
   const wrap = document.getElementById("cp-return-wrap");
   if (!wrap || !card) return;
 
-  const rows = members
+  const rows = (_collectCtx.roster || members)
     .map(m => ({ m, r: _collectCtx.perMember[m.id] }))
     .filter(x => x.r)
     .map(x => ({ ...x, amts: returnAmountsFor(x.r) }))
@@ -924,7 +927,7 @@ function buildReturnTable() {
         <div class="cp-mcard-head">
           <div class="cp-mcard-avatar" style="background:${av.bg};color:${av.color}">${avFace(m.id, m.name)}</div>
           <div>
-            <div class="cp-mcard-name">${m.name}</div>
+            <div class="cp-mcard-name">${m.name}${m.left_at ? ' <span class="badge" style="font-size:9px" title="Moved out — settling their last month">left</span>' : ''}</div>
             <div style="font-size:11px;color:var(--green);margin-top:1px">Return money to this member</div>
           </div>
           <div class="cp-mcard-total">
@@ -1078,7 +1081,7 @@ async function _saveReturnRow(memberId, carry) {
   const ctx = _collectCtx;
   if (!(await ensureMonthOpen(ctx.key))) return;
   const r   = ctx.perMember[memberId];
-  const m   = members.find(x => x.id === memberId);
+  const m   = memberById(memberId);
   if (!r || !m) return;
 
   const { changeRemaining, owesRemaining } = returnAmountsFor(r);
@@ -1441,7 +1444,7 @@ async function _saveCollectRow(memberId) {
   if (!(await ensureMonthOpen(_collectCtx.key))) return;
   const ctx = _collectCtx;
   const r = ctx.perMember[memberId];
-  const m = members.find(x => x.id === memberId);
+  const m = memberById(memberId);
   if (!r || !m) return;
 
   const amt = parseFloat(document.getElementById("cp-amt-" + memberId)?.value || 0);

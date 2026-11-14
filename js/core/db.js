@@ -226,7 +226,7 @@ async function _setMemberLeft(id, leftAt) {
     throw error;
   }
 }
-const dbArchiveMember = (id) => _setMemberLeft(id, today());
+const dbArchiveMember = (id, leftAt) => _setMemberLeft(id, leftAt || today());
 const dbRestoreMember = (id) => _setMemberLeft(id, null);
 
 /* ── Announcements ── */

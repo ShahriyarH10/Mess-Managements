@@ -130,6 +130,13 @@ const Router = (() => {
           await loadAppScripts(currentUser.role);
         }
       } catch (e) { console.error("Role refresh failed:", e); }
+      try {   // the manager may have renamed the mess or changed its address
+        const { data: mess } = await getClient().from("messes").select("name,location").eq("id", currentMess.id).maybeSingle();
+        if (mess && (mess.name !== currentMess.name || (mess.location || "") !== (currentMess.location || ""))) {
+          currentMess = { ...currentMess, name: mess.name, location: mess.location || "" };
+          saveSession(currentUser, currentMess, _getSessionToken());
+        }
+      } catch (_) { /* keep the cached name */ }
     }
     await prepareShell();
     shellKey = `${currentUser.memberId}:${currentUser.role}`;

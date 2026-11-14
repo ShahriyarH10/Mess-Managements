@@ -560,6 +560,21 @@ async function renderMessRules(el, isManager) {
       <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" data-on-click="saveMessRules()">${ic("save")} Save</button></div>
     </div>
     <div class="content dk">
+      <div class="card" style="margin-bottom:16px">
+        <div class="dk-card-title"><span>${ic("home")} Mess details</span>
+          <button class="btn btn-primary btn-sm" id="md-save" data-on-click="saveMessDetails()">${ic("save")} Save details</button></div>
+        <div class="grid-2">
+          <div class="field" style="margin-bottom:0">
+            <label>Mess name</label>
+            <input type="text" class="input" id="md-name" maxlength="60" value="${escapeHtml(currentMess?.name||"")}" placeholder="e.g. Green House Mess"/>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>House address</label>
+            <input type="text" class="input" id="md-location" maxlength="120" value="${escapeHtml(currentMess?.location||"")}" placeholder="e.g. House 12, Road 5, Mirpur 10, Dhaka"/>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">Shown in the sidebar and on receipts for everyone. Members see the change the next time they open the app.</div>
+      </div>
       <div class="mr-grid">
         <div class="card mr-info">
           <div class="dk-card-title"><span>Quick info</span></div>
@@ -646,6 +661,28 @@ function insertMd(before, after) {
   ta.selectionStart = s + before.length;
   ta.selectionEnd   = s + before.length + sel.length;
   ta.focus(); updateRulesPreview();
+}
+
+/* Mess name + address (messes table). Managers may update their own mess
+   (RLS: mm_messes_write in supabase/security-lockdown.sql). */
+function saveMessDetails() { return runOnce("mess-details", "saveMessDetails()", _saveMessDetails); }
+async function _saveMessDetails() {
+  if (!requireManager("saveMessDetails")) return;
+  const name     = cleanText(document.getElementById("md-name")?.value);
+  const location = cleanText(document.getElementById("md-location")?.value);
+  if (!name) { toast("Mess name can't be empty", "error"); return; }
+  const before = { name: currentMess?.name || "", location: currentMess?.location || "" };
+  if (name === before.name && location === before.location) { toast("Nothing changed"); return; }
+  try {
+    const { error } = await getClient().from("messes").update({ name, location }).eq("id", messId());
+    if (error) throw error;
+    currentMess = { ...currentMess, name, location };
+    saveSession(currentUser, currentMess, _getSessionToken());
+    updateMessBranding();
+    const diffs = auditDiffs([["Mess name", before.name, name], ["Address", before.location, location]]);
+    await logAudit("update", "mess_rules", messId(), auditLine("Mess details", diffs), { changes: diffs });
+    toast("Mess details saved", "success");
+  } catch (e) { toast("Error: " + e.message, "error"); }
 }
 
 async function saveMessRules() {
