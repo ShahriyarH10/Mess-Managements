@@ -192,15 +192,20 @@ async function prepareShell() {
   checkDB(); // non-blocking — updates the status dot in the background
 }
 
-/* Mess profile picture (mess_rules.custom.photo) → top-right corner of the app. */
+/* Mess profile picture (mess_rules.custom.photo) replaces the letter logo, top left. */
+let _messPhotoUrl = null;
 function setMessPhoto(photo) {
-  const ok = typeof photo === "string" && isPhoto(photo);
-  ["mess-corner", "mess-corner-mob"].forEach(id => {
-    const b = document.getElementById(id); if (!b) return;
-    b.hidden = !ok;
-    b.innerHTML = ok ? `<img src="${photo}" alt=""/>` : "";
+  _messPhotoUrl = typeof photo === "string" && isPhoto(photo) ? photo : null;
+  paintMessLogo();
+}
+function paintMessLogo() {
+  const letter = ((currentMess?.name || "M")[0] || "M").toUpperCase();
+  ["app-logo-icon", "mob-logo-icon"].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.classList.toggle("has-photo", !!_messPhotoUrl);
+    el.innerHTML = _messPhotoUrl ? `<img src="${_messPhotoUrl}" alt=""/>` : "";
+    if (!_messPhotoUrl) el.textContent = letter;
   });
-  document.body.classList.toggle("has-mess-photo", ok);
 }
 async function loadMessPhoto() {
   try { setMessPhoto(messPhotoOf(await dbGetMessRules())); } catch (_) { setMessPhoto(null); }
@@ -211,7 +216,7 @@ function updateMessBranding() {
   const el1=document.getElementById("app-mess-name"), el2=document.getElementById("app-mess-location"), el3=document.getElementById("mob-mess-name");
   if(el1) el1.textContent=n; if(el2) el2.textContent=l||""; if(el3) el3.textContent=n;
   document.title = n + " · MessManager";
-  const li=document.getElementById("app-logo-icon"); if(li) li.textContent=(n[0]||"M").toUpperCase();
+  paintMessLogo();
 }
 
 async function checkDB() {
