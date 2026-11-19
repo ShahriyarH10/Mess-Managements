@@ -225,6 +225,7 @@ async function renderMyDashboard(el) {
     </div>
     <div class="topbar-actions">
       <button class="btn btn-ghost btn-sm" data-on-click="navigate('my-receipts')">${ic("receipt")} My receipts</button>
+      <button class="btn btn-ghost btn-sm" data-on-click="showMessInfoModal()">${ic("home")} Mess Info</button>
       <button class="btn btn-primary btn-sm" data-on-click="navigate('give-payment')">${ic("cash")} Give payment</button>
     </div>
   </div>
@@ -328,47 +329,34 @@ async function renderMyDashboard(el) {
       </div>
     </div>` : ""}
 
-    <!-- ── Mess Info (WiFi, bank, contacts) ── -->
-    <div id="my-dash-mess-info"></div>
   </div>`;
-
-  // Load mess info asynchronously
-  dbGetMessRules().then(rules => {
-    const infoWrap = document.getElementById("my-dash-mess-info");
-    if (!infoWrap) return;
-    const hasAny = rules && (rules.wifi_pass || rules.bank_info || rules.contacts);
-    if (!hasAny) return;
-    infoWrap.innerHTML = `
-      <div class="card">
-        <div class="dk-card-title"><span>${ic("home")} Mess info</span></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
-          ${rules.wifi_pass ? `
-          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${ic("wifi")} WiFi</div>
-            <div style="font-size:15px;font-weight:700;font-family:monospace;user-select:all;color:var(--accent)">${escapeHtml(rules.wifi_pass)}</div>
-          </div>` : ''}
-          ${rules.bank_info ? `
-          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${ic("card")} Payment</div>
-            <div style="font-size:12px;white-space:pre-wrap;color:var(--text2);line-height:1.5">${escapeHtml(rules.bank_info)}</div>
-          </div>` : ''}
-          ${rules.contacts ? `
-          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px">
-            <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${ic("phone")} Contacts</div>
-            <div style="font-size:12px;white-space:pre-wrap;color:var(--text2);line-height:1.5">${escapeHtml(rules.contacts)}</div>
-          </div>` : ''}
-        </div>
-        ${rules.rules_text ? `
-        <details style="margin-top:10px">
-          <summary style="cursor:pointer;font-size:12px;color:var(--text3);font-weight:600">${ic("file")} Mess rules</summary>
-          <div style="font-size:13px;color:var(--text2);margin-top:8px;line-height:1.7">${renderMarkdown(rules.rules_text)}</div>
-        </details>` : ''}
-      </div>`;
-  }).catch(() => {});
 
   // Store calc in window for breakdown modal
   window._myDashCalc = calc;
   window._myDashPrevInfo = prevInfo;
+}
+
+async function showMessInfoModal() {
+  const box = document.getElementById("modal-content");
+  box.innerHTML = `<div class="modal-title">Mess Info</div><div class="empty" style="padding:28px">Loading…</div>`;
+  openModal();
+  let rules = null;
+  try { rules = await dbGetMessRules(); }
+  catch (e) { box.innerHTML = `<div class="modal-title">Mess Info</div><div class="empty" style="padding:28px">Couldn't load mess info.</div><div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Close</button></div>`; return; }
+  const photo = messPhotoOf(rules);
+  const sec = (icon, title, body) => `<div class="card mi-card" style="margin-bottom:10px"><div class="dk-card-title"><span>${icon} ${title}</span></div>${body}</div>`;
+  const any = rules && (rules.wifi_pass || rules.bank_info || rules.contacts || rules.rules_text);
+  box.innerHTML = `
+    <div class="mi-head" style="margin-bottom:14px">
+      <div class="mi-photo">${photo ? `<img class="av-img" src="${photo}" alt=""/>` : ic("home")}</div>
+      <div><div class="mi-head-name">${escapeHtml(currentMess?.name || "Our mess")}</div>${currentMess?.location ? `<div class="mi-text">${escapeHtml(currentMess.location)}</div>` : ""}</div>
+    </div>
+    ${rules?.wifi_pass ? sec(ic("wifi"), "WiFi", `<div class="mi-wifi">${escapeHtml(rules.wifi_pass)}</div>`) : ""}
+    ${rules?.bank_info ? sec(ic("card"), "How to pay", `<div class="mi-text">${escapeHtml(rules.bank_info)}</div>`) : ""}
+    ${rules?.contacts ? sec(ic("phone"), "Contacts", `<div class="mi-text">${escapeHtml(rules.contacts)}</div>`) : ""}
+    ${rules?.rules_text ? sec(ic("file"), "House rules", `<div class="md-body">${renderMarkdown(rules.rules_text)}</div>`) : ""}
+    ${any ? "" : `<div class="empty" style="padding:20px">The manager hasn't added any mess info yet.</div>`}
+    <div class="modal-footer"><button class="btn btn-ghost" data-on-click="closeModal()">Close</button></div>`;
 }
 
 function showMySettlementBreakdown() {

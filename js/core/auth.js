@@ -188,7 +188,22 @@ async function prepareShell() {
   buildNav();
   updateSidebarUser();
   updateMessBranding();
+  loadMessPhoto(); // non-blocking
   checkDB(); // non-blocking — updates the status dot in the background
+}
+
+/* Mess profile picture (mess_rules.custom.photo) → top-right corner of the app. */
+function setMessPhoto(photo) {
+  const ok = typeof photo === "string" && isPhoto(photo);
+  ["mess-corner", "mess-corner-mob"].forEach(id => {
+    const b = document.getElementById(id); if (!b) return;
+    b.hidden = !ok;
+    b.innerHTML = ok ? `<img src="${photo}" alt=""/>` : "";
+  });
+  document.body.classList.toggle("has-mess-photo", ok);
+}
+async function loadMessPhoto() {
+  try { setMessPhoto(messPhotoOf(await dbGetMessRules())); } catch (_) { setMessPhoto(null); }
 }
 
 function updateMessBranding() {

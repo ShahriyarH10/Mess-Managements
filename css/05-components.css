@@ -763,6 +763,12 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .mm-photo-btns{display:flex;gap:6px;flex-wrap:wrap;}
 .mm-upload{position:relative;overflow:hidden;cursor:pointer;}
 .mm-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0;}
+.mm-photo-prev.mm-photo-sq{border-radius:18px;overflow:hidden;}
+.mm-photo-prev.mm-photo-sq .av-img{border-radius:0;}
+.mi-head{display:flex;align-items:center;gap:14px;}
+.mi-head-name{font-size:17px;font-weight:700;margin-bottom:2px;}
+.mi-photo{width:64px;height:64px;border-radius:16px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg3);color:var(--text3);}
+.mi-photo .av-img{border-radius:0;}
 .mm-photo-hint{font-size:11px;color:var(--text3);margin-top:6px;}
 @keyframes fxPop{from{opacity:0;transform:scale(.6);}60%{opacity:1;transform:scale(1.06);}to{transform:none;}}
 

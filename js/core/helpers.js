@@ -722,7 +722,11 @@ function avStyle(name) {
 
 /* Read an image file → centre-cropped 160×160 JPEG data: URL (≤ ~25 KB).
    FileReader (not blob: URLs) because the CSP only allows data: images. */
-function compressMemberPhoto(file) {
+function compressMemberPhoto(file) { return compressSquarePhoto(file, 160, 25000); }
+/* Mess profile picture: bigger (256px, ≤ ~45 KB) — stored in mess_rules.custom.photo. */
+function compressMessPhoto(file) { return compressSquarePhoto(file, 256, 45000); }
+
+function compressSquarePhoto(file, S, maxLen) {
   return new Promise((resolve, reject) => {
     if (!file || !/^image\//.test(file.type)) return reject(new Error("Choose an image file (JPG, PNG or WebP)"));
     if (file.size > 15 * 1024 * 1024) return reject(new Error("That image is too large (max 15 MB)"));
@@ -732,7 +736,7 @@ function compressMemberPhoto(file) {
       const img = new Image();
       img.onerror = () => reject(new Error("This image format isn't supported here — try a JPG or PNG"));
       img.onload = () => {
-        const S = 160, side = Math.min(img.naturalWidth, img.naturalHeight);
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
         const c = document.createElement("canvas");
         c.width = c.height = S;
         const ctx = c.getContext("2d");
@@ -740,7 +744,7 @@ function compressMemberPhoto(file) {
         ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, S, S);           // transparent PNGs → white, not black
         ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
         let q = 0.86, out = c.toDataURL("image/jpeg", q);
-        while (out.length > 25000 && q > 0.4) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+        while (out.length > maxLen && q > 0.4) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
         isPhoto(out) ? resolve(out) : reject(new Error("Couldn't process that image"));
       };
       img.src = fr.result;

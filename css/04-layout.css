@@ -315,3 +315,16 @@
   background:var(--accent-bg);border:1px solid rgba(212,168,83,.35);font-size:13px;color:var(--text2);}
 .view-as-bar b{color:var(--accent);font-weight:600;}
 @media(max-width:768px){.view-as-bar{margin:12px 12px 0;}}
+
+/* Mess profile picture, top-right corner */
+.mess-corner{position:fixed;top:14px;right:18px;width:44px;height:44px;padding:0;border:2px solid var(--border2);border-radius:14px;overflow:hidden;background:var(--bg2);cursor:pointer;z-index:90;box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform .2s var(--ease-snap),border-color .2s;}
+.mess-corner:hover{transform:scale(1.07);border-color:var(--accent);}
+.mess-corner[hidden],.mess-corner-mob[hidden]{display:none;}
+.mess-corner img,.mess-corner-mob img{width:100%;height:100%;object-fit:cover;display:block;}
+.mess-corner-mob{display:none;width:32px;height:32px;padding:0;border:1px solid var(--border2);border-radius:10px;overflow:hidden;background:var(--bg3);cursor:pointer;}
+body.has-mess-photo .topbar{padding-right:84px;}
+@media(max-width:768px){
+  .mess-corner{display:none;}
+  .mess-corner-mob:not([hidden]){display:block;}
+  body.has-mess-photo .topbar{padding-right:14px;}
+}
