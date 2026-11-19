@@ -715,6 +715,23 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .au-c-broadcast.au-cat-tag{color:var(--accent);background:var(--accent-bg);}
 
 /* ── Mess Rules (manager) + Mess Info (member) — js/manager/features.js ── */
+.mr-profile{display:flex;gap:22px;align-items:flex-start;margin-bottom:14px;}
+.mr-avatar{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;width:112px;}
+.mr-avatar-img{width:104px;height:104px;border-radius:22px;overflow:hidden;background:var(--bg3);border:1px dashed var(--border2);color:var(--text3);display:flex;align-items:center;justify-content:center;transition:opacity .2s;}
+.mr-avatar-img img{width:100%;height:100%;object-fit:cover;display:block;}
+.mr-avatar-img:has(img){border-style:solid;}
+.mr-avatar-img.mm-busy{opacity:.4;}
+.mr-avatar-img.mm-pop{animation:fxPop .45s var(--ease-snap);}
+.mr-avatar-btn{width:100%;justify-content:center;}
+.mr-link{background:none;border:0;padding:0;font-size:12px;color:var(--text3);cursor:pointer;}
+.mr-link:hover{color:var(--red);}
+.mr-link[hidden]{display:none;}
+.mr-profile-fields{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1.4fr;gap:0 14px;align-content:start;}
+.mr-profile-fields .mr-note{grid-column:1/-1;}
+.mr-note{font-size:11px;color:var(--text3);}
+.mr-info .field:last-child,.mr-profile-fields .field{margin-bottom:12px;}
+.mr-info .field:last-child{margin-bottom:0;}
+.mr-preview{min-height:286px;}
 .mr-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:12px;align-items:start;}
 .mr-grid>.card{margin-bottom:14px;min-width:0;}
 .mr-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;}
@@ -740,7 +757,8 @@ tfoot td{background:var(--bg3);color:var(--text);font-weight:500;border-top:1px 
 .mi-text{font-size:13px;white-space:pre-wrap;color:var(--text2);line-height:1.6;}
 
 @media(max-width:1000px){.au-filters{grid-template-columns:1fr 1fr;}.au-search{grid-column:1/-1;}}
-@media(max-width:860px){.mr-grid{grid-template-columns:minmax(0,1fr);}}
+@media(max-width:860px){.mr-grid{grid-template-columns:minmax(0,1fr);}.mr-profile-fields{grid-template-columns:1fr;}}
+@media(max-width:520px){.mr-profile{flex-direction:column;align-items:center;}.mr-profile-fields{width:100%;}}
 @media(max-width:768px){
   .au-item{grid-template-columns:12px 22px 1fr;}
   .au-item .dk-av{width:22px;height:22px;font-size:8px;}

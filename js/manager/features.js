@@ -560,51 +560,45 @@ async function renderMessRules(el, isManager) {
   if (isManager) {
     const photo = messPhotoOf(rules);
     window._messPhoto = { value: photo, saved: photo, custom: { ...(rules?.custom || {}) } };
+    const v = (k) => escapeHtml(rules?.[k] || "");
     el.innerHTML = `
-    <div class="topbar"><div><div class="page-title">Mess Rules</div><div class="page-sub">What members see on their Mess Info page</div></div>
+    <div class="topbar"><div><div class="page-title">Mess Rules</div><div class="page-sub">Everything members see on their Mess Info page</div></div>
       <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" data-on-click="saveMessRules()">${ic("save")} Save</button></div>
     </div>
-    <div class="content dk">
-      <div class="card" style="margin-bottom:16px">
-        <div class="dk-card-title"><span>${ic("home")} Mess details</span>
-          <button class="btn btn-primary btn-sm" id="md-save" data-on-click="saveMessDetails()">${ic("save")} Save details</button></div>
-        <div class="mm-photo">
-          <div class="mm-photo-prev mm-photo-sq" id="mess-photo-prev">${photo ? `<img class="av-img" src="${photo}" alt=""/>` : ic("camera")}</div>
-          <div class="mm-photo-ctl">
-            <div class="mm-photo-title">Mess profile picture</div>
-            <div class="mm-photo-btns">
-              <label class="btn btn-ghost btn-sm mm-upload">${ic("camera")} <span id="mess-photo-lbl">${photo ? "Change" : "Upload"} photo</span><input type="file" accept="image/*" data-on-change="pickMessPhoto(this)"/></label>
-              <button class="btn btn-ghost btn-sm" id="mess-photo-rm" data-on-click="removeMessPhoto()" ${photo ? "" : "hidden"}>Remove</button>
-            </div>
-            <div class="mm-photo-hint">Cropped to a square and resized. Click <b>Save details</b> to apply.</div>
-          </div>
+    <div class="content dk mr-page">
+      <div class="card mr-profile">
+        <div class="mr-avatar">
+          <div class="mr-avatar-img" id="mess-photo-prev">${photo ? `<img src="${photo}" alt=""/>` : ic("camera")}</div>
+          <label class="btn btn-ghost btn-sm mm-upload mr-avatar-btn">${ic("camera")} <span id="mess-photo-lbl">${photo ? "Change" : "Upload"}</span><input type="file" accept="image/*" data-on-change="pickMessPhoto(this)"/></label>
+          <button class="mr-link" id="mess-photo-rm" data-on-click="removeMessPhoto()" ${photo ? "" : "hidden"}>Remove</button>
         </div>
-        <div class="grid-2">
-          <div class="field" style="margin-bottom:0">
+        <div class="mr-profile-fields">
+          <div class="field">
             <label>Mess name</label>
-            <input type="text" class="input" id="md-name" maxlength="60" value="${escapeHtml(currentMess?.name||"")}" placeholder="e.g. Green House Mess"/>
+            <input type="text" class="input" id="md-name" maxlength="60" value="${escapeHtml(currentMess?.name||"")}" placeholder="e.g. Green House Mess" data-on-input="markRulesDirty()"/>
           </div>
-          <div class="field" style="margin-bottom:0">
+          <div class="field">
             <label>House address</label>
-            <input type="text" class="input" id="md-location" maxlength="120" value="${escapeHtml(currentMess?.location||"")}" placeholder="e.g. House 12, Road 5, Mirpur 10, Dhaka"/>
+            <input type="text" class="input" id="md-location" maxlength="120" value="${escapeHtml(currentMess?.location||"")}" placeholder="e.g. House 12, Road 5, Mirpur 10, Dhaka" data-on-input="markRulesDirty()"/>
           </div>
+          <div class="mr-note">Name, address and photo appear in the sidebar and on receipts for everyone.</div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:8px">Shown in the sidebar and on receipts for everyone. Members see the change the next time they open the app.</div>
       </div>
+
       <div class="mr-grid">
         <div class="card mr-info">
-          <div class="dk-card-title"><span>Quick info</span></div>
+          <div class="dk-card-title"><span>${ic("pin")} Quick info</span></div>
           <div class="field">
             <label>${ic("wifi")} WiFi password</label>
-            <input type="text" class="input mr-mono" id="mr-wifi" value="${escapeHtml(rules?.wifi_pass||"")}" placeholder="e.g. MyWiFi@123" data-on-input="markRulesDirty()"/>
+            <input type="text" class="input mr-mono" id="mr-wifi" value="${v("wifi_pass")}" placeholder="e.g. MyWiFi@123" data-on-input="markRulesDirty()"/>
           </div>
           <div class="field">
             <label>${ic("card")} Payment info</label>
-            <textarea class="input" id="mr-bank" rows="3" placeholder="e.g. bKash: 01712345678 (Personal)" data-on-input="markRulesDirty()">${escapeHtml(rules?.bank_info||"")}</textarea>
+            <textarea class="input" id="mr-bank" rows="3" placeholder="e.g. bKash: 01712345678 (Personal)" data-on-input="markRulesDirty()">${v("bank_info")}</textarea>
           </div>
-          <div class="field" style="margin-bottom:0">
+          <div class="field">
             <label>${ic("phone")} Emergency contacts</label>
-            <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx&#10;Gas: 016xxx" data-on-input="markRulesDirty()">${escapeHtml(rules?.contacts||"")}</textarea>
+            <textarea class="input" id="mr-contacts" rows="3" placeholder="e.g. Landlord: 017xxx&#10;Gas: 016xxx" data-on-input="markRulesDirty()">${v("contacts")}</textarea>
           </div>
         </div>
 
@@ -622,12 +616,11 @@ async function renderMessRules(el, isManager) {
               <button class="ml-chip" data-on-click="insertMd('*','*')" title="Italic"><i>I</i></button>
               <button class="ml-chip" data-on-click="insertMd('## ','')" title="Heading">Heading</button>
               <button class="ml-chip" data-on-click="insertMd('- ','')" title="Bullet">• List</button>
-              <span class="mr-hint">**bold** · *italic* · ## heading · - list</span>
             </div>
-            <textarea class="input mr-mono" id="mr-rules" rows="14" placeholder="## House rules&#10;&#10;- No guests after 11pm&#10;- Clean dishes right away&#10;- **Rent by the 5th of every month**" data-on-input="updateRulesPreview();markRulesDirty()">${escapeHtml(rules?.rules_text||"")}</textarea>
+            <textarea class="input mr-mono" id="mr-rules" rows="13" placeholder="## House rules&#10;&#10;- No guests after 11pm&#10;- Clean dishes right away&#10;- **Rent by the 5th of every month**" data-on-input="updateRulesPreview();markRulesDirty()">${v("rules_text")}</textarea>
           </div>
           <div id="mr-pane-preview" style="display:none">
-            <div id="mr-preview" class="md-body">${renderMarkdown(rules?.rules_text||"") || '<span style="color:var(--text3)">Nothing written yet.</span>'}</div>
+            <div id="mr-preview" class="md-body mr-preview">${renderMarkdown(rules?.rules_text||"") || '<span style="color:var(--text3)">Nothing written yet.</span>'}</div>
           </div>
         </div>
       </div>
@@ -684,44 +677,6 @@ function insertMd(before, after) {
   ta.focus(); updateRulesPreview();
 }
 
-/* Mess name + address (messes table). Managers may update their own mess
-   (RLS: mm_messes_write in supabase/security-lockdown.sql). */
-function saveMessDetails() { return runOnce("mess-details", "saveMessDetails()", _saveMessDetails); }
-async function _saveMessDetails() {
-  if (!requireManager("saveMessDetails")) return;
-  const name     = cleanText(document.getElementById("md-name")?.value);
-  const location = cleanText(document.getElementById("md-location")?.value);
-  if (!name) { toast("Mess name can't be empty", "error"); return; }
-  const before = { name: currentMess?.name || "", location: currentMess?.location || "" };
-  const ph = window._messPhoto, photoChanged = !!ph && (ph.value || null) !== (ph.saved || null);
-  const textChanged = name !== before.name || location !== before.location;
-  if (!textChanged && !photoChanged) { toast("Nothing changed"); return; }
-  try {
-    if (textChanged) {
-      const { error } = await getClient().from("messes").update({ name, location }).eq("id", messId());
-      if (error) throw error;
-      currentMess = { ...currentMess, name, location };
-      saveSession(currentUser, currentMess, _getSessionToken());
-      updateMessBranding();
-      const diffs = auditDiffs([["Mess name", before.name, name], ["Address", before.location, location]]);
-      await logAudit("update", "mess_rules", messId(), auditLine("Mess details", diffs), { changes: diffs });
-    }
-    if (photoChanged) {
-      // Only the photo is written; WiFi/payment/contacts/rules are re-saved as stored, not as typed.
-      const cur = await dbGetMessRules();
-      ph.custom = { ...(cur?.custom || {}) };
-      await dbSaveMessRules({
-        wifi_pass: cur?.wifi_pass, bank_info: cur?.bank_info, rules_text: cur?.rules_text, contacts: cur?.contacts,
-        custom: messCustomForSave(),
-      });
-      ph.saved = ph.value || null;
-      setMessPhoto(ph.saved);
-      await logAudit("update", "mess_rules", messId(), ph.saved ? "Updated mess photo" : "Removed mess photo");
-    }
-    toast("Mess details saved", "success");
-  } catch (e) { toast("Error: " + e.message, "error"); }
-}
-
 function messCustomForSave() {
   const st = window._messPhoto || { value: null, custom: {} };
   const custom = { ...st.custom };
@@ -737,9 +692,9 @@ async function pickMessPhoto(input) {
   try {
     const data = await compressMessPhoto(file);
     window._messPhoto = { ...(window._messPhoto || { custom: {} }), value: data };
-    if (prev) { prev.innerHTML = `<img class="av-img" src="${data}" alt=""/>`; prev.classList.remove("mm-pop"); void prev.offsetWidth; prev.classList.add("mm-pop"); }
+    if (prev) { prev.innerHTML = `<img src="${data}" alt=""/>`; prev.classList.remove("mm-pop"); void prev.offsetWidth; prev.classList.add("mm-pop"); }
     document.getElementById("mess-photo-rm")?.removeAttribute("hidden");
-    const lbl = document.getElementById("mess-photo-lbl"); if (lbl) lbl.textContent = "Change photo";
+    const lbl = document.getElementById("mess-photo-lbl"); if (lbl) lbl.textContent = "Change";
     markRulesDirty();
   } catch (e) { toast(e.message, "error"); }
   finally { if (prev) prev.classList.remove("mm-busy"); input.value = ""; }
@@ -748,13 +703,29 @@ function removeMessPhoto() {
   window._messPhoto = { ...(window._messPhoto || { custom: {} }), value: null };
   const prev = document.getElementById("mess-photo-prev"); if (prev) prev.innerHTML = ic("camera");
   document.getElementById("mess-photo-rm")?.setAttribute("hidden", "");
-  const lbl = document.getElementById("mess-photo-lbl"); if (lbl) lbl.textContent = "Upload photo";
+  const lbl = document.getElementById("mess-photo-lbl"); if (lbl) lbl.textContent = "Upload";
   markRulesDirty();
 }
 
-async function saveMessRules() {
+/* One Save for the whole page: name + address (messes table; RLS mm_messes_write
+   in supabase/security-lockdown.sql) and info/rules/photo (mess_rules). */
+function saveMessRules() { return runOnce("mess-rules", "saveMessRules()", _saveMessRules); }
+async function _saveMessRules() {
   if (!requireManager("saveMessRules")) return;
+  const name     = cleanText(document.getElementById("md-name")?.value);
+  const location = cleanText(document.getElementById("md-location")?.value);
+  if (!name) { toast("Mess name can't be empty", "error"); return; }
+  const before = { name: currentMess?.name || "", location: currentMess?.location || "" };
   try {
+    if (name !== before.name || location !== before.location) {
+      const { error } = await getClient().from("messes").update({ name, location }).eq("id", messId());
+      if (error) throw error;
+      currentMess = { ...currentMess, name, location };
+      saveSession(currentUser, currentMess, _getSessionToken());
+      updateMessBranding();
+      const diffs = auditDiffs([["Mess name", before.name, name], ["Address", before.location, location]]);
+      await logAudit("update", "mess_rules", messId(), auditLine("Mess details", diffs), { changes: diffs });
+    }
     await dbSaveMessRules({
       wifi_pass:  document.getElementById("mr-wifi")?.value    || "",
       bank_info:  document.getElementById("mr-bank")?.value    || "",
