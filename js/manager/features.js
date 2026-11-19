@@ -559,7 +559,7 @@ async function renderMessRules(el, isManager) {
   const rules = await dbGetMessRules();
   if (isManager) {
     const photo = messPhotoOf(rules);
-    window._messPhoto = { value: photo, custom: { ...(rules?.custom || {}) } };
+    window._messPhoto = { value: photo, saved: photo, custom: { ...(rules?.custom || {}) } };
     el.innerHTML = `
     <div class="topbar"><div><div class="page-title">Mess Rules</div><div class="page-sub">What members see on their Mess Info page</div></div>
       <div class="topbar-actions"><button class="btn btn-primary btn-sm" id="mr-save" data-on-click="saveMessRules()">${ic("save")} Save</button></div>
@@ -576,7 +576,7 @@ async function renderMessRules(el, isManager) {
               <label class="btn btn-ghost btn-sm mm-upload">${ic("camera")} <span id="mess-photo-lbl">${photo ? "Change" : "Upload"} photo</span><input type="file" accept="image/*" data-on-change="pickMessPhoto(this)"/></label>
               <button class="btn btn-ghost btn-sm" id="mess-photo-rm" data-on-click="removeMessPhoto()" ${photo ? "" : "hidden"}>Remove</button>
             </div>
-            <div class="mm-photo-hint">Cropped to a square and resized. Click <b>Save</b> (top right) to apply.</div>
+            <div class="mm-photo-hint">Cropped to a square and resized. Click <b>Save details</b> to apply.</div>
           </div>
         </div>
         <div class="grid-2">
@@ -693,15 +693,31 @@ async function _saveMessDetails() {
   const location = cleanText(document.getElementById("md-location")?.value);
   if (!name) { toast("Mess name can't be empty", "error"); return; }
   const before = { name: currentMess?.name || "", location: currentMess?.location || "" };
-  if (name === before.name && location === before.location) { toast("Nothing changed"); return; }
+  const ph = window._messPhoto, photoChanged = !!ph && (ph.value || null) !== (ph.saved || null);
+  const textChanged = name !== before.name || location !== before.location;
+  if (!textChanged && !photoChanged) { toast("Nothing changed"); return; }
   try {
-    const { error } = await getClient().from("messes").update({ name, location }).eq("id", messId());
-    if (error) throw error;
-    currentMess = { ...currentMess, name, location };
-    saveSession(currentUser, currentMess, _getSessionToken());
-    updateMessBranding();
-    const diffs = auditDiffs([["Mess name", before.name, name], ["Address", before.location, location]]);
-    await logAudit("update", "mess_rules", messId(), auditLine("Mess details", diffs), { changes: diffs });
+    if (textChanged) {
+      const { error } = await getClient().from("messes").update({ name, location }).eq("id", messId());
+      if (error) throw error;
+      currentMess = { ...currentMess, name, location };
+      saveSession(currentUser, currentMess, _getSessionToken());
+      updateMessBranding();
+      const diffs = auditDiffs([["Mess name", before.name, name], ["Address", before.location, location]]);
+      await logAudit("update", "mess_rules", messId(), auditLine("Mess details", diffs), { changes: diffs });
+    }
+    if (photoChanged) {
+      // Only the photo is written; WiFi/payment/contacts/rules are re-saved as stored, not as typed.
+      const cur = await dbGetMessRules();
+      ph.custom = { ...(cur?.custom || {}) };
+      await dbSaveMessRules({
+        wifi_pass: cur?.wifi_pass, bank_info: cur?.bank_info, rules_text: cur?.rules_text, contacts: cur?.contacts,
+        custom: messCustomForSave(),
+      });
+      ph.saved = ph.value || null;
+      setMessPhoto(ph.saved);
+      await logAudit("update", "mess_rules", messId(), ph.saved ? "Updated mess photo" : "Removed mess photo");
+    }
     toast("Mess details saved", "success");
   } catch (e) { toast("Error: " + e.message, "error"); }
 }
@@ -746,6 +762,7 @@ async function saveMessRules() {
       contacts:   document.getElementById("mr-contacts")?.value || "",
       custom:     messCustomForSave(),
     });
+    if (window._messPhoto) window._messPhoto.saved = window._messPhoto.value || null;
     setMessPhoto(window._messPhoto?.value || null);
     await logAudit("update", "mess_rules", "", "Updated mess rules & info");
     toast("Mess info saved", "success");
