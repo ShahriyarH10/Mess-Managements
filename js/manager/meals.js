@@ -140,7 +140,12 @@ function updMealSum() {
   if(te) te.textContent=round2(d+n); if(td) td.textContent=round2(d); if(tn) tn.textContent=round2(n); if(ce) ce.textContent=e;
 }
 function setAllMeals(target,v) {
-  members.forEach(m=>{ if(target==="day"||target==="both"){ const de=document.getElementById("md-"+m.id); if(de) de.value=v; mealDayVals[m.id]=v; } if(target==="night"||target==="both"){ const ne=document.getElementById("mn-"+m.id); if(ne) ne.value=v; mealNightVals[m.id]=v; } });
+  // A bulk "→ 1" skips meals a member has turned off; "Clear" (0) applies to everyone
+  const abD = window._absentDay || {}, abN = window._absentNight || {};
+  members.forEach(m=>{
+    if((target==="day"||target==="both") && !(v>0 && abD[m.id])){ const de=document.getElementById("md-"+m.id); if(de) de.value=v; mealDayVals[m.id]=v; }
+    if((target==="night"||target==="both") && !(v>0 && abN[m.id])){ const ne=document.getElementById("mn-"+m.id); if(ne) ne.value=v; mealNightVals[m.id]=v; }
+  });
   updMealSum();
 }
 async function loadMealDate() {
@@ -168,9 +173,10 @@ async function loadMealDate() {
   members.forEach(m=>{
     const dA = window._absentDay[m.id], nA = window._absentNight[m.id];
     if ([m.name+"_day", m.name+"_night", m.name].some(k => mObj[k] != null)) {
-      // Load existing values — absence badges show but values are not overridden
-      mealDayVals[m.id]   = Number(mObj[m.name+"_day"]  ?? mObj[m.name] ?? 0);
-      mealNightVals[m.id] = Number(mObj[m.name+"_night"] ?? 0);
+      // Load existing values, but a meal that is still marked off shows 0: saving a
+      // count > 0 clears the off flag, so a flag that is still set is newer than the count
+      mealDayVals[m.id]   = dA ? 0 : Number(mObj[m.name+"_day"]  ?? mObj[m.name] ?? 0);
+      mealNightVals[m.id] = nA ? 0 : Number(mObj[m.name+"_night"] ?? 0);
     } else if (dA || nA) {
       mealDayVals[m.id]   = dA ? 0 : (m.meal_default_day   ?? 1);
       mealNightVals[m.id] = nA ? 0 : (m.meal_default_night ?? 1);
